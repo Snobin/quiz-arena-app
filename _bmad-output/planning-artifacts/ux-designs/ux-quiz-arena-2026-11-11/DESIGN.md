@@ -268,7 +268,7 @@ components:
     edge-dark: '1px {colors.dim-dark}'
     radius: '{rounded.2xl}'
   button-primary:
-    background: '{colors.ink}'
+    background: '{colors.band}'      # ink in light; band-dark in dark (ink-dark would be 1.2:1 under the white label)
     foreground: '{colors.on-band}'
     radius: '{rounded.md}'
     minHeight: '{spacing.target-min}'
@@ -479,7 +479,7 @@ Soft rectangles, no pills on surfaces. `{rounded.sm}` letter tiles, tags (EN, �
 ### Shared
 
 - **Focus ring** — `{components.focus-ring}`: 2px solid ink (ink-dark in dark, on-band on band), 2px offset. Never volt.
-- **Buttons** — *Primary:* ink fill, white label. *Secondary:* card fill, 1.5px ink outline. *Disabled:* `{components.button-disabled}` (card, 1px dim border, muted label, 5.3:1), with a caption beside it saying why.
+- **Buttons** — *Primary:* band fill (ink in light, band-dark in dark), white label. *Secondary:* card fill, 1.5px ink outline. *Disabled:* `{components.button-disabled}` (card, 1px dim border, muted label, 5.3:1), with a caption beside it saying why.
 - **Tab bar** — four items, 20px icon over `{typography.tab-label}`; active ink bold, inactive muted.
 - **Text field** — card fill, 1px control-edge border, `{rounded.md}`, visible label above in `{typography.label}` muted.
 - **Bot badge** — `{rounded.sm}` outline tag "BOT" next to the bot's name.
