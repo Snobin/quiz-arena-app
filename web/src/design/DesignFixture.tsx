@@ -3,6 +3,12 @@ import { BrandMark } from './BrandMark.tsx';
 import { Button } from './Button.tsx';
 import { PageColumn } from './PageColumn.tsx';
 import { useDocumentTitle } from '../i18n/useDocumentTitle.ts';
+import {
+  REDUCE_EFFECTS_SETTINGS,
+  isReducedPath,
+  useReduceEffectsStore,
+} from '../motion/reduceEffects.ts';
+import { Skeleton } from './Skeleton.tsx';
 import { colors, darkSwapped, typography, type TypographyToken } from './tokens.ts';
 
 // Dev-only QA page at /__design (never shipped: App imports it behind import.meta.env.DEV).
@@ -21,13 +27,13 @@ function typeStyle(name: TypographyToken): CSSProperties {
 
 function Swatch({ name, background }: { name: string; background: string }) {
   return (
-    <li className="flex min-w-0 items-center gap-3 rounded-md border border-hairline bg-card p-2">
+    <li className="flex min-w-[0] items-center gap-3 rounded-md border border-hairline bg-card p-2">
       <span
         aria-hidden="true"
         className="size-8 shrink-0 rounded-sm border border-hairline"
         style={{ background }}
       />
-      <span className="min-w-0 text-label text-ink">
+      <span className="min-w-[0] text-label text-ink">
         <code className="font-code text-code">{name}</code>
         <br />
         <span className="text-muted">{background}</span>
@@ -45,11 +51,39 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+/** Dev toggle for the Reduce-effects setting (the real Settings row arrives in Epic 2). */
+function ReduceEffectsToggle() {
+  const state = useReduceEffectsStore();
+  return (
+    <fieldset className="flex flex-col gap-2">
+      <legend className="text-label text-muted">Reduce effects (persisted)</legend>
+      <div className="flex flex-wrap gap-4">
+        {REDUCE_EFFECTS_SETTINGS.map((setting) => (
+          <label key={setting} className="hit-target inline-flex items-center gap-2">
+            <input
+              type="radio"
+              name="reduce-effects"
+              value={setting}
+              checked={state.setting === setting}
+              onChange={() => state.setSetting(setting)}
+            />
+            {setting}
+          </label>
+        ))}
+      </div>
+      <p className="text-caption text-muted">
+        OS prefers reduced motion: {String(state.osReduced)} · session fallback: {state.fallback ?? 'none'} ·{' '}
+        <strong>reduced path {isReducedPath(state) ? 'ON' : 'off'}</strong>
+      </p>
+    </fieldset>
+  );
+}
+
 export default function DesignFixture() {
   useDocumentTitle('design fixture');
   return (
     <PageColumn className="gap-8 py-6">
-      <main lang="en" className="flex flex-col gap-8">
+      <main lang="en" data-dev-fixture="design" className="flex flex-col gap-8">
         <h1 className="text-card-title font-card-title">
           <BrandMark /> design fixture
         </h1>
@@ -77,7 +111,7 @@ export default function DesignFixture() {
         <Section title="Type scale">
           <ul className="flex flex-col gap-3">
             {(Object.keys(typography) as TypographyToken[]).map((name) => (
-              <li key={name} className="flex min-w-0 flex-col">
+              <li key={name} className="flex min-w-[0] flex-col">
                 <code className="font-code text-code text-muted">{name}</code>
                 <span style={typeStyle(name)}>
                   <span lang="ml">മിന്നൽ ചോദ്യം</span> Minnal 1,234
@@ -97,6 +131,14 @@ export default function DesignFixture() {
               Disabled
             </Button>
           </div>
+        </Section>
+
+        <Section title="Reduce effects">
+          <ReduceEffectsToggle />
+        </Section>
+
+        <Section title="Skeleton (shimmer off on the reduced path)">
+          <Skeleton rows={[{ kind: 'title', width: '60%' }, { width: '90%' }, { width: '75%' }, { kind: 'card' }]} />
         </Section>
 
         <Section title="BrandMark">

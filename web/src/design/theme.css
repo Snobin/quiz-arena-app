@@ -255,3 +255,22 @@
     transform: translate(-50%, -50%);
   }
 }
+
+/*
+ * Skeleton shimmer: a slow opacity pulse (opacity only, never a flash). Skeleton drops the class
+ * on the reduced path (useReducedEffects is the single switch, so the in-app setting wins over
+ * the OS preference: no media query here).
+ */
+@keyframes skeleton-shimmer {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@utility skeleton-shimmer {
+  animation: skeleton-shimmer 1.6s var(--motion-easing-default) infinite;
+}

@@ -48,6 +48,34 @@ export const catalogue = {
   'tab.rooms': { ml: 'റൂമുകൾ', en: 'Rooms' },
   'tab.ranks': { ml: 'റാങ്ക്', en: 'Ranks' },
   'tab.me': { ml: 'ഞാൻ', en: 'Me' },
+  'nav.main': { ml: 'പ്രധാന മെനു', en: 'Main', signoff: ['ml', 'en'] },
+  'common.loading': { ml: 'ലോഡ് ചെയ്യുന്നു…', en: 'Loading…', signoff: ['ml', 'en'] },
+  'play.quickMatch': { ml: 'ക്വിക്ക് മാച്ച്', en: 'Quick Match', signoff: ['ml', 'en'] },
+  'rooms.placeholder': {
+    ml: 'റൂമുകൾ ഉടൻ വരുന്നു. ബാച്ചിനെ മുഴുവൻ ഒരുമിച്ച് കളിപ്പിക്കാം.',
+    en: 'Rooms are coming soon. Your whole batch will play together here.',
+    signoff: ['ml', 'en'],
+  },
+  'ranks.placeholder': {
+    ml: 'റാങ്ക് ലിസ്റ്റ് ഉടൻ വരുന്നു. അതുവരെ കുറച്ചു കളികൾ ജയിച്ചു വെക്കൂ.',
+    en: 'Leaderboards are on the way. Win a few matches in the meantime.',
+    signoff: ['ml', 'en'],
+  },
+  'me.placeholder': {
+    ml: 'നിങ്ങളുടെ പ്രൊഫൈലും സെറ്റിങ്സും ഉടൻ ഇവിടെ എത്തും.',
+    en: 'Your profile and settings will land here soon.',
+    signoff: ['ml', 'en'],
+  },
+  'offline.banner': {
+    ml: 'ഇന്റർനെറ്റ് ഇല്ല. കണക്ഷൻ തിരിച്ചു വന്നാൽ കളിക്കാം.',
+    en: "You're offline. You can play again once you're back online.",
+    signoff: ['ml', 'en'],
+  },
+  'offline.playCaption': {
+    ml: 'കളിക്കാൻ ഇന്റർനെറ്റ് കണക്ഷൻ വേണം',
+    en: 'Playing needs an internet connection',
+    signoff: ['ml', 'en'],
+  },
 
   // Voice and Tone (EXPERIENCE.md)
   'matchmaking.searching': { moment: 'Matchmaking', ml: 'എതിരാളിയെ തിരയുന്നു…', en: 'Finding an opponent…' },

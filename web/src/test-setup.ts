@@ -5,3 +5,6 @@ import { afterEach } from 'vitest';
 afterEach(() => {
   cleanup();
 });
+
+// jsdom does not implement scrolling; the shell restores scroll offsets with window.scrollTo.
+window.scrollTo = (() => {}) as typeof window.scrollTo;

@@ -1,0 +1,63 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Skeleton > never shimmers on the reduced path 1`] = `
+<div
+  aria-busy="true"
+  class="flex flex-col gap-3"
+>
+  <span
+    class="sr-only"
+  >
+    ലോഡ് ചെയ്യുന്നു…
+  </span>
+  <div
+    aria-hidden="true"
+    class="rounded-sm bg-hairline h-[2em]"
+    data-skeleton-row=""
+    style="width: 60%;"
+  />
+  <div
+    aria-hidden="true"
+    class="rounded-sm bg-hairline h-[1.5em]"
+    data-skeleton-row=""
+    style="width: 90%;"
+  />
+  <div
+    aria-hidden="true"
+    class="rounded-sm bg-hairline h-[5rem]"
+    data-skeleton-row=""
+    style="width: 100%;"
+  />
+</div>
+`;
+
+exports[`Skeleton > shapes rows from props and shimmers on the full path 1`] = `
+<div
+  aria-busy="true"
+  class="flex flex-col gap-3"
+>
+  <span
+    class="sr-only"
+  >
+    ലോഡ് ചെയ്യുന്നു…
+  </span>
+  <div
+    aria-hidden="true"
+    class="rounded-sm bg-hairline h-[2em] skeleton-shimmer"
+    data-skeleton-row=""
+    style="width: 60%;"
+  />
+  <div
+    aria-hidden="true"
+    class="rounded-sm bg-hairline h-[1.5em] skeleton-shimmer"
+    data-skeleton-row=""
+    style="width: 90%;"
+  />
+  <div
+    aria-hidden="true"
+    class="rounded-sm bg-hairline h-[5rem] skeleton-shimmer"
+    data-skeleton-row=""
+    style="width: 100%;"
+  />
+</div>
+`;
