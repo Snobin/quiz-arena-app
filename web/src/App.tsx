@@ -3,17 +3,20 @@ import { lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BrandMark } from './design/BrandMark.tsx';
 import { PageColumn } from './design/PageColumn.tsx';
+import { Lang } from './i18n/Lang.tsx';
+import { useDocumentTitle } from './i18n/useDocumentTitle.ts';
 
-// Dev-only design fixture at /__design. `import.meta.env.DEV` is a build-time constant, so the
-// fixture is dropped from production bundles entirely.
+// Dev-only fixtures at /__design and /__shaping. `import.meta.env.DEV` is a build-time constant,
+// so the fixtures are dropped from production bundles entirely.
 const DesignFixture = import.meta.env.DEV ? lazy(() => import('./design/DesignFixture.tsx')) : null;
+const ShapingFixture = import.meta.env.DEV ? lazy(() => import('./design/ShapingFixture.tsx')) : null;
 
-/** True at `<base>/__design` (with or without a trailing slash), whatever the app's base URL. */
-function isDesignFixtureRoute(): boolean {
+/** True at `<base><route>` (with or without a trailing slash), whatever the app's base URL. */
+function isFixtureRoute(route: '/__design' | '/__shaping'): boolean {
   const base = import.meta.env.BASE_URL.replace(/\/+$/, '');
   let path = window.location.pathname;
   if (base && path.startsWith(`${base}/`)) path = path.slice(base.length);
-  return path.replace(/\/+$/, '') === '/__design';
+  return path.replace(/\/+$/, '') === route;
 }
 
 /** RFC 9457 Problem Details, as returned by every service error. */
@@ -39,10 +42,16 @@ async function probeApi(): Promise<ProblemDetail> {
 
 // Placeholder shell for Story 1.1, now on the design foundation. The real shell arrives in Story 1.5.
 export function App() {
-  if (DesignFixture && isDesignFixtureRoute()) {
+  const Fixture =
+    DesignFixture && isFixtureRoute('/__design')
+      ? DesignFixture
+      : ShapingFixture && isFixtureRoute('/__shaping')
+        ? ShapingFixture
+        : null;
+  if (Fixture) {
     return (
       <Suspense fallback={null}>
-        <DesignFixture />
+        <Fixture />
       </Suspense>
     );
   }
@@ -51,6 +60,7 @@ export function App() {
 
 function Shell() {
   const { t } = useTranslation();
+  useDocumentTitle();
   // Network errors, non-JSON bodies (e.g. a proxy error page) and unexpected statuses all reject.
   const probe = useQuery({ queryKey: ['scaffold-probe'], queryFn: probeApi, retry: false });
 
@@ -61,12 +71,14 @@ function Shell() {
           <BrandMark />
         </h1>
         <p>{t('shell.tagline')}</p>
-        <pre lang="en" className="font-code text-code whitespace-pre-wrap text-muted">
-          {probe.isSuccess
-            ? `${probe.data.status} ${probe.data.title ?? ''}`.trim()
-            : probe.isError
-              ? 'API unreachable'
-              : '…'}
+        <pre className="font-code text-code whitespace-pre-wrap text-muted">
+          {probe.isSuccess ? (
+            <Lang lang="en">{`${probe.data.status} ${probe.data.title ?? ''}`.trim()}</Lang>
+          ) : probe.isError ? (
+            t('shell.probe.unreachable')
+          ) : (
+            t('shell.probe.pending')
+          )}
         </pre>
       </main>
     </PageColumn>

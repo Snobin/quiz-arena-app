@@ -49,32 +49,32 @@ colors:
 typography:
   # Authored in rem (px / 16). Malayalam: self-hosted script-range woff2 (AD-18). Latin: platform system stack.
   question:
-    fontFamily: 'Noto Sans Malayalam, Nirmala UI, Kartika, sans-serif'
+    fontFamily: 'Noto Sans Malayalam, Noto Sans Malayalam Fallback, Nirmala UI, Kartika, sans-serif'
     fontSize: 1.4375rem
     fontWeight: '500'
     lineHeight: '1.65'
   option:
-    fontFamily: 'Noto Sans Malayalam, Nirmala UI, Kartika, sans-serif'
+    fontFamily: 'Noto Sans Malayalam, Noto Sans Malayalam Fallback, Nirmala UI, Kartika, sans-serif'
     fontSize: 1.09375rem
     fontWeight: '400'
     lineHeight: '1.5'
   explanation:
-    fontFamily: 'Noto Sans Malayalam, Nirmala UI, Kartika, sans-serif'
+    fontFamily: 'Noto Sans Malayalam, Noto Sans Malayalam Fallback, Nirmala UI, Kartika, sans-serif'
     fontSize: 0.875rem
     fontWeight: '400'
     lineHeight: '1.75'
   title:
-    fontFamily: 'Noto Sans Malayalam, system-ui, sans-serif'
+    fontFamily: 'Noto Sans Malayalam, Noto Sans Malayalam Fallback, system-ui, sans-serif'
     fontSize: 1.3125rem
     fontWeight: '600'
     lineHeight: '1.5'
   card-title:
-    fontFamily: 'Noto Sans Malayalam, system-ui, sans-serif'
+    fontFamily: 'Noto Sans Malayalam, Noto Sans Malayalam Fallback, system-ui, sans-serif'
     fontSize: 1.5rem
     fontWeight: '600'
     lineHeight: '1.4'
   peak-word:
-    fontFamily: 'Noto Sans Malayalam, system-ui, sans-serif'
+    fontFamily: 'Noto Sans Malayalam, Noto Sans Malayalam Fallback, system-ui, sans-serif'
     fontSize: 1.5rem
     fontWeight: '600'
     lineHeight: '1.4'
@@ -85,7 +85,7 @@ typography:
     lineHeight: '1'
     letterSpacing: -0.02em
   takeover-title:
-    fontFamily: 'Noto Sans Malayalam, system-ui, sans-serif'
+    fontFamily: 'Noto Sans Malayalam, Noto Sans Malayalam Fallback, system-ui, sans-serif'
     fontSize: 2.375rem
     fontWeight: '700'
     lineHeight: '1.35'
@@ -115,22 +115,22 @@ typography:
     letterSpacing: 0em
   code:
     # JSON paste area and schema block; Malayalam strings fall back to the Malayalam face
-    fontFamily: 'ui-monospace, SF Mono, Menlo, Consolas, Noto Sans Malayalam, monospace'
+    fontFamily: 'ui-monospace, SF Mono, Menlo, Consolas, Noto Sans Malayalam, Noto Sans Malayalam Fallback, monospace'
     fontSize: 0.75rem
     fontWeight: '400'
     lineHeight: '1.6'
   body:
-    fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, sans-serif'
+    fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, Noto Sans Malayalam Fallback, sans-serif'
     fontSize: 0.9375rem
     fontWeight: '400'
     lineHeight: '1.5'
   label:
-    fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, sans-serif'
+    fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, Noto Sans Malayalam Fallback, sans-serif'
     fontSize: 0.75rem
     fontWeight: '400'
     lineHeight: '1.5'
   caption:
-    fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, sans-serif'
+    fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, Noto Sans Malayalam Fallback, sans-serif'
     fontSize: 0.75rem
     fontWeight: '500'
     lineHeight: '1.5'
@@ -140,7 +140,7 @@ typography:
     fontWeight: '700'
     lineHeight: '1'
   tab-label:
-    fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, sans-serif'
+    fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, Noto Sans Malayalam Fallback, sans-serif'
     fontSize: 0.75rem
     fontWeight: '400'
     lineHeight: '1.5'
@@ -442,7 +442,7 @@ Dark mode is a full theme that follows the OS setting. The full-screen win takeo
 
 ## Typography
 
-Two stacks. **Malayalam:** Noto Sans Malayalam, self-hosted `woff2` (AD-18), falling back to Nirmala UI / Kartika. **Latin and numerals:** the platform system stack (Roboto on Android). No web Latin font ships, which protects the 150 KB JS budget.
+Two stacks. **Malayalam:** Noto Sans Malayalam, self-hosted `woff2` (AD-18). Every stack that names it is followed by `Noto Sans Malayalam Fallback`, a metric-matched `@font-face` over `local()` Noto Sans Malayalam UI / Nirmala UI / Kartika (`size-adjust` and ascent/descent/line-gap overrides), so the swap does not shift layout; then Nirmala UI / Kartika. **Latin and numerals:** the platform system stack (Roboto on Android). No web Latin font ships, which protects the 150 KB JS budget.
 
 **Malayalam font file.** Subset by **script range**, not by observed text: `unicode-range: U+0D00-0D7F, U+200C-200D, U+25CC, U+0964-0965`, keeping all GSUB/GPOS features (`--layout-features='*'`), atomic chillu (ൺ ൻ ർ ൽ ൾ ൿ) and ZWJ-sequence forms, so custom topics, names and report notes shape correctly. Ship one variable woff2 (or at most 400 + 600 statics), budgeted at about 45–70 KB outside the JS budget. Set `font-synthesis: none`; never synthesize bold on Malayalam. Loading behaviour is in `EXPERIENCE.md` › State Patterns.
 

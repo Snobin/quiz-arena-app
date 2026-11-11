@@ -49,32 +49,32 @@
   --color-band-raised-dark: #3D414A;
 
   /* Typography (rem): font-<name> for the family, text-<name> for size + line-height + weight */
-  --font-question: Noto Sans Malayalam, Nirmala UI, Kartika, sans-serif;
+  --font-question: Noto Sans Malayalam, Noto Sans Malayalam Fallback, Nirmala UI, Kartika, sans-serif;
   --text-question: 1.4375rem;
   --text-question--line-height: 1.65;
   --text-question--font-weight: 500;
 
-  --font-option: Noto Sans Malayalam, Nirmala UI, Kartika, sans-serif;
+  --font-option: Noto Sans Malayalam, Noto Sans Malayalam Fallback, Nirmala UI, Kartika, sans-serif;
   --text-option: 1.09375rem;
   --text-option--line-height: 1.5;
   --text-option--font-weight: 400;
 
-  --font-explanation: Noto Sans Malayalam, Nirmala UI, Kartika, sans-serif;
+  --font-explanation: Noto Sans Malayalam, Noto Sans Malayalam Fallback, Nirmala UI, Kartika, sans-serif;
   --text-explanation: 0.875rem;
   --text-explanation--line-height: 1.75;
   --text-explanation--font-weight: 400;
 
-  --font-title: Noto Sans Malayalam, system-ui, sans-serif;
+  --font-title: Noto Sans Malayalam, Noto Sans Malayalam Fallback, system-ui, sans-serif;
   --text-title: 1.3125rem;
   --text-title--line-height: 1.5;
   --text-title--font-weight: 600;
 
-  --font-card-title: Noto Sans Malayalam, system-ui, sans-serif;
+  --font-card-title: Noto Sans Malayalam, Noto Sans Malayalam Fallback, system-ui, sans-serif;
   --text-card-title: 1.5rem;
   --text-card-title--line-height: 1.4;
   --text-card-title--font-weight: 600;
 
-  --font-peak-word: Noto Sans Malayalam, system-ui, sans-serif;
+  --font-peak-word: Noto Sans Malayalam, Noto Sans Malayalam Fallback, system-ui, sans-serif;
   --text-peak-word: 1.5rem;
   --text-peak-word--line-height: 1.4;
   --text-peak-word--font-weight: 600;
@@ -85,7 +85,7 @@
   --text-peak-points--font-weight: 700;
   --text-peak-points--letter-spacing: -0.02em;
 
-  --font-takeover-title: Noto Sans Malayalam, system-ui, sans-serif;
+  --font-takeover-title: Noto Sans Malayalam, Noto Sans Malayalam Fallback, system-ui, sans-serif;
   --text-takeover-title: 2.375rem;
   --text-takeover-title--line-height: 1.35;
   --text-takeover-title--font-weight: 700;
@@ -113,22 +113,22 @@
   --text-room-code-compact--font-weight: 700;
   --text-room-code-compact--letter-spacing: 0em;
 
-  --font-code: ui-monospace, SF Mono, Menlo, Consolas, Noto Sans Malayalam, monospace;
+  --font-code: ui-monospace, SF Mono, Menlo, Consolas, Noto Sans Malayalam, Noto Sans Malayalam Fallback, monospace;
   --text-code: 0.75rem;
   --text-code--line-height: 1.6;
   --text-code--font-weight: 400;
 
-  --font-body: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, sans-serif;
+  --font-body: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, Noto Sans Malayalam Fallback, sans-serif;
   --text-body: 0.9375rem;
   --text-body--line-height: 1.5;
   --text-body--font-weight: 400;
 
-  --font-label: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, sans-serif;
+  --font-label: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, Noto Sans Malayalam Fallback, sans-serif;
   --text-label: 0.75rem;
   --text-label--line-height: 1.5;
   --text-label--font-weight: 400;
 
-  --font-caption: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, sans-serif;
+  --font-caption: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, Noto Sans Malayalam Fallback, sans-serif;
   --text-caption: 0.75rem;
   --text-caption--line-height: 1.5;
   --text-caption--font-weight: 500;
@@ -138,7 +138,7 @@
   --text-countdown--line-height: 1;
   --text-countdown--font-weight: 700;
 
-  --font-tab-label: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, sans-serif;
+  --font-tab-label: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, Noto Sans Malayalam Fallback, sans-serif;
   --text-tab-label: 0.75rem;
   --text-tab-label--line-height: 1.5;
   --text-tab-label--font-weight: 400;

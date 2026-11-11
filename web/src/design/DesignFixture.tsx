@@ -2,10 +2,12 @@ import type { CSSProperties, ReactNode } from 'react';
 import { BrandMark } from './BrandMark.tsx';
 import { Button } from './Button.tsx';
 import { PageColumn } from './PageColumn.tsx';
+import { useDocumentTitle } from '../i18n/useDocumentTitle.ts';
 import { colors, darkSwapped, typography, type TypographyToken } from './tokens.ts';
 
 // Dev-only QA page at /__design (never shipped: App imports it behind import.meta.env.DEV).
 // Strings here are developer-facing and not part of the i18n catalogue.
+// check-i18n: dev-fixture
 
 function typeStyle(name: TypographyToken): CSSProperties {
   return {
@@ -44,6 +46,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 export default function DesignFixture() {
+  useDocumentTitle('design fixture');
   return (
     <PageColumn className="gap-8 py-6">
       <main lang="en" className="flex flex-col gap-8">

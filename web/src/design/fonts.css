@@ -1,0 +1,95 @@
+/*
+ * Self-hosted Malayalam face (Story 1.3). Built reproducibly by web/scripts/build-font.sh from
+ * google/fonts@8b0a1d0 (Noto Sans Malayalam 2.104, instanced to wdth=100, wght 400-700 still
+ * variable, full script range, every layout feature). One file serves both named faces below,
+ * so it downloads once; index.html preloads it and the service worker precaches it.
+ *
+ * - `Noto Sans Malayalam` (swap): every screen except the live match.
+ * - `Noto Sans Malayalam Live` (optional): the live match, via the `.font-face-live` scope, so
+ *   the face never swaps in mid-match. font-display belongs to the face, not the element,
+ *   which is why the live match needs its own family name.
+ * - `Noto Sans Malayalam Fallback`: a metric-matched local() face that sits right after the web
+ *   face in every token stack (DESIGN.md › Typography), so the swap does not shift layout.
+ */
+@font-face {
+  font-family: 'Noto Sans Malayalam';
+  src: url('/fonts/noto-sans-malayalam-2.104.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+0D00-0D7F, U+200C-200D, U+25CC, U+0964-0965;
+}
+
+@font-face {
+  font-family: 'Noto Sans Malayalam Live';
+  src: url('/fonts/noto-sans-malayalam-2.104.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: optional;
+  unicode-range: U+0D00-0D7F, U+200C-200D, U+25CC, U+0964-0965;
+}
+
+/*
+ * Metric-matched fallback. Numbers from web/scripts/build-font.sh (subset hhea, unitsPerEm 1000):
+ *   ascent 864, descent -383, lineGap 0.
+ *   Average Malayalam advance (U+0D00-0D7F, wght 400, wdth 100, 110 glyphs):
+ *   Noto Sans Malayalam 1.02812 em, Noto Sans Malayalam UI 1.02812 em, so size-adjust is 100%.
+ *   (The UI build shares the outlines and advances; only its vertical metrics are tighter, which
+ *   is exactly what the overrides correct.) Overrides are scaled by size-adjust (CSS Fonts 5),
+ *   so each is hhea / unitsPerEm / size-adjust.
+ * The overrides are tuned to Noto Sans Malayalam UI (Android's system Malayalam face); Nirmala UI
+ * and Kartika (Windows) get the same line box, though their advances differ.
+ * Whether Chrome Android resolves local() by these names is checked on /__shaping (fallback row).
+ * unicode-range keeps these Latin-capable system fonts from taking over Latin text.
+ */
+@font-face {
+  font-family: 'Noto Sans Malayalam Fallback';
+  src: local('Noto Sans Malayalam UI'), local('NotoSansMalayalamUI-Regular'), local('Nirmala UI'), local('Kartika');
+  font-weight: 400;
+  font-style: normal;
+  size-adjust: 100%;
+  ascent-override: 86.4%;
+  descent-override: 38.3%;
+  line-gap-override: 0%;
+  unicode-range: U+0D00-0D7F, U+200C-200D, U+25CC, U+0964-0965;
+}
+
+@font-face {
+  font-family: 'Noto Sans Malayalam Fallback';
+  src: local('Noto Sans Malayalam UI Bold'), local('NotoSansMalayalamUI-Bold'), local('Nirmala UI Bold'), local('Kartika Bold');
+  font-weight: 700;
+  font-style: normal;
+  size-adjust: 100%;
+  ascent-override: 86.4%;
+  descent-override: 38.3%;
+  line-gap-override: 0%;
+  unicode-range: U+0D00-0D7F, U+200C-200D, U+25CC, U+0964-0965;
+}
+
+@layer base {
+  html {
+    /* Never synthesize bold or italic on Malayalam (DESIGN.md › Typography). */
+    font-synthesis: none;
+  }
+
+  /*
+   * Live-match scope: every token stack that names Noto Sans Malayalam uses the optional face
+   * instead (fonts.test.ts checks each stack has its counterpart here). font-family is re-set so
+   * text that only inherits the body stack picks the scoped variable up too.
+   */
+  .font-face-live {
+    --font-question: Noto Sans Malayalam Live, Noto Sans Malayalam Fallback, Nirmala UI, Kartika, sans-serif;
+    --font-option: Noto Sans Malayalam Live, Noto Sans Malayalam Fallback, Nirmala UI, Kartika, sans-serif;
+    --font-explanation: Noto Sans Malayalam Live, Noto Sans Malayalam Fallback, Nirmala UI, Kartika, sans-serif;
+    --font-title: Noto Sans Malayalam Live, Noto Sans Malayalam Fallback, system-ui, sans-serif;
+    --font-card-title: Noto Sans Malayalam Live, Noto Sans Malayalam Fallback, system-ui, sans-serif;
+    --font-peak-word: Noto Sans Malayalam Live, Noto Sans Malayalam Fallback, system-ui, sans-serif;
+    --font-takeover-title: Noto Sans Malayalam Live, Noto Sans Malayalam Fallback, system-ui, sans-serif;
+    --font-code: ui-monospace, SF Mono, Menlo, Consolas, Noto Sans Malayalam Live, Noto Sans Malayalam Fallback, monospace;
+    --font-body: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam Live, Noto Sans Malayalam Fallback, sans-serif;
+    --font-label: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam Live, Noto Sans Malayalam Fallback, sans-serif;
+    --font-caption: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam Live, Noto Sans Malayalam Fallback, sans-serif;
+    --font-tab-label: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam Live, Noto Sans Malayalam Fallback, sans-serif;
+    font-family: var(--font-body);
+  }
+}

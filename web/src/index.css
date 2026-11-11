@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./design/theme.css";
+@import "./design/fonts.css";
 
 @layer base {
   body {
