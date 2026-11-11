@@ -1,25 +1,22 @@
 import { useTranslation } from 'react-i18next';
+import { uiLanguage } from '../i18n/index.ts';
+import type { Language } from '../i18n/language.ts';
 
-export type BrandLanguage = 'ml' | 'en';
-
-const WORDMARK: Record<BrandLanguage, string> = { ml: 'മിന്നൽ', en: 'Minnal' };
-
-/** English for any `en` locale (case-insensitive: en, EN, en-US, en_IN); anything else is Malayalam. */
-export function brandLanguage(language: string | undefined): BrandLanguage {
-  return language !== undefined && /^en(?:[-_]|$)/i.test(language) ? 'en' : 'ml';
-}
+// Re-exported so existing imports keep working; the rule lives in i18n/language.ts.
+export { brandLanguage, type Language as BrandLanguage } from '../i18n/language.ts';
 
 type BrandMarkProps = {
   /** Overrides the i18n language (used by the design fixture to show both). */
-  language?: BrandLanguage;
+  language?: Language;
   className?: string;
 };
 
 /** The hard-edged bolt (never rounded, always ink, never volt) followed by the wordmark. */
 export function BrandMark({ language, className }: BrandMarkProps) {
   const { i18n } = useTranslation();
-  const lang = language ?? brandLanguage(i18n.language);
-  const wordmark = WORDMARK[lang];
+  const lang = language ?? uiLanguage(i18n);
+  // The wordmark is the catalogue's brand name, read in the mark's own language.
+  const wordmark = i18n.getFixedT(lang)('brand.name');
 
   // The accessible name is real text inside a lang span (so it is voiced in the right language);
   // the visible wordmark and the bolt are hidden from assistive tech to avoid a double read.

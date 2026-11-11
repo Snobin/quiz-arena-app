@@ -76,11 +76,11 @@ type TypeToken = {
   letterSpacing?: string;
 };
 
-const MALAYALAM = 'Noto Sans Malayalam, Nirmala UI, Kartika, sans-serif';
-const MALAYALAM_UI = 'Noto Sans Malayalam, system-ui, sans-serif';
+const MALAYALAM = 'Noto Sans Malayalam, Noto Sans Malayalam Fallback, Nirmala UI, Kartika, sans-serif';
+const MALAYALAM_UI = 'Noto Sans Malayalam, Noto Sans Malayalam Fallback, system-ui, sans-serif';
 const NUMERIC = 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
 const MONO = 'ui-monospace, SF Mono, Menlo, Consolas, monospace';
-const UI = 'system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, sans-serif';
+const UI = 'system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, Noto Sans Malayalam Fallback, sans-serif';
 
 export const typography = {
   question: { fontFamily: MALAYALAM, fontSize: '1.4375rem', fontWeight: '500', lineHeight: '1.65' },
@@ -108,7 +108,7 @@ export const typography = {
   'room-code': { fontFamily: MONO, fontSize: '2.5rem', fontWeight: '700', lineHeight: '1.1', letterSpacing: '0.06em' },
   'room-code-compact': { fontFamily: MONO, fontSize: '2rem', fontWeight: '700', lineHeight: '1.1', letterSpacing: '0em' },
   code: {
-    fontFamily: 'ui-monospace, SF Mono, Menlo, Consolas, Noto Sans Malayalam, monospace',
+    fontFamily: 'ui-monospace, SF Mono, Menlo, Consolas, Noto Sans Malayalam, Noto Sans Malayalam Fallback, monospace',
     fontSize: '0.75rem',
     fontWeight: '400',
     lineHeight: '1.6',
