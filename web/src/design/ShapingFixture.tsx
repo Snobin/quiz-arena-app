@@ -69,7 +69,7 @@ export default function ShapingFixture() {
 
   return (
     <PageColumn className="gap-8 py-6">
-      <main lang="en" className="flex flex-col gap-8">
+      <main lang="en" data-dev-fixture="shaping" className="flex flex-col gap-8">
         <h1 className="text-card-title font-card-title">Malayalam shaping fixture</h1>
         <p className="text-muted">
           Every sample must shape (stacked conjuncts, chillu as single letters) with no dotted circle.
@@ -92,7 +92,7 @@ export default function ShapingFixture() {
                 <ul key={size.name} className="flex flex-col gap-2 rounded-md border border-hairline bg-card p-3">
                   <li className="text-label text-muted">{size.name} size</li>
                   {SAMPLES.map((sample) => (
-                    <li key={sample.label} className="flex min-w-0 flex-col">
+                    <li key={sample.label} className="flex min-w-[0] flex-col">
                       <span className="text-label text-muted">{sample.label}</span>
                       <span lang="ml" style={style}>
                         {sample.text}

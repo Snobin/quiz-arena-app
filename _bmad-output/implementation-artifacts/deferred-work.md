@@ -27,3 +27,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-malayalam-font-and-bilingual-text.md`
   summary: Extend the post-build `web/dist` check to assert the Malayalam woff2 is listed in `dist/sw.js`, the font preload is in `dist/index.html`, and the `/fonts/...` URLs still resolve under a non-root `BASE_URL`.
   evidence: These Story 1.3 part 2 acceptance criteria were verified by hand only (grep on dist); nothing fails if a Vite or workbox change drops them. Fold into the part 3 bundle/dist check.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-shell-motion-safety-and-offline.md`
+  summary: Story 1.2's CI must run `cd web && npm ci && npm run typecheck && npm test && npm run build:check` on every change.
+  evidence: The 150 KB budget and the dist checks (`check:dist`) run only by hand; the repo has no `.github/workflows` yet.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-shell-motion-safety-and-offline.md`
+  summary: Decide how the flash scheduler treats requests queued while the tab is hidden (expire them, or have peak callers cancel on `visibilitychange`) when Story 1.8 adds the first peaks.
+  evidence: rAF pauses in a hidden tab but the queue does not, so on return a backlog plays one flash per second after its trigger has passed (medium, needs peak semantics).

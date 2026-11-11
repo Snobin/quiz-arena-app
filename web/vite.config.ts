@@ -21,6 +21,8 @@ export default defineConfig({
         start_url: '/',
         scope: '/',
         display: 'standalone',
+        // No portrait lock (EXPERIENCE.md › Responsive & Platform).
+        orientation: 'any',
         background_color: '#ffffff',
         theme_color: '#111111',
         icons: [{ src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
@@ -33,6 +35,10 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    // dist/.vite/manifest.json: check:dist walks the entry chunk's static imports for the JS budget.
+    manifest: true,
+  },
   server: {
     port: 5173,
     strictPort: true,

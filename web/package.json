@@ -10,8 +10,10 @@
     "dev": "vite",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "vite build",
+    "build:check": "npm run build && npm run check:dist",
     "check:tokens": "node scripts/check-tokens.mjs",
     "check:i18n": "node scripts/check-i18n.mjs",
+    "check:dist": "node scripts/check-dist.mjs",
     "test": "vitest run",
     "preview": "vite preview"
   },
