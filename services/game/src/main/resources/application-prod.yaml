@@ -1,0 +1,7 @@
+minnal:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+
+logging:
+  level:
+    in.minnal: INFO

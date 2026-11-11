@@ -1,0 +1,46 @@
+{
+	# Admin API stays inside the container (used by the healthcheck only).
+	admin 127.0.0.1:2019
+}
+
+{$CADDY_SITE_ADDRESS::8080} {
+	# JSON access log to stdout; requestId is the id after the rule below, so it matches service logs.
+	log {
+		output stdout
+		format json
+	}
+	log_append requestId {http.request.header.X-Request-Id}
+
+	# Keep a well-formed caller X-Request-Id; replace it when absent or malformed (same rule as the
+	# services' RequestIdFilter, so edge and service ids always agree). reverse_proxy forwards it.
+	@needsRequestId not header_regexp X-Request-Id ^[A-Za-z0-9._:-]{1,128}$
+	request_header @needsRequestId X-Request-Id {http.request.uuid}
+
+	# Service-to-service endpoints are reachable only on the private network (AD-12).
+	handle /internal* {
+		respond 404
+	}
+
+	# Public health probe -> core actuator health. /actuator/** itself is never routed.
+	handle /health {
+		rewrite * /actuator/health
+		reverse_proxy core-service:8081
+	}
+
+	handle /api/core/* {
+		reverse_proxy core-service:8081
+	}
+
+	handle /api/ratings/* {
+		reverse_proxy ratings-service:8083
+	}
+
+	# WebSocket upgrade is handled transparently by reverse_proxy.
+	handle /ws {
+		reverse_proxy game-service:8082
+	}
+
+	handle {
+		respond 404
+	}
+}

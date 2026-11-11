@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: game-service
+  data:
+    redis:
+      host: ${VALKEY_HOST:localhost}
+      port: ${VALKEY_PORT:6379}
+      password: ${VALKEY_PASSWORD:}
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  port: ${SERVER_PORT:8082}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        # Public /health body is exactly {"status":"UP"}.
+        enabled: false
+
+logging:
+  structured:
+    format:
+      # JSON lines; MDC entries (requestId) become top-level fields.
+      console: logstash
+
+minnal:
+  valkey:
+    # Owner prefix for every key this service writes (AD-3). Applied when a story first writes keys.
+    key-prefix: "game:"

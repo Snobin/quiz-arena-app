@@ -1,0 +1,13 @@
+**/target/
+**/node_modules/
+web/
+deploy/
+_bmad/
+_bmad-output/
+docs/
+.claude/
+.git/
+**/.DS_Store
+**/*.iml
+.idea/
+.vscode/
