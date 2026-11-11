@@ -15,3 +15,6 @@ deploy/.env
 *.iml
 .vscode/
 *.swp
+
+# Party-mode session memory (personal, not project history)
+_bmad-output/party-mode/
