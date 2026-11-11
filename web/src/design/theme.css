@@ -1,0 +1,257 @@
+/*
+ * Minnal theme: the DESIGN.md token contract as Tailwind 4 theme variables.
+ * Values must match web/src/design/tokens.ts exactly (tokens.test.ts checks parity).
+ *
+ * `static` emits every variable even when no utility uses it, so the built CSS always carries
+ * the full contract. The default Tailwind palette, radii, type scale and spacing multiplier are
+ * cleared, so only DESIGN colours, radii, type steps and spacing steps exist as utilities.
+ */
+@theme static {
+  --color-*: initial;
+  --radius-*: initial;
+  --text-*: initial;
+  --spacing: initial;
+
+  /* Colours: calm surface, light */
+  --color-paper: #F4F5F7;
+  --color-card: #FFFFFF;
+  --color-ink: #101216;
+  --color-muted: #666C78;
+  --color-hairline: #E1E3E8;
+  --color-control-edge: #8D939C;
+  --color-dim: #9AA0AA;
+  --color-tile: #F4F5F7;
+  --color-ink-soft: #2B3040;
+  --color-unanswered: #80868F;
+  --color-brick: #B8463A;
+  /* Colours: calm surface, dark */
+  --color-paper-dark: #141518;
+  --color-card-dark: #1D1F23;
+  --color-ink-dark: #E8E9EB;
+  --color-muted-dark: #9CA1AA;
+  --color-hairline-dark: #2F3238;
+  --color-control-edge-dark: #6E737C;
+  --color-dim-dark: #6E737C;
+  --color-tile-dark: #26292E;
+  --color-ink-soft-dark: #E8E9EB;
+  --color-unanswered-dark: #6E737C;
+  --color-brick-dark: #E2705F;
+  /* Colours: peak surface (volt is reserved for web/src/design/peak/) */
+  --color-band: #101216;
+  --color-band-raised: #2B3040;
+  --color-on-band: #FFFFFF;
+  --color-on-band-muted: #9AA0AA;
+  --color-on-band-soft: #C9CDD3;
+  --color-volt: #D4FF2A;
+  --color-on-volt: #101216;
+  /* Colours: peak surface, dark */
+  --color-band-dark: #2F3238;
+  --color-band-raised-dark: #3D414A;
+
+  /* Typography (rem): font-<name> for the family, text-<name> for size + line-height + weight */
+  --font-question: Noto Sans Malayalam, Nirmala UI, Kartika, sans-serif;
+  --text-question: 1.4375rem;
+  --text-question--line-height: 1.65;
+  --text-question--font-weight: 500;
+
+  --font-option: Noto Sans Malayalam, Nirmala UI, Kartika, sans-serif;
+  --text-option: 1.09375rem;
+  --text-option--line-height: 1.5;
+  --text-option--font-weight: 400;
+
+  --font-explanation: Noto Sans Malayalam, Nirmala UI, Kartika, sans-serif;
+  --text-explanation: 0.875rem;
+  --text-explanation--line-height: 1.75;
+  --text-explanation--font-weight: 400;
+
+  --font-title: Noto Sans Malayalam, system-ui, sans-serif;
+  --text-title: 1.3125rem;
+  --text-title--line-height: 1.5;
+  --text-title--font-weight: 600;
+
+  --font-card-title: Noto Sans Malayalam, system-ui, sans-serif;
+  --text-card-title: 1.5rem;
+  --text-card-title--line-height: 1.4;
+  --text-card-title--font-weight: 600;
+
+  --font-peak-word: Noto Sans Malayalam, system-ui, sans-serif;
+  --text-peak-word: 1.5rem;
+  --text-peak-word--line-height: 1.4;
+  --text-peak-word--font-weight: 600;
+
+  --font-peak-points: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  --text-peak-points: 2.75rem;
+  --text-peak-points--line-height: 1;
+  --text-peak-points--font-weight: 700;
+  --text-peak-points--letter-spacing: -0.02em;
+
+  --font-takeover-title: Noto Sans Malayalam, system-ui, sans-serif;
+  --text-takeover-title: 2.375rem;
+  --text-takeover-title--line-height: 1.35;
+  --text-takeover-title--font-weight: 700;
+
+  --font-takeover-score: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  --text-takeover-score: 2.125rem;
+  --text-takeover-score--line-height: 1;
+  --text-takeover-score--font-weight: 700;
+  --text-takeover-score--letter-spacing: -0.02em;
+
+  --font-score: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  --text-score: 1.1875rem;
+  --text-score--line-height: 1.2;
+  --text-score--font-weight: 600;
+
+  --font-room-code: ui-monospace, SF Mono, Menlo, Consolas, monospace;
+  --text-room-code: 2.5rem;
+  --text-room-code--line-height: 1.1;
+  --text-room-code--font-weight: 700;
+  --text-room-code--letter-spacing: 0.06em;
+
+  --font-room-code-compact: ui-monospace, SF Mono, Menlo, Consolas, monospace;
+  --text-room-code-compact: 2rem;
+  --text-room-code-compact--line-height: 1.1;
+  --text-room-code-compact--font-weight: 700;
+  --text-room-code-compact--letter-spacing: 0em;
+
+  --font-code: ui-monospace, SF Mono, Menlo, Consolas, Noto Sans Malayalam, monospace;
+  --text-code: 0.75rem;
+  --text-code--line-height: 1.6;
+  --text-code--font-weight: 400;
+
+  --font-body: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, sans-serif;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.5;
+  --text-body--font-weight: 400;
+
+  --font-label: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, sans-serif;
+  --text-label: 0.75rem;
+  --text-label--line-height: 1.5;
+  --text-label--font-weight: 400;
+
+  --font-caption: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, sans-serif;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.5;
+  --text-caption--font-weight: 500;
+
+  --font-countdown: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  --text-countdown: 4.5rem;
+  --text-countdown--line-height: 1;
+  --text-countdown--font-weight: 700;
+
+  --font-tab-label: system-ui, -apple-system, Segoe UI, Roboto, Noto Sans Malayalam, sans-serif;
+  --text-tab-label: 0.75rem;
+  --text-tab-label--line-height: 1.5;
+  --text-tab-label--font-weight: 400;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-2xl: 16px;
+  --radius-full: 9999px;
+
+  /* Spacing */
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-5: 20px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-gutter-card: 16px;
+  --spacing-gutter-text: 20px;
+  --spacing-option-gap: 10px;
+  --spacing-target-min: 48px;
+  --spacing-sticky-max: 48px;
+
+  /* Motion (also exported as TS constants from tokens.ts) */
+  --motion-flash-window: 1000ms;
+  --motion-band-drop: 160ms;
+  --motion-strike-volt-hold: 80ms;
+  --motion-strike-total: 400ms;
+  --motion-overtake-jump: 180ms;
+  --motion-overtake-crack-fade-after: 1200ms;
+  --motion-win-flood: 200ms;
+  --motion-win-hold: 1600ms;
+  --motion-win-collapse: 240ms;
+  --motion-chip-pop: 160ms;
+  --motion-chip-new-label: 3000ms;
+  --motion-reduced-fade: 200ms;
+  --motion-reduced-chip-fade: 120ms;
+  --motion-easing-default: ease-out;
+  --motion-easing-overtake: cubic-bezier(.34,1.4,.64,1);
+}
+
+@layer base {
+  :root {
+    color-scheme: light dark;
+    /* Height of the fixed bottom bar on screen (tab bar, action bar, host start bar). */
+    --fixed-bar-height: 0px;
+  }
+
+  /*
+   * Live OS-driven dark theme: the semantic surface names take their -dark raw values.
+   * Pure CSS, so the swap is immediate with no reload and no JS. Keep this list in sync with
+   * `darkSwapped` in tokens.ts (tokens.test.ts checks it).
+   */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-paper: var(--color-paper-dark);
+      --color-card: var(--color-card-dark);
+      --color-ink: var(--color-ink-dark);
+      --color-muted: var(--color-muted-dark);
+      --color-hairline: var(--color-hairline-dark);
+      --color-control-edge: var(--color-control-edge-dark);
+      --color-dim: var(--color-dim-dark);
+      --color-tile: var(--color-tile-dark);
+      --color-ink-soft: var(--color-ink-soft-dark);
+      --color-unanswered: var(--color-unanswered-dark);
+      --color-brick: var(--color-brick-dark);
+      --color-band: var(--color-band-dark);
+      --color-band-raised: var(--color-band-raised-dark);
+    }
+  }
+
+  html {
+    /* A focused item is never hidden under a fixed bottom bar. */
+    scroll-padding-bottom: var(--fixed-bar-height);
+  }
+
+  /* Focus ring: 2px solid ink (ink-dark via the swap), 2px offset. Never volt. */
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+
+  /* Band (peak) surfaces: on-band text, and the focus ring switches to on-band. */
+  .surface-band {
+    background-color: var(--color-band);
+    color: var(--color-on-band);
+  }
+
+  /* Only descendants: a focused band element's own ring sits outside it, on paper. */
+  .surface-band :focus-visible {
+    outline-color: var(--color-on-band);
+  }
+}
+
+/*
+ * Hit area of at least 48 x 48 CSS px without changing the element's display or visual size:
+ * a centred ::before box, max(own size, 48px) in each direction. The box extends past small
+ * visuals, so lay out neighbours far enough apart (gap >= 48px minus the visual size) that
+ * adjacent hit areas never overlap.
+ */
+@utility hit-target {
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--spacing-target-min));
+    height: max(100%, var(--spacing-target-min));
+    transform: translate(-50%, -50%);
+  }
+}

@@ -1,1 +1,15 @@
 @import "tailwindcss";
+@import "./design/theme.css";
+
+@layer base {
+  body {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: var(--text-body);
+    font-weight: var(--text-body--font-weight);
+    line-height: var(--text-body--line-height);
+    /* Long words wrap instead of forcing a horizontal page scroll at 320 px / 200% text. */
+    overflow-wrap: break-word;
+  }
+}
