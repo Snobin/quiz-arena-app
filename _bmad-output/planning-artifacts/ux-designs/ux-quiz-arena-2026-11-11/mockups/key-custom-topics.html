@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="ml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minnal Key Screen Custom Topics</title>
+<style>
+/* ============================================================
+   KEY SCREEN: Custom Topics (Me tab), Rajeev sir, Kollam coaching center
+   Col A: Custom Topics list, ML UI. Usage meter 12 / 50 topics · 410 / 500 questions
+          (questions at 82% = warning state, threshold >= 80%).
+   Col B: Import screen, ML UI: topic name, pasted JSON (Kerala Renaissance — Week 12, 15 Qs),
+          schema reference expanded + sample GPT prompt collapsed, each with copy.
+   Col C: Import rejected: field-level error list (Q7 options, Q12 answer), Import disabled until fixed.
+   Col D: Success, English UI: "Kerala Renaissance — Week 12 · 15 questions imported",
+          actions Use in Battle Room / Practice. Meter now 13 / 50 · 425 / 500 (still >= 80%).
+
+   Governing spine sections:
+   - DESIGN Colors (calm surface only: NO volt, import is not a peak; brick = error text only),
+     Typography (title, body, label, caption, explanation for Malayalam question previews; tabular nums),
+     Layout & Spacing, Shapes, Components: Answered meter (base for usage bars), Sign-in nudge
+     (1.5px ink outline, precedent for warning card), button-primary / button-secondary,
+     Room code block copy text link (precedent for copy), Mode entry row (base for topic rows),
+     Admin import error list [ASSUMPTION row], Tab bar (inactive = muted)
+   - EXPERIENCE Information Architecture: Custom Topics under Me (memlog triage #12)
+   - EXPERIENCE Voice and Tone: errors say exactly what to fix; microcopy "Import error"
+   - EXPERIENCE Bilingual Behavior: custom-topic questions show in the language they were written in
+   - EXPERIENCE Component Patterns: Import error list; Source row + unrated tag (സ്വന്തം / unrated wording)
+   - EXPERIENCE State Patterns: JSON import error; Fair-use cap (warn >= 80%, block over cap)
+   - EXPERIENCE Key Flows: J2 Rajeev steps 1-3 (generate with GPT prompt -> rejected -> fix -> saved -> Battle Room)
+   - Product rules: question-content.md Custom topic JSON (schema, exactly 4 options, answer 0-3,
+     per-field errors, caps 50 / 500, private, re-import edits, schema + GPT prompt on creation screen)
+
+   Tokens (DESIGN.md, light): paper #F4F5F7 card #FFFFFF ink #101216 muted #666C78 hairline #E1E3E8
+   dim #9AA0AA tile #F4F5F7 ink-soft #2B3040 brick #B8463A on-band #FFFFFF
+   ============================================================ */
+:root{
+  --ml:"Noto Sans Malayalam","Nirmala UI","Kartika",sans-serif;
+  --sys:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --page-bg:#ECECEA; --page-ink:#1C1E22; --page-muted:#5E636C;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --page-bg:#141518; --page-ink:#E8E9EB; --page-muted:#9CA1AA; }
+}
+:root[data-theme="dark"]{ --page-bg:#141518; --page-ink:#E8E9EB; --page-muted:#9CA1AA; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--page-bg);color:var(--page-ink);font-family:var(--sys),var(--ml);line-height:1.4;padding:32px 16px 64px}
+.ml{font-family:var(--ml)}
+.tab{font-variant-numeric:tabular-nums}
+header.page{max-width:1560px;margin:0 auto 24px}
+header.page h1{font-size:24px;letter-spacing:-.01em}
+header.page p{color:var(--page-muted);max-width:880px;margin-top:6px;font-size:14px}
+.stage{margin:0 auto;display:flex;gap:28px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+.col{width:360px;max-width:100%}
+.col h2{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--page-muted);margin-bottom:10px}
+.cap{font-size:12px;color:var(--page-muted);margin-top:12px;line-height:1.55}
+.cap b{color:var(--page-ink);font-weight:600}
+.cap ul{padding-left:16px;margin-top:6px}
+
+/* ---------- product tokens (DESIGN.md light) ---------- */
+.phone{--paper:#F4F5F7;--card:#FFFFFF;--ink:#101216;--muted:#666C78;--line:#E1E3E8;--dim:#9AA0AA;--tile:#F4F5F7;--soft:#2B3040;--brick:#B8463A;--on-band:#FFFFFF;
+  width:360px;height:740px;border-radius:38px;border:8px solid #0E0F12;overflow:hidden;position:relative;
+  background:var(--paper);color:var(--ink);font-family:var(--sys),var(--ml);box-shadow:0 16px 36px rgba(0,0,0,.16)}
+.notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:104px;height:19px;background:#0E0F12;border-radius:0 0 14px 14px;z-index:5}
+.sb{height:26px;display:flex;justify-content:space-between;align-items:center;padding:0 18px;font:600 11px var(--sys);color:var(--muted)}
+.scroll{position:absolute;top:26px;left:0;right:0;bottom:66px;overflow:hidden}
+
+/* header: back crumb + title (typography.title) */
+.bk{margin:6px 12px 0;min-height:32px;display:flex;align-items:center;font-size:13px;font-weight:600;color:var(--ink);padding-left:8px}
+.bk.ml{font-family:var(--ml)}
+.ttl{margin:0 20px;font-family:var(--ml);font-size:21px;font-weight:600;line-height:1.5}
+.ttl.en{font-family:var(--sys)}
+
+/* Usage meter (invented; built from Answered meter: 4px ink fill on hairline) */
+.use{margin:10px 16px 0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.use.warn{border:1.5px solid var(--ink)}
+.use .hd{font-size:13.5px;font-weight:600;line-height:1.5}
+.use .hd.ml{font-family:var(--ml)}
+.use .m{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
+.use .m span{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);line-height:1.5}
+.use .m span.ml{font-family:var(--ml)}
+.use .m span b{color:var(--ink);font-weight:600}
+.bar{height:4px;background:var(--line);border-radius:2px;margin-top:4px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ink)}
+.use .w{display:flex;gap:8px;align-items:flex-start;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:12.5px;line-height:1.55}
+.use .w.ml{font-family:var(--ml)}
+.use .w .ic{flex:none;width:18px;height:18px;border-radius:50%;background:var(--ink);color:var(--on-band);font:700 11px/18px var(--sys);text-align:center;margin-top:1px}
+
+/* buttons (button-primary / button-secondary) */
+.btn{min-height:48px;display:flex;align-items:center;justify-content:center;border-radius:10px;font-weight:700;font-size:14.5px;line-height:1.5;text-align:center;padding:0 10px}
+.btn.ml{font-family:var(--ml)}
+.btn.pr{background:var(--ink);color:var(--on-band)}
+.btn.sc{background:var(--card);border:1.5px solid var(--ink);color:var(--ink)}
+.btn.off{background:var(--line);color:var(--dim)}
+.mx{margin:12px 16px 0}
+
+/* topic list (Mode entry row base) */
+.lh{margin:16px 20px 6px;display:flex;justify-content:space-between;font-size:11.5px;font-weight:500;color:var(--muted);line-height:1.5}
+.lh.ml{font-family:var(--ml)}
+.tl{margin:0 16px;background:var(--card);border:1px solid var(--line);border-radius:12px}
+.tr{display:flex;align-items:center;gap:12px;padding:9px 14px;min-height:56px;border-bottom:1px solid var(--line)}
+.tr:last-child{border-bottom:0}
+.tr .tx{min-width:0}
+.tr .tx b{display:block;font-size:14.5px;font-weight:600;line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tr .tx b.ml{font-family:var(--ml)}
+.tr .tx span{font-family:var(--ml);font-size:12px;color:var(--muted);line-height:1.5}
+.tr .ch{margin-left:auto;color:var(--dim);font-size:16px;flex:none}
+
+/* form fields (invented: labelled input + paste area) */
+.fl{margin:12px 20px 4px;font-family:var(--ml);font-size:12px;color:var(--muted);line-height:1.5;display:flex;justify-content:space-between}
+.fl.en{font-family:var(--sys)}
+.in{margin:0 16px;min-height:48px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:0 12px;display:flex;align-items:center;font-size:15px}
+.ta{margin:0 16px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-family:var(--mono),var(--ml);font-size:11px;line-height:1.6;color:var(--ink);height:176px;overflow:hidden;white-space:pre;position:relative}
+.ta.err{border:1.5px solid var(--brick)}
+.ta .ln{display:block}
+.ta .ln i{font-style:normal;color:var(--dim);display:inline-block;width:20px;text-align:right;margin-right:8px}
+.ta .ln.bad{background:#FFFFFF;box-shadow:inset 3px 0 0 var(--brick);margin:0 -10px;padding:0 10px}
+.ta .ln.bad i{color:var(--brick);font-weight:700}
+.ta .k{color:var(--soft);font-weight:600}
+.meta{margin:6px 20px 0;font-family:var(--ml);font-size:11.5px;font-weight:500;color:var(--muted);line-height:1.5}
+.meta b{color:var(--ink);font-weight:600}
+
+/* Disclosure rows (invented: collapsible section with copy text link) */
+.dc{margin:12px 16px 0;background:var(--card);border:1px solid var(--line);border-radius:12px}
+.dr{display:flex;align-items:center;gap:8px;min-height:48px;padding:0 14px;border-bottom:1px solid var(--line)}
+.dr:last-child{border-bottom:0}
+.dr .cv{width:12px;color:var(--ink);font-size:11px}
+.dr b{font-family:var(--ml);font-size:13.5px;font-weight:600;line-height:1.5}
+.dr .cp{margin-left:auto;font-family:var(--ml);font-size:12.5px;font-weight:700;color:var(--ink);min-height:48px;display:flex;align-items:center;padding-left:12px}
+.code{margin:0 14px 12px;background:var(--tile);border-radius:6px;padding:8px 10px;font-family:var(--mono);font-size:10.5px;line-height:1.6;color:var(--soft);white-space:pre;overflow:hidden}
+.dsub{padding:0 14px 0 34px;margin-top:-10px;padding-bottom:10px;font-size:11.5px;color:var(--muted);line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Import error list (EXPERIENCE Component Patterns: one line per problem: item number, field, what to fix) */
+.el{margin:10px 16px 0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px 4px}
+.el .h{font-family:var(--ml);font-size:13.5px;font-weight:600;line-height:1.5}
+.el .h span{display:block;font-size:11.5px;font-weight:400;color:var(--muted)}
+.er{display:flex;gap:10px;align-items:flex-start;min-height:48px;padding:9px 0;border-top:1px solid var(--line);margin-top:8px}
+.er + .er{margin-top:0}
+.er p{font-family:var(--ml);font-size:13.5px;line-height:1.6;color:var(--brick);font-weight:500}
+.er code{margin-left:auto;flex:none;font-family:var(--mono);font-size:10.5px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:1px 6px;margin-top:2px}
+.hint{margin:6px 20px 0;font-family:var(--ml);font-size:11.5px;color:var(--muted);text-align:center;line-height:1.5}
+
+/* Success card (invented: confirmation card; calm, no volt) */
+.ok{margin:10px 16px 0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 14px 14px}
+.ok .ic{width:28px;height:28px;border-radius:50%;background:var(--ink);display:flex;align-items:center;justify-content:center}
+.ok b{display:block;font-size:16px;font-weight:600;line-height:1.45;margin-top:10px}
+.ok p{font-size:12.5px;color:var(--muted);margin-top:4px;line-height:1.5}
+.ok .acts{display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-top:14px}
+.qp{margin:0 16px;display:flex;flex-direction:column;gap:6px}
+.qp div{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 12px}
+.qp span{font-size:11px;color:var(--muted)}
+.qp p{font-family:var(--ml);font-size:14px;line-height:1.65;font-weight:500;margin-top:2px}
+.lnks{margin:10px 20px 0;display:flex;gap:20px;font-size:13px;font-weight:600}
+.lnks span{min-height:40px;display:flex;align-items:center}
+
+/* Tab bar */
+.tabs{position:absolute;left:0;right:0;bottom:0;height:66px;background:var(--card);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);padding:8px 0 14px;z-index:4}
+.tabs div{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;line-height:1.3;color:var(--muted)}
+.tabs.ml div{font-family:var(--ml)}
+.tabs svg{width:20px;height:20px}
+.tabs .on{color:var(--ink);font-weight:700}
+</style>
+</head>
+<body>
+<header class="page">
+  <h1>Key screen: Custom Topics (Me tab)</h1>
+  <p>Rajeev sir's J2 steps 1–3, entirely on the calm surface. Importing is admin-like work, not a peak, so there is no volt. Ink is the only emphasis and brick appears only on error text. Columns A–C are in Malayalam because Rajeev's UI follows his question language. Column D shows the success state with an English UI. The questions themselves stay in Malayalam, because custom topics keep the language they were written in.</p>
+</header>
+
+<div class="stage">
+
+<!-- ================= A: LIST + USAGE WARNING (ML) ================= -->
+<div class="col">
+  <h2>A · List · usage ≥ 80% warning</h2>
+  <div class="phone"><div class="notch"></div>
+    <div class="sb"><span>9:41</span><span>4G ▮▮▮</span></div>
+    <div class="scroll">
+      <div class="bk ml">‹ ഞാൻ</div>
+      <div class="ttl">സ്വന്തം ടോപ്പിക്കുകൾ</div>
+
+      <div class="use warn">
+        <div class="hd ml tab">12 / 50 ടോപ്പിക് · 410 / 500 ചോദ്യം</div>
+        <div class="m">
+          <div><span class="ml">ടോപ്പിക്<b class="tab">12 / 50</b></span><div class="bar"><i style="width:24%"></i></div></div>
+          <div><span class="ml">ചോദ്യം<b class="tab">410 / 500</b></span><div class="bar"><i style="width:82%"></i></div></div>
+        </div>
+        <div class="w ml"><span class="ic">!</span><span>ചോദ്യ പരിധിക്ക് അടുത്തെത്തി. <span class="tab">90</span> ചോദ്യം കൂടി ചേർക്കാം. പഴയ ടോപ്പിക് കളഞ്ഞാൽ ഇടം കിട്ടും.</span></div>
+      </div>
+
+      <div class="mx"><div class="btn pr ml">+ JSON ഇംപോർട്ട് ചെയ്യുക</div></div>
+
+      <div class="lh ml"><span>നിങ്ങൾക്ക് മാത്രം കാണാം · റേറ്റിംഗിൽ കൂട്ടില്ല</span><span class="tab">12</span></div>
+      <div class="tl">
+        <div class="tr"><span class="tx"><b>Kerala Renaissance — Week 11</b><span><span class="tab">30</span> ചോദ്യം · 4 നവം.</span></span><span class="ch">›</span></div>
+        <div class="tr"><span class="tx"><b>Kerala Renaissance — Week 10</b><span><span class="tab">40</span> ചോദ്യം · 28 ഒക്ടോ.</span></span><span class="ch">›</span></div>
+        <div class="tr"><span class="tx"><b>Constitution — Fundamental Rights</b><span><span class="tab">50</span> ചോദ്യം · 21 ഒക്ടോ.</span></span><span class="ch">›</span></div>
+        <div class="tr"><span class="tx"><b class="ml">കേരളത്തിലെ നദികൾ</b><span><span class="tab">35</span> ചോദ്യം · 14 ഒക്ടോ.</span></span><span class="ch">›</span></div>
+        <div class="tr"><span class="tx"><b>LDC Mock Set 3</b><span><span class="tab">50</span> ചോദ്യം · 7 ഒക്ടോ.</span></span><span class="ch">›</span></div>
+        <div class="tr"><span class="tx"><b class="ml">നവോത്ഥാന നായകർ</b><span><span class="tab">25</span> ചോദ്യം · 30 സെപ്.</span></span><span class="ch">›</span></div>
+      </div>
+    </div>
+    <div class="tabs ml">
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><polygon points="11.5,1 4,11 9,11 7.5,19 16,8 11,8 13,1" fill="currentColor"/></svg>കളി</div>
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="7" cy="7" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="14" cy="7" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2 17c0-3 2.2-5 5-5s5 2 5 5M10 17c0-3 1.8-5 4-5s4 2 4 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>റൂമുകൾ</div>
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="10" width="3.5" height="7" fill="currentColor"/><rect x="8.25" y="4" width="3.5" height="13" fill="currentColor"/><rect x="13.5" y="7" width="3.5" height="10" fill="currentColor"/></svg>റാങ്ക്</div>
+      <div class="on"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="7" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 18c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>ഞാൻ</div>
+    </div>
+  </div>
+  <p class="cap"><b>List with fair-use warning.</b> The meter shows both caps in one line (the brief's string), then a 4px bar per cap built from the Answered meter. Questions are at 82%, so the card switches to a 1.5px ink outline with a "!" line that gives the headroom (90 left) and a way out (delete an old topic). The warning stays monochrome: brick is reserved for errors and volt for peaks. Below 80% the card has only a hairline border and no "!" line.
+    <ul><li>Each row opens the topic view (questions, Practice, Use in Battle Room, re-import, delete).</li>
+    <li>The list header states the two rules up front: private to the owner, never rated.</li>
+    <li>Over a cap, the import is blocked on the Import screen, naming the cap and the overshoot (e.g. "500 ചോദ്യ പരിധി 15 കവിയും"). Not rendered here.</li></ul></p>
+</div>
+
+<!-- ================= B: IMPORT (ML) ================= -->
+<div class="col">
+  <h2>B · Import · pasted JSON</h2>
+  <div class="phone"><div class="notch"></div>
+    <div class="sb"><span>9:43</span><span>4G ▮▮▮</span></div>
+    <div class="scroll">
+      <div class="bk ml">‹ സ്വന്തം ടോപ്പിക്കുകൾ</div>
+      <div class="ttl">JSON ഇംപോർട്ട്</div>
+
+      <div class="fl"><span>ടോപ്പിക് പേര്</span></div>
+      <div class="in">Kerala Renaissance — Week 12</div>
+
+      <div class="fl"><span>JSON ഇവിടെ പേസ്റ്റ് ചെയ്യുക</span></div>
+<div class="ta"><span class="ln">{ <span class="k">"topic"</span>: "Kerala Renaissance — Week 12",</span><span class="ln">  <span class="k">"questions"</span>: [</span><span class="ln">    { <span class="k">"question"</span>: "വൈക്കം സത്യാഗ്രഹം ആരംഭിച്ച വർഷം?",</span><span class="ln">      <span class="k">"options"</span>: ["1924", "1921", "1931", "1936"],</span><span class="ln">      <span class="k">"answer"</span>: 0,</span><span class="ln">      <span class="k">"explanation"</span>: "1924 മാർച്ച് 30-ന് ആരംഭിച്ചു." },</span><span class="ln">    { <span class="k">"question"</span>: "'ഒരു ജാതി, ഒരു മതം, ഒരു ദൈവം</span><span class="ln">        മനുഷ്യന്' ആരുടെ വാക്യം?",</span><span class="ln">      <span class="k">"options"</span>: ["ശ്രീനാരായണ ഗുരു", "ചട്ടമ്പിസ്വാമി",</span><span class="ln">        "അയ്യങ്കാളി", "വാഗ്ഭടാനന്ദൻ"],</span></div>
+      <div class="meta"><b class="tab">15</b> ചോദ്യം കണ്ടെത്തി · ശേഷം <span class="tab">425 / 500</span></div>
+
+      <div class="mx"><div class="btn pr ml">ഇംപോർട്ട് ചെയ്യുക</div></div>
+
+      <div class="dc">
+        <div class="dr"><span class="cv">▾</span><b>JSON ഫോർമാറ്റ്</b><span class="cp">കോപ്പി</span></div>
+<div class="code">{ "topic": "string",
+  "questions": [
+    { "question": "string",
+      "options": ["a","b","c","d"],
+      "answer": 0,
+      "explanation": "string" } ] }</div>
+        <div class="dr"><span class="cv">▸</span><b>സാമ്പിൾ GPT പ്രോംപ്റ്റ്</b><span class="cp">കോപ്പി</span></div>
+      </div>
+    </div>
+    <div class="tabs ml">
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><polygon points="11.5,1 4,11 9,11 7.5,19 16,8 11,8 13,1" fill="currentColor"/></svg>കളി</div>
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="7" cy="7" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="14" cy="7" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2 17c0-3 2.2-5 5-5s5 2 5 5M10 17c0-3 1.8-5 4-5s4 2 4 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>റൂമുകൾ</div>
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="10" width="3.5" height="7" fill="currentColor"/><rect x="8.25" y="4" width="3.5" height="13" fill="currentColor"/><rect x="13.5" y="7" width="3.5" height="10" fill="currentColor"/></svg>റാങ്ക്</div>
+      <div class="on"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="7" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 18c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>ഞാൻ</div>
+    </div>
+  </div>
+  <p class="cap"><b>Import, Rajeev's JSON pasted.</b> The topic name is prefilled from the JSON's "topic" and stays editable. The paste area is monospace and does not soft-wrap, so JSON structure stays readable while the Malayalam strings use the Malayalam fallback. The line under it confirms the count and the cap after import (15 found → 425 / 500), so a cap overshoot would show up before he taps Import.
+    <ul><li>Schema reference and sample GPT prompt (required on the creation screen) sit below the action as collapsible rows. Each has a one-tap "കോപ്പി" text link (same treatment as copy code in the lobby). The schema is shown expanded here and the prompt collapsed. When the list is empty, both start expanded (State Patterns: Empty).</li>
+    <li>The GPT prompt text is not written yet. It needs content sign-off (language, PSC style, "exactly 4 options", answer index 0–3).</li></ul></p>
+</div>
+
+<!-- ================= C: IMPORT ERROR (ML) ================= -->
+<div class="col">
+  <h2>C · Import rejected · field errors</h2>
+  <div class="phone"><div class="notch"></div>
+    <div class="sb"><span>9:43</span><span>4G ▮▮▮</span></div>
+    <div class="scroll">
+      <div class="bk ml">‹ സ്വന്തം ടോപ്പിക്കുകൾ</div>
+      <div class="ttl">JSON ഇംപോർട്ട്</div>
+
+      <div class="el">
+        <div class="h">2 തെറ്റുകൾ തിരുത്തിയാൽ ഇംപോർട്ട് ചെയ്യാം<span>ഓരോന്നിലും തൊട്ടാൽ ആ വരിയിലേക്ക് പോകും</span></div>
+        <div class="er"><p>ചോദ്യം 7: 4 ഓപ്ഷനുകൾ വേണം, 3 എണ്ണമേ ഉള്ളൂ</p><code>options</code></div>
+        <div class="er"><p>ചോദ്യം 12: answer 0 മുതൽ 3 വരെ ആകണം, ഇപ്പോൾ 4 ആണ്</p><code>answer</code></div>
+      </div>
+
+      <div class="fl"><span>JSON</span><span class="tab">വരി 41–50</span></div>
+<div class="ta err"><span class="ln"><i>41</i>{ <span class="k">"question"</span>: "ശ്രീനാരായണ ഗുരു അരുവിപ്പുറത്ത്</span><span class="ln"><i>42</i>    ശിവപ്രതിഷ്ഠ നടത്തിയ വർഷം?",</span><span class="ln bad"><i>43</i>  <span class="k">"options"</span>: ["1888", "1891", "1903"],</span><span class="ln"><i>44</i>  <span class="k">"answer"</span>: 0,</span><span class="ln"><i>45</i>  <span class="k">"explanation"</span>: "1888-ൽ അരുവിപ്പുറം</span><span class="ln"><i>46</i>    ശിവപ്രതിഷ്ഠ." },</span><span class="ln"><i>47</i>{ <span class="k">"question"</span>: "തിരുവിതാംകൂറിൽ ആദ്യത്തെ</span><span class="ln"><i>48</i>    നിവർത്തന പ്രക്ഷോഭം ആരംഭിച്ച വർഷം?",</span><span class="ln"><i>49</i>  <span class="k">"options"</span>: ["1932", "1936", "1928", "1941"],</span><span class="ln"><i>50</i>  <span class="k">"answer"</span>: 0, …</span></div>
+
+      <div class="mx"><div class="btn off ml" aria-disabled="true">ഇംപോർട്ട് ചെയ്യുക</div></div>
+      <div class="hint">തെറ്റുകൾ തിരുത്തുമ്പോൾ ബട്ടൺ തെളിയും</div>
+
+      <div class="dc">
+        <div class="dr"><span class="cv">▸</span><b>JSON ഫോർമാറ്റ്</b><span class="cp">കോപ്പി</span></div>
+        <div class="dr"><span class="cv">▸</span><b>സാമ്പിൾ GPT പ്രോംപ്റ്റ്</b><span class="cp">കോപ്പി</span></div>
+      </div>
+    </div>
+    <div class="tabs ml">
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><polygon points="11.5,1 4,11 9,11 7.5,19 16,8 11,8 13,1" fill="currentColor"/></svg>കളി</div>
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="7" cy="7" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="14" cy="7" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2 17c0-3 2.2-5 5-5s5 2 5 5M10 17c0-3 1.8-5 4-5s4 2 4 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>റൂമുകൾ</div>
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="10" width="3.5" height="7" fill="currentColor"/><rect x="8.25" y="4" width="3.5" height="13" fill="currentColor"/><rect x="13.5" y="7" width="3.5" height="10" fill="currentColor"/></svg>റാങ്ക്</div>
+      <div class="on"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="7" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 18c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>ഞാൻ</div>
+    </div>
+  </div>
+  <p class="cap"><b>Import rejected.</b> Nothing is saved. Following the Import error list pattern, there is one line per problem, giving the question number, what to fix and the field name (monospace tag). The text is brick, the card stays calm, and the header counts the problems as a goal rather than a scolding. Tapping a line scrolls the paste area to that question. The bad line gets a brick gutter rule and line number, and the paste area gets a brick border.
+    <ul><li>Import stays disabled (hairline fill, dim label: the disabled-only use of dim) until local validation passes again. Then it returns to ink and the server validates once more on tap.</li>
+    <li>The second error is the realistic LLM slip: Ayyankali is option index 0, but the JSON says 4.</li>
+    <li>Both reference rows collapse in this state so the errors and the fix stay on screen.</li></ul></p>
+</div>
+
+<!-- ================= D: SUCCESS (EN) ================= -->
+<div class="col">
+  <h2>D · Imported · English UI</h2>
+  <div class="phone"><div class="notch"></div>
+    <div class="sb"><span>9:46</span><span>4G ▮▮▮</span></div>
+    <div class="scroll">
+      <div class="bk">‹ My topics</div>
+      <div class="ttl en">Kerala Renaissance — Week 12</div>
+
+      <div class="ok" lang="en">
+        <span class="ic"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 7.5l3 3 6-7" fill="none" stroke="#FFFFFF" stroke-width="2"/></svg></span>
+        <b>Kerala Renaissance — Week 12 · 15 questions imported</b>
+        <p>Private to you. Custom topics never change ratings or leaderboards.</p>
+        <div class="acts">
+          <div class="btn pr">Use in Battle Room</div>
+          <div class="btn sc">Practice</div>
+        </div>
+      </div>
+
+      <div class="use warn">
+        <div class="hd tab">13 / 50 topics · 425 / 500 questions</div>
+        <div class="m">
+          <div><span>Topics<b class="tab">13 / 50</b></span><div class="bar"><i style="width:26%"></i></div></div>
+          <div><span>Questions<b class="tab">425 / 500</b></span><div class="bar"><i style="width:85%"></i></div></div>
+        </div>
+      </div>
+
+      <div class="lh"><span>Questions</span><span class="tab">15</span></div>
+      <div class="qp">
+        <div><span class="tab">1</span><p lang="ml">വൈക്കം സത്യാഗ്രഹം ആരംഭിച്ച വർഷം?</p></div>
+        <div><span class="tab">2</span><p lang="ml">'ഒരു ജാതി, ഒരു മതം, ഒരു ദൈവം മനുഷ്യന്' ആരുടെ വാക്യം?</p></div>
+        <div><span class="tab">3</span><p lang="ml">ശ്രീനാരായണ ഗുരു അരുവിപ്പുറത്ത് ശിവപ്രതിഷ്ഠ നടത്തിയ വർഷം?</p></div>
+      </div>
+    </div>
+    <div class="tabs">
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><polygon points="11.5,1 4,11 9,11 7.5,19 16,8 11,8 13,1" fill="currentColor"/></svg>Play</div>
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="7" cy="7" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="14" cy="7" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2 17c0-3 2.2-5 5-5s5 2 5 5M10 17c0-3 1.8-5 4-5s4 2 4 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Rooms</div>
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="10" width="3.5" height="7" fill="currentColor"/><rect x="8.25" y="4" width="3.5" height="13" fill="currentColor"/><rect x="13.5" y="7" width="3.5" height="10" fill="currentColor"/></svg>Ranks</div>
+      <div class="on"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="7" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 18c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Me</div>
+    </div>
+  </div>
+  <p class="cap"><b>Imported, landing on the new topic's view.</b> A calm confirmation card (ink check, no volt, since importing isn't a peak) with the two next steps. "Use in Battle Room" is primary because it is Rajeev's J2 next step. It opens Rooms → create with this topic preselected as the source ("സ്വന്തം" + unrated). "Practice" starts untimed Solo Practice on it. Primary sits first, as in the results action bar.
+    <ul><li>The meter updates right away (13 / 50 · 425 / 500), still ≥ 80%, so it keeps the ink-outline warning card. The "!" line is dropped here to keep focus on the success.</li>
+    <li>The UI is English, but the questions stay Malayalam, the language the JSON was written in (lang="ml" per string).</li>
+    <li>The rest of this view (below the fold): Re-import JSON (replaces the topic's questions) and Delete topic.</li></ul></p>
+</div>
+
+</div>
+</body>
+</html>

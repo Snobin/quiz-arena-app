@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minnal — Brainstorm Session</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap');
+
+  :root {
+    --lightning: #FFD700;
+    --lightning-dim: #B8960C;
+    --bg: #0A0A0F;
+    --surface: #12121A;
+    --surface2: #1A1A26;
+    --text: #E8E8F0;
+    --muted: #888899;
+    --kerala: #E8572A;
+    --teal: #00C8C8;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    text-align: center;
+    padding: 2rem;
+  }
+
+  .hero-bg {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse 80% 60% at 50% 40%, rgba(255,215,0,0.08) 0%, transparent 70%);
+  }
+
+  .bolt {
+    font-size: 6rem;
+    animation: pulse 2s ease-in-out infinite;
+    display: block;
+    margin-bottom: 1rem;
+    filter: drop-shadow(0 0 40px rgba(255,215,0,0.6));
+  }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); filter: drop-shadow(0 0 40px rgba(255,215,0,0.6)); }
+    50% { transform: scale(1.08); filter: drop-shadow(0 0 70px rgba(255,215,0,0.9)); }
+  }
+
+  .hero h1 {
+    font-size: clamp(3rem, 10vw, 7rem);
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    color: var(--lightning);
+    text-shadow: 0 0 60px rgba(255,215,0,0.4);
+    line-height: 1;
+  }
+
+  .hero .malayalam {
+    font-size: clamp(1.2rem, 3vw, 2rem);
+    color: var(--muted);
+    margin-top: 0.5rem;
+    letter-spacing: 0.1em;
+  }
+
+  .hero .tagline {
+    margin-top: 1.5rem;
+    font-size: clamp(1rem, 2.5vw, 1.4rem);
+    color: var(--text);
+    max-width: 600px;
+    font-weight: 300;
+  }
+
+  .hero .meta {
+    margin-top: 3rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .scroll-hint {
+    margin-top: 4rem;
+    color: var(--muted);
+    font-size: 0.8rem;
+    animation: bounce 2s infinite;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); opacity: 0.5; }
+    50% { transform: translateY(6px); opacity: 1; }
+  }
+
+  /* ── LAYOUT ── */
+  .section {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 5rem 2rem;
+  }
+
+  .section + .section {
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--lightning-dim);
+    margin-bottom: 1rem;
+  }
+
+  h2 {
+    font-size: clamp(1.8rem, 4vw, 2.8rem);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin-bottom: 1.5rem;
+  }
+
+  p {
+    color: rgba(232,232,240,0.8);
+    font-size: 1.05rem;
+    max-width: 680px;
+    margin-bottom: 1rem;
+  }
+
+  /* ── TECHNIQUE BLOCKS ── */
+  .technique {
+    background: var(--surface);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 16px;
+    padding: 2rem;
+    margin-top: 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .technique::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+
+  .technique.jtbd::before { background: linear-gradient(90deg, var(--kerala), var(--lightning)); }
+  .technique.modes::before { background: linear-gradient(90deg, var(--teal), #0066FF); }
+  .technique.naming::before { background: linear-gradient(90deg, var(--lightning), #FF9800); }
+  .technique.money::before { background: linear-gradient(90deg, #00C853, var(--teal)); }
+
+  .technique h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+    color: var(--text);
+  }
+
+  .technique .tech-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+
+  /* ── IDEA CARDS ── */
+  .ideas {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+
+  .idea-card {
+    background: var(--surface2);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px;
+    padding: 1.2rem;
+    font-size: 0.95rem;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+
+  .idea-card:hover {
+    border-color: rgba(255,215,0,0.3);
+    transform: translateY(-2px);
+  }
+
+  .idea-card .by {
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 0.5rem;
+  }
+
+  .by.user { color: var(--kerala); }
+  .by.coach { color: var(--teal); }
+
+  /* ── GAME MODES ── */
+  .modes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1.2rem;
+    margin-top: 1.5rem;
+  }
+
+  .mode-card {
+    background: var(--surface2);
+    border-radius: 14px;
+    padding: 1.5rem;
+    border: 1px solid rgba(0,200,200,0.15);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .mode-card .icon {
+    font-size: 2rem;
+    margin-bottom: 0.8rem;
+    display: block;
+  }
+
+  .mode-card h4 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+    color: var(--teal);
+  }
+
+  .mode-card p {
+    font-size: 0.9rem;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  /* ── DECISIONS ── */
+  .decision-row {
+    display: flex;
+    gap: 1.5rem;
+    padding: 1.2rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    align-items: flex-start;
+  }
+
+  .decision-row:last-child { border-bottom: none; }
+
+  .decision-row .key {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--muted);
+    min-width: 140px;
+    padding-top: 0.1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .decision-row .val {
+    font-size: 1rem;
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  /* ── SYNTHESIS ── */
+  .insight-list {
+    list-style: none;
+    margin-top: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .insight-list li {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  .insight-list .num {
+    min-width: 2rem;
+    height: 2rem;
+    background: rgba(255,215,0,0.1);
+    border: 1px solid rgba(255,215,0,0.3);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--lightning);
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+  }
+
+  .insight-list .text {
+    font-size: 1rem;
+    color: rgba(232,232,240,0.85);
+    line-height: 1.5;
+  }
+
+  .insight-list strong {
+    color: var(--text);
+  }
+
+  /* ── NAME REVEAL ── */
+  .name-reveal {
+    text-align: center;
+    padding: 3rem 2rem;
+    background: radial-gradient(ellipse 60% 60% at 50% 50%, rgba(255,215,0,0.06) 0%, transparent 70%);
+    border-radius: 20px;
+    border: 1px solid rgba(255,215,0,0.12);
+    margin-top: 2rem;
+  }
+
+  .name-reveal .big-name {
+    font-size: clamp(3rem, 8vw, 6rem);
+    font-weight: 900;
+    color: var(--lightning);
+    text-shadow: 0 0 40px rgba(255,215,0,0.3);
+    letter-spacing: -0.02em;
+    display: block;
+  }
+
+  .name-reveal .transliteration {
+    font-size: 1.2rem;
+    color: var(--muted);
+    margin-top: 0.5rem;
+    letter-spacing: 0.15em;
+  }
+
+  .name-reveal .meaning {
+    margin-top: 1rem;
+    font-size: 1rem;
+    color: rgba(232,232,240,0.6);
+  }
+
+  /* ── FOOTER ── */
+  .footer {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .next-step {
+    display: inline-block;
+    margin-top: 1.5rem;
+    padding: 0.8rem 2rem;
+    background: rgba(255,215,0,0.08);
+    border: 1px solid rgba(255,215,0,0.25);
+    border-radius: 8px;
+    color: var(--lightning);
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+
+  /* ── LIGHTNING DIVIDER ── */
+  .divider {
+    text-align: center;
+    color: var(--lightning);
+    font-size: 1.5rem;
+    padding: 1rem 0;
+    opacity: 0.4;
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-bg"></div>
+  <span class="bolt">⚡</span>
+  <h1>Minnal</h1>
+  <div class="malayalam">മിന്നൽ · Lightning</div>
+  <p class="tagline">A Kerala quiz battle app where the battle <em>is</em> the learning — fast, competitive, and built for the way Kerala studies.</p>
+  <div class="meta">Brainstorm Session · 10 November 2026</div>
+  <div class="scroll-hint">↓ scroll to explore ↓</div>
+</div>
+
+<!-- TECHNIQUE 1: JOB TO BE DONE -->
+<div class="section">
+  <div class="label">Technique 01 · Job to Be Done</div>
+  <h2>What are they really hiring this for?</h2>
+  <p>Forget features. When an aspirant opens a quiz app at 10 pm after a long day, what is the actual job?</p>
+
+  <div class="technique jtbd">
+    <div class="tech-label">The real job discovered</div>
+    <h3>Feel like making real progress — not just grinding.</h3>
+    <p style="margin-top:0.8rem; color: rgba(232,232,240,0.7);">Not "study for PSC." Not "complete a mock test." The underlying anxiety is: <em>I don't know if I'm ready.</em> Aspirants need a confidence mirror — proof they could pass if the exam was tomorrow.</p>
+
+    <div class="ideas">
+      <div class="idea-card">
+        <div class="by user">↑ User</div>
+        Feel real progress, not grind
+      </div>
+      <div class="idea-card">
+        <div class="by coach">↑ Partner</div>
+        "Am I ready?" is the anxiety. Confidence mirror, not content volume.
+      </div>
+      <div class="idea-card">
+        <div class="by coach">↑ Partner</div>
+        Social sting of losing a live battle = stronger memory hook than any flashcard
+      </div>
+      <div class="idea-card">
+        <div class="by user">↑ User</div>
+        Learning happens effortlessly through battling — it's the exhaust, not the engine
+      </div>
+    </div>
+  </div>
+
+  <div class="technique jtbd" style="margin-top:1rem;">
+    <div class="tech-label">Key positioning unlock</div>
+    <h3>Battle-only. No classes. No courses.</h3>
+    <p style="margin-top:0.8rem; color: rgba(232,232,240,0.7);">PSC Challenger puts battle on top of a course platform. Prepscale is course-first, battle as an afterthought. Minnal inverts this entirely: the battle <strong>is</strong> the product. Learning is what leaks out.</p>
+  </div>
+</div>
+
+<!-- TECHNIQUE 2: GAME MODES -->
+<div class="section">
+  <div class="label">Technique 02 · Game Modes</div>
+  <h2>Three modes. Ship it. Grow it later.</h2>
+  <p>Start focused. The room mechanic is the differentiator — no competitor has it in this form.</p>
+
+  <div class="modes-grid">
+    <div class="mode-card">
+      <span class="icon">⚔️</span>
+      <h4>Quick Match</h4>
+      <p>1v1 matchmaking. Bot fills the seat if no human appears in ~8 seconds. Never a cold lobby.</p>
+    </div>
+    <div class="mode-card">
+      <span class="icon">🎯</span>
+      <h4>Topic Duel</h4>
+      <p>1v1, topic-locked. Challenge someone to Kerala History specifically. Settle the score.</p>
+    </div>
+    <div class="mode-card">
+      <span class="icon">🏟️</span>
+      <h4>Battle Room</h4>
+      <p>2–N players. Free-for-all. Same questions, live scoreboard ticking as answers land. Pure pressure.</p>
+    </div>
+  </div>
+
+  <div class="technique modes" style="margin-top:1.5rem;">
+    <div class="tech-label">The room insight</div>
+    <h3>Live scoreboard changes everything.</h3>
+    <p style="margin-top:0.8rem; color: rgba(232,232,240,0.7);">In a 5-player room you watch 4 people simultaneously. If you're 3rd after question 6, you know exactly who to overtake. That psychological pressure is what turns a practice session into a habit. It's the same mechanic that makes watching live cricket scores compelling even from a distance.</p>
+  </div>
+</div>
+
+<!-- TECHNIQUE 3: NAMING -->
+<div class="section">
+  <div class="label">Technique 03 · Concept Blending</div>
+  <h2>The name.</h2>
+  <p>Fuse the Kerala world and the competitive world into something that belongs to both.</p>
+
+  <div class="name-reveal">
+    <span class="big-name">Minnal</span>
+    <div class="transliteration">മിന്നൽ</div>
+    <div class="meaning">Lightning · Every Malayali knows it · Speed is the core mechanic · Not exam-locked · Yours to own</div>
+  </div>
+
+  <div class="ideas" style="margin-top:1.5rem;">
+    <div class="idea-card">
+      <div class="by user">↑ User pick</div>
+      <strong>Minnal</strong> — lightning, speed, Kerala-rooted
+    </div>
+    <div class="idea-card">
+      <div class="by coach">↑ Also considered</div>
+      Kalari — battle of minds, distinctly Kerala
+    </div>
+    <div class="idea-card">
+      <div class="by coach">↑ Also considered</div>
+      Spardha — rivalry/competition, slightly formal
+    </div>
+    <div class="idea-card">
+      <div class="by coach">↑ Also considered</div>
+      Porali — warrior energy, street-level
+    </div>
+  </div>
+</div>
+
+<!-- TECHNIQUE 4: MONETIZATION -->
+<div class="section">
+  <div class="label">Technique 04 · What If Scenarios</div>
+  <h2>How it earns.</h2>
+  <p>Free for users. Coaching centers are the revenue layer — eventually.</p>
+
+  <div class="technique money">
+    <div class="tech-label">The B2B2C model</div>
+    <h3>Coaching centers pay. Students follow.</h3>
+    <p style="margin-top:0.8rem; color: rgba(232,232,240,0.7);">Kerala coaching centers already run informal batch battles on WhatsApp — "answer this question, first correct reply wins." Minnal doesn't need to teach a new behaviour. It formalizes what centers already want to do, adds tracking and analytics, and charges the center — not the student.</p>
+
+    <div class="ideas" style="margin-top:1rem;">
+      <div class="idea-card">
+        <div class="by">Free tier</div>
+        Unlimited battles for all players forever
+      </div>
+      <div class="idea-card">
+        <div class="by coach">↑ Partner</div>
+        Teacher dashboard: see the whole batch's weak topics in one screen
+      </div>
+      <div class="idea-card">
+        <div class="by coach">↑ Partner</div>
+        Scheduled batch rooms, recurring weekly tests
+      </div>
+      <div class="idea-card">
+        <div class="by">Revenue</div>
+        ₹500–2000/month per coaching center — cheaper than printing mock tests
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SYNTHESIS -->
+<div class="section">
+  <div class="label">Synthesis · The Connections</div>
+  <h2>What the session revealed.</h2>
+  <p>These aren't just individual ideas — they lock together.</p>
+
+  <ul class="insight-list">
+    <li>
+      <div class="num">1</div>
+      <div class="text"><strong>Battle = disguised spaced repetition.</strong> Live scoreboard + competitive pressure = the core learning mechanism. No explicit study UX needed. The sting of losing in front of batchmates is a stronger memory hook than any flashcard app.</div>
+    </li>
+    <li>
+      <div class="num">2</div>
+      <div class="text"><strong>Coaching centers are the distribution channel.</strong> Sign up a center, their students follow — no paid B2C acquisition. The teacher dashboard turns teachers into evangelists.</div>
+    </li>
+    <li>
+      <div class="num">3</div>
+      <div class="text"><strong>WhatsApp-culture fit.</strong> The free-for-all room mechanic maps directly onto how Kerala coaching batches already coordinate informally. Lowest friction adoption path in the market.</div>
+    </li>
+    <li>
+      <div class="num">4</div>
+      <div class="text"><strong>General quiz + Kerala-first = natural expansion runway.</strong> PSC is the launch wedge, but Minnal extends to school competitions, college quiz fests, and general Kerala trivia culture without a rebrand. No competitor owns that space.</div>
+    </li>
+    <li>
+      <div class="num">5</div>
+      <div class="text"><strong>The name does double duty.</strong> Minnal = lightning = speed, the core mechanic. And it's inherently Kerala. No Bangalore startup can claim it.</div>
+    </li>
+  </ul>
+</div>
+
+<!-- KEY DECISIONS -->
+<div class="section">
+  <div class="label">Decisions Locked</div>
+  <h2>What we know going into the PRD.</h2>
+
+  <div class="decision-row">
+    <div class="key">App Name</div>
+    <div class="val">Minnal (മിന്നൽ)</div>
+  </div>
+  <div class="decision-row">
+    <div class="key">Positioning</div>
+    <div class="val">General quiz battle app · Kerala-first · Battle-only, no classes</div>
+  </div>
+  <div class="decision-row">
+    <div class="key">Differentiator</div>
+    <div class="val">Free-for-all battle rooms with live scoreboard · effortless learning through competition</div>
+  </div>
+  <div class="decision-row">
+    <div class="key">Game Modes (MVP)</div>
+    <div class="val">Quick Match · Topic Duel · Battle Room</div>
+  </div>
+  <div class="decision-row">
+    <div class="key">At Launch</div>
+    <div class="val">Free for all users</div>
+  </div>
+  <div class="decision-row">
+    <div class="key">Revenue (later)</div>
+    <div class="val">Coaching center B2B — teacher dashboard, batch analytics</div>
+  </div>
+  <div class="decision-row">
+    <div class="key">Backend</div>
+    <div class="val">Java 21 + Spring Boot</div>
+  </div>
+</div>
+
+<div class="footer">
+  <div>Brainstorm session complete · 10 November 2026</div>
+  <div class="next-step">Next step → /bmad-product-brief with the intent doc</div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="ml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minnal Key Screen Leaderboards</title>
+<style>
+/* ============================================================
+   KEY SCREEN: Leaderboards (Ranks tab)
+   Col 1: Anju, Malayalam UI, Quick Match · ഇന്ന് (daily, ranked by rating gained today, IST).
+          Top 7 rows + Anju's own row pinned (#212, +24) because she is outside the visible list.
+   Col 2: Anju, Malayalam UI, Quick Match · എക്കാലവും (all-time, ranked by rating). Pinned #3,406 · 1,284.
+   Col 3: English UI, empty state: new IST day, no completed rated matches yet.
+
+   Governing spine sections:
+   - DESIGN Colors (calm surface only: NO volt; Ranks is not a peak), Typography (score, label,
+     caption, tab-label; tabular numerals), Layout & Spacing (gutter-card 16 / gutter-text 20),
+     Shapes (rounded.md rows, rounded.lg cards), Components: Scoreboard row (base for board rows),
+     Joined chip "You: ink fill" (precedent for the pinned own row), Tab bar (inactive = muted, AA),
+     button-primary
+   - EXPERIENCE Information Architecture: Leaderboards (Ranks tab, rank snippet); tab bar Play / Rooms / Ranks / Me
+   - EXPERIENCE Voice and Tone: display names never inflected; light competition, never shaming
+   - EXPERIENCE Bilingual Behavior: UI follows question language; Latin names unchanged; Latin digits with grouping
+   - EXPERIENCE Component Patterns: Tab bar (keeps scroll position), Rank snippet (tap -> here)
+   - EXPERIENCE State Patterns: Empty (Leaderboard early in the day)
+   - Product rules: game-modes.md Ratings (per mode; daily / weekly / all-time; all Kerala;
+     IST days, weeks start Monday; guests and custom-topic matches never on boards)
+
+   Tokens (DESIGN.md, light): paper #F4F5F7 card #FFFFFF ink #101216 muted #666C78
+   hairline #E1E3E8 dim #9AA0AA tile #F4F5F7 band #101216 on-band #FFFFFF on-band-muted #9AA0AA
+   ============================================================ */
+:root{
+  --ml:"Noto Sans Malayalam","Nirmala UI","Kartika",sans-serif;
+  --sys:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --page-bg:#ECECEA; --page-ink:#1C1E22; --page-muted:#5E636C;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --page-bg:#141518; --page-ink:#E8E9EB; --page-muted:#9CA1AA; }
+}
+:root[data-theme="dark"]{ --page-bg:#141518; --page-ink:#E8E9EB; --page-muted:#9CA1AA; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--page-bg);color:var(--page-ink);font-family:var(--sys),var(--ml);line-height:1.4;padding:32px 16px 64px}
+.ml{font-family:var(--ml)}
+.tab{font-variant-numeric:tabular-nums}
+header.page{max-width:1180px;margin:0 auto 24px}
+header.page h1{font-size:24px;letter-spacing:-.01em}
+header.page p{color:var(--page-muted);max-width:860px;margin-top:6px;font-size:14px}
+.stage{max-width:1180px;margin:0 auto;display:flex;gap:28px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+.col{width:360px;max-width:100%}
+.col h2{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--page-muted);margin-bottom:10px}
+.cap{font-size:12px;color:var(--page-muted);margin-top:12px;line-height:1.55}
+.cap b{color:var(--page-ink);font-weight:600}
+.cap ul{padding-left:16px;margin-top:6px}
+
+/* ---------- product tokens (DESIGN.md light) ---------- */
+.phone{--paper:#F4F5F7;--card:#FFFFFF;--ink:#101216;--muted:#666C78;--line:#E1E3E8;--dim:#9AA0AA;--tile:#F4F5F7;
+  --band:#101216;--on-band:#FFFFFF;--on-band-muted:#9AA0AA;
+  width:360px;height:740px;border-radius:38px;border:8px solid #0E0F12;overflow:hidden;position:relative;
+  background:var(--paper);color:var(--ink);font-family:var(--sys),var(--ml);box-shadow:0 16px 36px rgba(0,0,0,.16)}
+.notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:104px;height:19px;background:#0E0F12;border-radius:0 0 14px 14px;z-index:5}
+.sb{height:26px;display:flex;justify-content:space-between;align-items:center;padding:0 18px;font:600 11px var(--sys);color:var(--muted)}
+
+/* title (typography.title 21/600/1.5) */
+.hd{margin:8px 20px 0;display:flex;align-items:baseline;justify-content:space-between}
+.hd h3{font-family:var(--ml);font-size:21px;font-weight:600;line-height:1.5}
+.hd.en h3{font-family:var(--sys)}
+.hd span{font-size:12px;color:var(--muted)}
+
+/* Mode switcher (invented: segmented control). Card track, hairline border, active = ink fill (button-primary) */
+.seg{margin:10px 16px 0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:3px;display:grid;grid-template-columns:repeat(3,1fr);gap:3px}
+.seg div{min-height:42px;display:flex;align-items:center;justify-content:center;text-align:center;border-radius:8px;font-size:12.5px;line-height:1.5;color:var(--muted);font-weight:600;padding:0 4px}
+.seg.ml div{font-family:var(--ml)}
+.seg .on{background:var(--ink);color:var(--on-band)}
+
+/* Period switcher (invented: text tabs with 2px ink underline, echoes hairline-timer weight) */
+.per{margin:6px 20px 0;display:flex;gap:22px;border-bottom:1px solid var(--line)}
+.per div{min-height:44px;display:flex;align-items:center;font-size:14px;line-height:1.5;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.per.ml div{font-family:var(--ml)}
+.per .on{color:var(--ink);font-weight:700;border-bottom-color:var(--ink)}
+
+/* list header (typography.caption) */
+.lh{margin:10px 20px 6px;display:flex;justify-content:space-between;font-size:11.5px;font-weight:500;color:var(--muted);line-height:1.5}
+.lh.ml{font-family:var(--ml)}
+
+/* Board row: based on Scoreboard row (card, rounded.md, 47px), rows gap spacing.1 */
+.list{margin:0 16px;display:flex;flex-direction:column;gap:4px}
+.row{display:grid;grid-template-columns:30px 1fr auto;gap:8px;align-items:center;height:47px;padding:0 12px;background:var(--card);border-radius:10px}
+.row .p{font-size:13px;color:var(--muted)}
+.row .p.top{color:var(--ink);font-weight:700}
+.row .n{font-size:14.5px;font-weight:500;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .n small{display:block;font-family:var(--ml);font-size:11px;color:var(--muted);font-weight:400;line-height:1.5}
+.row .s{font-size:15px;font-weight:600}
+
+/* Pinned own row: ink fill (Joined chip "You" precedent), NO volt. Sits above the tab bar. */
+.pin{position:absolute;left:0;right:0;bottom:66px;background:var(--paper);padding:0 16px 8px}
+.pin .gap{text-align:center;color:var(--dim);font-size:14px;letter-spacing:3px;line-height:1;padding:4px 0 6px}
+.pin .row{background:var(--band);color:var(--on-band);height:56px;grid-template-columns:auto 1fr auto;gap:10px}
+.pin .row .p{color:var(--on-band);font-weight:700;font-size:14px}
+.pin .row .n small{color:var(--on-band-muted)}
+.pin .row .s{font-size:17px}
+.pin .you{display:inline-block;margin-left:6px;border:1px solid var(--on-band-muted);color:#C9CDD3;border-radius:6px;font-family:var(--ml);font-size:10.5px;padding:0 5px;vertical-align:2px;font-weight:500}
+
+/* Empty state (EXPERIENCE State Patterns: Empty -> one plain line + next action) */
+.empty{margin:14px 16px 0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:22px 18px 18px;text-align:left}
+.empty svg{width:22px;height:28px}
+.empty b{display:block;font-size:17px;font-weight:600;margin-top:10px;line-height:1.4}
+.empty p{font-size:13.5px;color:var(--muted);margin-top:6px;line-height:1.5}
+.empty .btn{margin-top:16px;min-height:48px;display:flex;align-items:center;justify-content:center;background:var(--ink);color:var(--on-band);border-radius:10px;font-weight:700;font-size:15px}
+.empty .lnk{margin-top:12px;text-align:center;font-size:13px;font-weight:600;color:var(--ink);min-height:32px;display:flex;align-items:center;justify-content:center}
+.ghost{margin:10px 16px 0;display:flex;flex-direction:column;gap:4px}
+.ghost i{display:block;height:47px;border-radius:10px;border:1px dashed var(--line)}
+
+/* Tab bar (DESIGN tab-bar: card, hairline top, active ink bold, inactive muted) */
+.tabs{position:absolute;left:0;right:0;bottom:0;height:66px;background:var(--card);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);padding:8px 0 14px}
+.tabs div{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;line-height:1.3;color:var(--muted)}
+.tabs.ml div{font-family:var(--ml)}
+.tabs svg{width:20px;height:20px}
+.tabs .on{color:var(--ink);font-weight:700}
+</style>
+</head>
+<body>
+<header class="page">
+  <h1>Key screen: Leaderboards (Ranks tab)</h1>
+  <p>Calm surface throughout: Ranks is not one of the three peaks, so there is no volt and no bolt strike. Ink carries the emphasis (active mode, active period, your own row). Boards are per mode, Kerala-wide, IST days and Monday-start weeks. Daily ranks by rating gained today; all-time ranks by rating. Names appear exactly as players typed them; districts are small meta.</p>
+</header>
+
+<div class="stage">
+
+<!-- ================= COL 1: DAILY QUICK MATCH (ML) ================= -->
+<div class="col">
+  <h2>Anju · ക്വിക്ക് മാച്ച് · ഇന്ന്</h2>
+  <div class="phone"><div class="notch"></div>
+    <div class="sb"><span>9:41</span><span>3G ▮▮▯</span></div>
+    <div class="hd"><h3>റാങ്ക്</h3><span class="ml">കേരളം മുഴുവൻ</span></div>
+
+    <div class="seg ml">
+      <div class="on">ക്വിക്ക് മാച്ച്</div>
+      <div>ടോപ്പിക് ഡ്യുവൽ</div>
+      <div>ബാറ്റിൽ റൂം</div>
+    </div>
+    <div class="per ml">
+      <div class="on">ഇന്ന്</div>
+      <div>ഈ ആഴ്ച</div>
+      <div>എക്കാലവും</div>
+    </div>
+
+    <div class="lh ml"><span>ഇന്ന് നേടിയ റേറ്റിംഗ് അനുസരിച്ച്</span><span>ഇന്ന്</span></div>
+    <div class="list">
+      <div class="row"><span class="p top tab">1</span><span class="n">Fathima S<small>തൃശ്ശൂർ</small></span><span class="s tab">+142</span></div>
+      <div class="row"><span class="p top tab">2</span><span class="n">Rahul M<small>കോഴിക്കോട്</small></span><span class="s tab">+118</span></div>
+      <div class="row"><span class="p top tab">3</span><span class="n">Muhammed Shafi<small>മലപ്പുറം</small></span><span class="s tab">+104</span></div>
+      <div class="row"><span class="p tab">4</span><span class="n">Devika R<small>കൊല്ലം</small></span><span class="s tab">+96</span></div>
+      <div class="row"><span class="p tab">5</span><span class="n">Arjun K<small>എറണാകുളം</small></span><span class="s tab">+88</span></div>
+      <div class="row"><span class="p tab">6</span><span class="n">Sreelakshmi V<small>കോട്ടയം</small></span><span class="s tab">+81</span></div>
+      <div class="row"><span class="p tab">7</span><span class="n">Nithya P<small>കണ്ണൂർ</small></span><span class="s tab">+77</span></div>
+    </div>
+
+    <div class="pin">
+      <div class="gap" aria-hidden="true">···</div>
+      <div class="row"><span class="p tab">#212</span><span class="n">Anju<span class="you">നിങ്ങൾ</span><small>ആലപ്പുഴ</small></span><span class="s tab">+24</span></div>
+    </div>
+
+    <div class="tabs ml">
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><polygon points="11.5,1 4,11 9,11 7.5,19 16,8 11,8 13,1" fill="currentColor"/></svg>കളി</div>
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="7" cy="7" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="14" cy="7" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2 17c0-3 2.2-5 5-5s5 2 5 5M10 17c0-3 1.8-5 4-5s4 2 4 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>റൂമുകൾ</div>
+      <div class="on"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="10" width="3.5" height="7" fill="currentColor"/><rect x="8.25" y="4" width="3.5" height="13" fill="currentColor"/><rect x="13.5" y="7" width="3.5" height="10" fill="currentColor"/></svg>റാങ്ക്</div>
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="7" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 18c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>ഞാൻ</div>
+    </div>
+  </div>
+  <p class="cap"><b>Daily board, Anju outside the visible list.</b> Two switchers: mode (segmented, ink fill on the active segment) above period (text tabs, ink underline). The value column is rating gained since 00:00 IST. Ranks 1–3 get bold ink numerals only; no medals, no volt. Anju's row is pinned above the tab bar in ink fill with a "നിങ്ങൾ" tag, so her name stays exactly "Anju". When she scrolls into her own position, the pinned row stops being pinned and her row shows in place.
+    <ul><li>Reached from the Home rank snippet (opens on Quick Match · ഇന്ന്) or the Ranks tab, which keeps its last mode, period and scroll position.</li>
+    <li>Motion: none. Switching mode or period swaps the list with no animation. Reduced motion: nothing to change.</li>
+    <li>Note: key-home shows "ഇന്ന് +46" in the rank snippet. This brief uses +24. The two need to match.</li></ul></p>
+</div>
+
+<!-- ================= COL 2: ALL-TIME QUICK MATCH (ML) ================= -->
+<div class="col">
+  <h2>Anju · ക്വിക്ക് മാച്ച് · എക്കാലവും</h2>
+  <div class="phone"><div class="notch"></div>
+    <div class="sb"><span>9:41</span><span>3G ▮▮▯</span></div>
+    <div class="hd"><h3>റാങ്ക്</h3><span class="ml">കേരളം മുഴുവൻ</span></div>
+
+    <div class="seg ml">
+      <div class="on">ക്വിക്ക് മാച്ച്</div>
+      <div>ടോപ്പിക് ഡ്യുവൽ</div>
+      <div>ബാറ്റിൽ റൂം</div>
+    </div>
+    <div class="per ml">
+      <div>ഇന്ന്</div>
+      <div>ഈ ആഴ്ച</div>
+      <div class="on">എക്കാലവും</div>
+    </div>
+
+    <div class="lh ml"><span>റേറ്റിംഗ് അനുസരിച്ച്</span><span>റേറ്റിംഗ്</span></div>
+    <div class="list">
+      <div class="row"><span class="p top tab">1</span><span class="n">Gokul Krishnan<small>പാലക്കാട്</small></span><span class="s tab">1,912</span></div>
+      <div class="row"><span class="p top tab">2</span><span class="n">Fathima S<small>തൃശ്ശൂർ</small></span><span class="s tab">1,876</span></div>
+      <div class="row"><span class="p top tab">3</span><span class="n">Aswathy Mohan<small>തിരുവനന്തപുരം</small></span><span class="s tab">1,851</span></div>
+      <div class="row"><span class="p tab">4</span><span class="n">Rahul M<small>കോഴിക്കോട്</small></span><span class="s tab">1,833</span></div>
+      <div class="row"><span class="p tab">5</span><span class="n">Bincy Thomas<small>ഇടുക്കി</small></span><span class="s tab">1,809</span></div>
+      <div class="row"><span class="p tab">6</span><span class="n">Muhammed Shafi<small>മലപ്പുറം</small></span><span class="s tab">1,794</span></div>
+      <div class="row"><span class="p tab">7</span><span class="n">Vishnu R<small>കൊല്ലം</small></span><span class="s tab">1,780</span></div>
+    </div>
+
+    <div class="pin">
+      <div class="gap" aria-hidden="true">···</div>
+      <div class="row"><span class="p tab">#3,406</span><span class="n">Anju<span class="you">നിങ്ങൾ</span><small>ആലപ്പുഴ</small></span><span class="s tab">1,284</span></div>
+    </div>
+
+    <div class="tabs ml">
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><polygon points="11.5,1 4,11 9,11 7.5,19 16,8 11,8 13,1" fill="currentColor"/></svg>കളി</div>
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="7" cy="7" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="14" cy="7" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2 17c0-3 2.2-5 5-5s5 2 5 5M10 17c0-3 1.8-5 4-5s4 2 4 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>റൂമുകൾ</div>
+      <div class="on"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="10" width="3.5" height="7" fill="currentColor"/><rect x="8.25" y="4" width="3.5" height="13" fill="currentColor"/><rect x="13.5" y="7" width="3.5" height="10" fill="currentColor"/></svg>റാങ്ക്</div>
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="7" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 18c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>ഞാൻ</div>
+    </div>
+  </div>
+  <p class="cap"><b>All-time Quick Match.</b> Same layout. Only the list header and the value column change: total rating (from 1200, ELO K = 32) in place of today's gain. Anju's pinned row shows her Quick Match rating, 1,284, the same number as the Home rating trio. Rank uses grouped Latin digits ("#3,406").
+    <ul><li>Weekly (ഈ ആഴ്ച) has the same layout as daily, with rating gained since Monday 00:00 IST.</li>
+    <li>Battle Room boards count bank-source rooms only. Custom-topic and guest matches never show here.</li></ul></p>
+</div>
+
+<!-- ================= COL 3: EMPTY STATE (EN) ================= -->
+<div class="col">
+  <h2>Empty · new day · English UI</h2>
+  <div class="phone"><div class="notch"></div>
+    <div class="sb"><span>12:06</span><span>3G ▮▮▯</span></div>
+    <div class="hd en"><h3>Ranks</h3><span>All of Kerala</span></div>
+
+    <div class="seg">
+      <div class="on">Quick Match</div>
+      <div>Topic Duel</div>
+      <div>Battle Room</div>
+    </div>
+    <div class="per">
+      <div class="on">Today</div>
+      <div>This week</div>
+      <div>All-time</div>
+    </div>
+
+    <div class="empty" lang="en">
+      <svg viewBox="0 0 12 16" aria-hidden="true"><polygon points="7,0 1,9 5,9 3,16 11,6 7,6 9,0" fill="none" stroke="#101216" stroke-width="1.1" stroke-linejoin="miter"/></svg>
+      <b>No one's on today's board yet.</b>
+      <p>The day started at midnight IST. The first win today takes the top spot.</p>
+      <div class="btn">Play Quick Match</div>
+      <div class="lnk">See this week's board ›</div>
+    </div>
+    <div class="ghost" aria-hidden="true"><i></i><i></i><i></i></div>
+
+    <div class="tabs">
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><polygon points="11.5,1 4,11 9,11 7.5,19 16,8 11,8 13,1" fill="currentColor"/></svg>Play</div>
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="7" cy="7" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="14" cy="7" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2 17c0-3 2.2-5 5-5s5 2 5 5M10 17c0-3 1.8-5 4-5s4 2 4 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Rooms</div>
+      <div class="on"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="10" width="3.5" height="7" fill="currentColor"/><rect x="8.25" y="4" width="3.5" height="13" fill="currentColor"/><rect x="13.5" y="7" width="3.5" height="10" fill="currentColor"/></svg>Ranks</div>
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="7" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 18c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Me</div>
+    </div>
+  </div>
+  <p class="cap"><b>Empty daily board, just after midnight IST.</b> Following the Empty state pattern: one plain line in voice plus the next action. The primary button starts the mode being viewed. The secondary link moves to a board that has rows. The bolt here is a static ink outline, not volt. Faint dashed placeholders hint at where rows will appear. There is no pinned row, because the player has no position today.
+    <ul><li>The copy is new (the spine says "Copy TBD") and needs voice sign-off, plus a Malayalam version.</li>
+    <li>Motion: none.</li></ul></p>
+</div>
+
+</div>
+</body>
+</html>

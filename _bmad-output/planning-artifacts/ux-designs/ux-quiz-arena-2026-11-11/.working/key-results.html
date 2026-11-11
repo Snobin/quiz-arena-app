@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="ml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minnal Key Screen Results</title>
+<style>
+/* ============================================================
+   KEY SCREEN: Topic Duel results, Anju wins on Q10 (Kerala History)
+   Before Q10: Anju 7,020 vs Vishnu 7,420. Q10: Anju correct +820
+   (9.6 s left), Vishnu wrong 0. Final 7,840 - 7,420. Topic Duel rating 1,236 -> 1,260 (+24).
+   Col 1: win peak, full-screen ink takeover (first ~1.6 s)
+   Col 2: settled results: compact ink band, per-question breakdown, actions
+   Col 3: share card image (1:1)
+   Col 4: share card as received in a WhatsApp group chat
+
+   Governing spine sections (DESIGN.md / EXPERIENCE.md not yet written;
+   section names follow the bmad-ux spine template):
+   - DESIGN Colors (ink + volt peak), Typography, Components; Motion (win takeover)
+   - EXPERIENCE Information Architecture: Results (+ share card)
+   - EXPERIENCE Voice and Tone: slang (പൊളി) allowed only at peaks; wrong answer always shows the correct one
+   - EXPERIENCE Component Patterns: Win takeover, Peak band (compact), Breakdown row
+     (correct / wrong / no attribution), Action bar (Rematch / Home / Share), Share card
+   - EXPERIENCE State Patterns: result-win (peak), results-settled
+   - EXPERIENCE Accessibility Floor: flash rule; volt never on white
+   - EXPERIENCE Key Flows: J1 Anju, step "Topic Duel -> win -> share / rematch"
+   - Product rules: CAP-5, CAP-9 (scores, breakdown, delta, Rematch / Home), CAP-10 (+24, K=32);
+     share card = memlog NEW NEED (not in SPEC yet)
+
+   Palette = directions-2 variation B:
+   #F4F5F7 cool paper  #FFFFFF card  #101216 ink  #666C78 muted  #E1E3E8 hairline
+   #9AA0AA dim  #D4FF2A volt (peak only, on ink)  #2B3040 ink-raised  #B8463A brick
+   ============================================================ */
+:root{
+  --ml:"Noto Sans Malayalam","Nirmala UI","Kartika",sans-serif;
+  --sys:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --page-bg:#ECECEA; --page-ink:#1C1E22; --page-muted:#5E636C; --page-card:#FFFFFF; --page-line:#D9DAD6;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --page-bg:#141518; --page-ink:#E8E9EB; --page-muted:#9CA1AA; --page-card:#1D1F23; --page-line:#2F3238; }
+}
+:root[data-theme="dark"]{ --page-bg:#141518; --page-ink:#E8E9EB; --page-muted:#9CA1AA; --page-card:#1D1F23; --page-line:#2F3238; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--page-bg);color:var(--page-ink);font-family:var(--sys),var(--ml);line-height:1.4;padding:32px 16px 64px}
+.ml{font-family:var(--ml)}
+.tab{font-variant-numeric:tabular-nums}
+header.page{max-width:1560px;margin:0 auto 24px}
+header.page h1{font-size:24px;letter-spacing:-.01em}
+header.page p{color:var(--page-muted);max-width:860px;margin-top:6px;font-size:14px}
+.stage{margin:0 auto;display:flex;gap:28px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+.col{width:360px;max-width:100%}
+.col h2{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--page-muted);margin-bottom:10px}
+.cap{font-size:12px;color:var(--page-muted);margin-top:12px;line-height:1.55}
+.cap b{color:var(--page-ink);font-weight:600}
+.cap ul{padding-left:16px;margin-top:6px}
+
+.phone{--bg:#F4F5F7;--card:#FFFFFF;--ink:#101216;--muted:#666C78;--line:#E1E3E8;--dim:#9AA0AA;--brick:#B8463A;
+  width:360px;height:740px;border-radius:38px;border:8px solid #0E0F12;overflow:hidden;position:relative;
+  background:var(--bg);color:var(--ink);font-family:var(--sys),var(--ml);box-shadow:0 16px 36px rgba(0,0,0,.16)}
+.notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:104px;height:19px;background:#000;border-radius:0 0 14px 14px;z-index:5}
+.sb{height:26px;display:flex;justify-content:space-between;align-items:center;padding:0 18px;font:600 11px var(--sys);color:var(--muted);position:relative;z-index:3}
+
+/* ---- Win takeover (full screen ink) ---- */
+.phone.take{background:#101216;color:#fff}
+.take .sb{color:#9AA0AA}
+.take .bolt{position:absolute;right:-40px;top:40px;width:300px;height:375px}
+.take .in{position:absolute;left:24px;right:24px;bottom:58px}
+.take .mode{font-family:var(--ml);font-size:12.5px;color:#9AA0AA}
+.take h3{font-family:var(--ml);font-size:38px;font-weight:700;line-height:1.35;margin-top:6px}
+.take .sl{font-family:var(--ml);font-size:15px;color:#D4FF2A;margin-top:4px}
+.take .sc{display:flex;justify-content:space-between;align-items:flex-end;margin-top:28px;padding-top:16px;border-top:1px solid #2B3040}
+.take .sc span{display:block;font-size:12px;color:#9AA0AA;font-family:var(--ml)}
+.take .sc .me b{font-size:34px;font-weight:700;color:#D4FF2A;letter-spacing:-.02em}
+.take .sc .op{text-align:right}
+.take .sc .op b{font-size:22px;font-weight:500;color:#9AA0AA}
+.take .rt{margin-top:18px;display:flex;align-items:baseline;gap:10px;background:#2B3040;border-radius:12px;padding:12px 14px}
+.take .rt b{font-size:28px;font-weight:700;color:#D4FF2A}
+.take .rt span{font-family:var(--ml);font-size:12.5px;color:#C9CDD3}
+.take .tap{text-align:center;font-family:var(--ml);font-size:12px;color:#666C78;margin-top:18px}
+
+/* ---- Settled results ---- */
+.band{margin:8px 14px 0;background:#101216;color:#fff;border-radius:14px;padding:14px 16px;position:relative;overflow:hidden}
+.band svg{position:absolute;right:-4px;top:-6px;width:84px;height:105px}
+.band .l{font-family:var(--ml);font-size:12px;color:#9AA0AA}
+.band .w{font-family:var(--ml);font-size:20px;font-weight:700;margin-top:1px}
+.band .row{display:flex;align-items:baseline;gap:14px;margin-top:8px}
+.band .row b{font-size:22px;color:#D4FF2A;font-weight:700}
+.band .row .o{font-size:15px;color:#9AA0AA}
+.band .row .d{margin-left:auto;font-size:13px;font-weight:700;color:#101216;background:#D4FF2A;border-radius:6px;padding:2px 8px;position:relative}
+.sh{margin:14px 20px 6px;display:flex;justify-content:space-between;font-size:12px;color:var(--muted);font-family:var(--ml)}
+.sh .dots{display:flex;gap:3px;align-items:center}
+.sh .dots i{width:7px;height:7px;border-radius:50%;background:#101216}
+.sh .dots i.x{background:transparent;border:1.5px solid var(--brick)}
+.list{margin:0 14px;display:flex;flex-direction:column;gap:6px}
+.qr{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.qr .h{display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted)}
+.qr .h b{color:var(--ink);font-weight:600}
+.qr .h .pt{font-weight:700;color:var(--ink)}
+.qr .h .pt.z{color:var(--brick)}
+.qr .qq{font-family:var(--ml);font-size:14.5px;line-height:1.6;margin-top:4px;font-weight:500}
+.qr .an{font-family:var(--ml);font-size:13px;margin-top:4px;line-height:1.6}
+.qr .an .x{color:var(--brick)}
+.qr .an .c{font-weight:700}
+.qr .ex{font-family:var(--ml);font-size:12.5px;color:#2B3040;line-height:1.65;margin-top:4px}
+.qr .at{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px;font-family:var(--sys),var(--ml)}
+.qr .at a{color:var(--ink);font-weight:600}
+.qr.cmp .qq{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.act{position:absolute;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:12px 14px 20px;display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;font-family:var(--ml)}
+.act div{border-radius:10px;padding:12px 6px;text-align:center;font-weight:700;font-size:14.5px;border:1.5px solid #101216}
+.act .pr{background:#101216;color:#fff}
+
+/* ---- Share card ---- */
+.card{width:340px;height:340px;background:#101216;color:#fff;border-radius:18px;position:relative;overflow:hidden;padding:24px;box-shadow:0 16px 36px rgba(0,0,0,.16)}
+.card .bolt{position:absolute;right:-30px;top:-10px;width:190px;height:238px}
+.card .wm{display:flex;align-items:center;gap:7px;font-weight:700;font-size:16px;position:relative}
+.card .wm svg{width:13px;height:17px}
+.card .wm span{font-family:var(--ml);font-size:15px;color:#9AA0AA;font-weight:500}
+.card .who{position:relative;font-size:24px;font-weight:700;margin-top:58px;line-height:1.2}
+.card .sc{position:relative;font-size:42px;font-weight:800;color:#D4FF2A;letter-spacing:-.02em;margin-top:6px;line-height:1}
+.card .md{position:relative;font-size:13px;color:#9AA0AA;margin-top:10px}
+.card .ft{position:absolute;left:24px;right:24px;bottom:20px;border-top:1px solid #2B3040;padding-top:12px;display:flex;justify-content:space-between;align-items:baseline}
+.card .ft b{font-size:15px}
+.card .ft span{font-size:12px;color:#D4FF2A;font-weight:600}
+
+/* ---- Chat context (approximate, neutral chrome) ---- */
+.chat{--chat-bg:#ECE5DD;background:var(--chat-bg)}
+.chat .bar{background:#1F2C34;color:#fff;padding:10px 16px;display:flex;gap:10px;align-items:center;margin-top:-26px;padding-top:34px}
+.chat .bar .gi{width:34px;height:34px;border-radius:50%;background:#3B4A54;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.chat .bar b{font-size:15px;display:block}
+.chat .bar span{font-size:11.5px;color:#AEBAC1}
+.msgs{padding:14px 12px;display:flex;flex-direction:column;gap:8px}
+.bub{max-width:78%;background:#fff;border-radius:10px;padding:7px 10px 5px;font-size:13.5px;box-shadow:0 1px 1px rgba(0,0,0,.08)}
+.bub .nm{font-size:12px;font-weight:700;color:#6B5BA8}
+.bub .tm{font-size:10px;color:#8696A0;text-align:right;margin-top:2px}
+.bub.me{align-self:flex-end;background:#D9FDD3}
+.bub.img{padding:4px 4px 5px;width:258px;max-width:none}
+.bub.img .card{width:250px;height:250px;border-radius:8px;padding:18px;box-shadow:none}
+.bub.img .card .bolt{width:140px;height:175px;right:-22px}
+.bub.img .card .wm{font-size:12px}
+.bub.img .card .wm span{font-size:11.5px}
+.bub.img .card .wm svg{width:10px;height:13px}
+.bub.img .card .who{font-size:18px;margin-top:40px}
+.bub.img .card .sc{font-size:31px}
+.bub.img .card .md{font-size:10.5px;margin-top:8px}
+.bub.img .card .ft{left:18px;right:18px;bottom:14px;padding-top:9px}
+.bub.img .card .ft b{font-size:11.5px}
+.bub.img .card .ft span{font-size:9.5px}
+.bub .tx{padding:5px 6px 0;font-size:13.5px}
+.bub .tx a{color:#027EB5}
+</style>
+</head>
+<body>
+<header class="page">
+  <h1>Key screen: Topic Duel results (Anju wins on the last question)</h1>
+  <p>A win is the biggest of the three peaks, so it gets a full-screen ink takeover with a large volt bolt. After about 1.6 s, or on any tap, it settles into the normal results screen: a compact ink band, the breakdown for every question, and a fixed action bar. The share card is a separate 1:1 image (exported at 1080 × 1080) that goes into WhatsApp. Numbers: before Q10 Vishnu led 7,420 to 7,020. Anju answered Q10 correctly with 9.6 s left (+820) and Vishnu missed, so the final is 7,840 to 7,420. Her Topic Duel rating goes from 1,236 to 1,260 (+24).</p>
+</header>
+
+<div class="stage">
+
+<!-- ========== 1. WIN TAKEOVER ========== -->
+<div class="col">
+  <h2>1 · Win peak · full-screen takeover</h2>
+  <div class="phone take"><div class="notch"></div>
+    <div class="sb"><span>9:47</span><span>3G ▮▮▯</span></div>
+    <svg class="bolt" viewBox="0 0 120 150" aria-hidden="true"><polygon points="70,4 26,82 56,82 40,146 96,58 64,58 84,4" fill="#D4FF2A"/></svg>
+    <div class="in">
+      <div class="mode">ടോപ്പിക് ഡ്യുവൽ · കേരള ചരിത്രം</div>
+      <h3>നിങ്ങൾ ജയിച്ചു!</h3>
+      <div class="sl">പൊളി! അവസാന ചോദ്യത്തിൽ മുന്നിലെത്തി</div>
+      <div class="sc">
+        <div class="me"><span>നിങ്ങൾ</span><b class="tab">7,840</b></div>
+        <div class="op"><span>Vishnu R</span><b class="tab">7,420</b></div>
+      </div>
+      <div class="rt"><b class="tab">+24</b><span>ടോപ്പിക് ഡ്യുവൽ റേറ്റിംഗ് · <span class="tab">1,260</span></span></div>
+      <div class="tap">തൊട്ടാൽ വിശദമായി കാണാം</div>
+    </div>
+  </div>
+  <p class="cap"><b>Win takeover.</b> The page floods ink from the top (200 ms). The large bolt strikes once: full volt, <b>one</b> white frame flash, then it settles. The scores and +24 snap in with no count-up. The whole strike is about 400 ms. The takeover holds until 1.6 s or a tap, then collapses into the band in column 2 (240 ms).
+    <ul><li>Flash rule: one flash for this peak. The collapse that follows doesn't flash.</li>
+    <li>Reduced motion: no flood and no strike. The takeover fades in over 200 ms, and moving on is tap-only.</li>
+    <li>Loss: no takeover and no volt. Results open straight to column 2 with an ink band that reads "Vishnu ജയിച്ചു · അടുത്ത തവണ നിങ്ങൾക്ക്" and shows the rating change in grey.</li></ul></p>
+</div>
+
+<!-- ========== 2. SETTLED RESULTS ========== -->
+<div class="col">
+  <h2>2 · Results settled · breakdown</h2>
+  <div class="phone"><div class="notch"></div>
+    <div class="sb"><span>9:47</span><span>3G ▮▮▯</span></div>
+    <div class="band">
+      <svg viewBox="0 0 120 150" aria-hidden="true"><polygon points="70,4 26,82 56,82 40,146 96,58 64,58 84,4" fill="#D4FF2A"/></svg>
+      <div class="l">ടോപ്പിക് ഡ്യുവൽ · കേരള ചരിത്രം</div>
+      <div class="w">നിങ്ങൾ ജയിച്ചു</div>
+      <div class="row"><b class="tab">7,840</b><span class="o tab">Vishnu R 7,420</span><span class="d tab">+24</span></div>
+    </div>
+    <div class="sh"><span>ഓരോ ചോദ്യവും · 8 / 10 ശരി</span><span class="dots"><i></i><i></i><i></i><i class="x"></i><i></i><i></i><i></i><i></i><i class="x"></i><i></i></span></div>
+    <div class="list">
+      <div class="qr cmp">
+        <div class="h"><span><b>Q8</b> · ശരി · 7.0 സെ</span><span class="pt tab">+767</span></div>
+        <div class="qq">കുണ്ടറ വിളംബരം നടത്തിയത് ആര്?</div>
+      </div>
+      <div class="qr">
+        <div class="h"><span><b>Q9</b> · <span style="color:#B8463A">തെറ്റി</span></span><span class="pt z tab">0</span></div>
+        <div class="qq">ഗുരുവായൂർ സത്യാഗ്രഹത്തിന് നേതൃത്വം നൽകിയത് ആര്?</div>
+        <div class="an">നിങ്ങൾ: <span class="x">എ.കെ. ഗോപാലൻ</span> · ശരി: <span class="c">കെ. കേളപ്പൻ</span></div>
+        <div class="ex">1931-ലെ ഗുരുവായൂർ സത്യാഗ്രഹത്തിന്റെ നേതാവ് കെ. കേളപ്പൻ. എ.കെ. ഗോപാലൻ വോളണ്ടിയർ ക്യാപ്റ്റനായിരുന്നു.</div>
+        <div class="at"><span>Kerala PSC LGS 2017</span><a class="ml">തെറ്റുണ്ടോ?</a></div>
+      </div>
+      <div class="qr">
+        <div class="h"><span><b>Q10</b> · ശരി · 5.4 സെ</span><span class="pt tab">+820</span></div>
+        <div class="qq">വൈക്കം സത്യാഗ്രഹം ആരംഭിച്ച വർഷം?</div>
+        <div class="an">നിങ്ങൾ: <span class="c">1924</span> ✓ · Vishnu: 1925</div>
+        <div class="ex">1924 മാർച്ച് 30-ന് ആരംഭിച്ച വൈക്കം സത്യാഗ്രഹം 603 ദിവസം നീണ്ടു.</div>
+        <div class="at"><span class="ml">ഉറവിടം ലഭ്യമല്ല</span><a class="ml">തെറ്റുണ്ടോ?</a></div>
+      </div>
+    </div>
+    <div class="act">
+      <div class="pr">റീമാച്ച്</div>
+      <div>ഹോം</div>
+      <div>ഷെയർ</div>
+    </div>
+  </div>
+  <p class="cap"><b>Settled.</b> The compact band keeps volt only on ink: Anju's score, the bolt, and the +24 chip. The dot strip gives a summary of all 10 at a glance (brick ring = wrong). Each row has the question, your answer, the correct answer, the explanation and the attribution. A correct answer collapses to one line once you've scrolled past it; a wrong answer always stays expanded, so the correct answer is never hidden. When there's no attribution the row says "ഉറവിടം ലഭ്യമല്ല" (CAP-3: attribution where available). The action bar is fixed at the bottom: Rematch is primary (same opponent), then Home and Share.
+    <ul><li>Motion: none after the collapse. Reduced motion: no change.</li></ul></p>
+</div>
+
+<!-- ========== 3. SHARE CARD ========== -->
+<div class="col">
+  <h2>3 · Share card · 1:1 image</h2>
+  <div class="card">
+    <svg class="bolt" viewBox="0 0 120 150" aria-hidden="true"><polygon points="70,4 26,82 56,82 40,146 96,58 64,58 84,4" fill="#D4FF2A"/></svg>
+    <div class="wm"><svg viewBox="0 0 12 16" aria-hidden="true"><polygon points="7,0 1,9 5,9 3,16 11,6 7,6 9,0" fill="#D4FF2A"/></svg>Minnal <span>മിന്നൽ</span></div>
+    <div class="who">Anju beat Vishnu</div>
+    <div class="sc tab">7,840 – 7,420</div>
+    <div class="md">Topic Duel · Kerala History</div>
+    <div class="ft"><b>Beat me on Minnal</b><span>minnal.app/d/7KQ2X</span></div>
+  </div>
+  <p class="cap"><b>Share card.</b> A static image built from the peak palette: an ink field, with volt only on ink. It's legible at WhatsApp thumbnail size (shown at 250 px in column 4). It holds the result line, the score, the mode and topic, the "Beat me on Minnal" CTA and a short link that opens a Topic Duel invite on the same topic.
+    <ul><li>Strings are in English as briefed. Whether the card follows the sharer's UI language (Malayalam for Anju) is still open.</li>
+    <li>The link domain is a placeholder.</li></ul></p>
+</div>
+
+<!-- ========== 4. IN CHAT ========== -->
+<div class="col">
+  <h2>4 · As received in WhatsApp</h2>
+  <div class="phone chat"><div class="notch"></div>
+    <div class="sb" style="color:#AEBAC1"><span>9:48</span><span>3G ▮▮▯</span></div>
+    <div class="bar"><span>←</span><span class="gi">LB</span><div><b>LDC Batch 2026 · Kollam</b><span>Anju, Vishnu, Rajeev sir, +38</span></div></div>
+    <div class="msgs">
+      <div class="bub"><div class="nm">Vishnu R</div><span class="ml">ഒരു റൗണ്ട് കൂടി? Kerala History</span><div class="tm">9:41</div></div>
+      <div class="bub me img">
+        <div class="card">
+          <svg class="bolt" viewBox="0 0 120 150" aria-hidden="true"><polygon points="70,4 26,82 56,82 40,146 96,58 64,58 84,4" fill="#D4FF2A"/></svg>
+          <div class="wm"><svg viewBox="0 0 12 16" aria-hidden="true"><polygon points="7,0 1,9 5,9 3,16 11,6 7,6 9,0" fill="#D4FF2A"/></svg>Minnal <span>മിന്നൽ</span></div>
+          <div class="who">Anju beat Vishnu</div>
+          <div class="sc tab">7,840 – 7,420</div>
+          <div class="md">Topic Duel · Kerala History</div>
+          <div class="ft"><b>Beat me on Minnal</b><span>minnal.app/d/7KQ2X</span></div>
+        </div>
+        <div class="tx">Beat me on Minnal → <a>minnal.app/d/7KQ2X</a></div>
+        <div class="tm">9:48 ✓✓</div>
+      </div>
+      <div class="bub"><div class="nm">Vishnu R</div><span class="ml">അവസാന ചോദ്യം ചതിച്ചു. റീമാച്ച് വാ</span><div class="tm">9:48</div></div>
+    </div>
+  </div>
+  <p class="cap"><b>In context.</b> Share goes to the OS share sheet with the image plus a prefilled text line and link. The chat chrome is only an approximation for context and is not Minnal UI. The card has to hold up against a busy chat, and an ink square with one volt score does.</p>
+</div>
+
+</div>
+</body>
+</html>
