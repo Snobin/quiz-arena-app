@@ -1,0 +1,100 @@
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when its first story starts (via build's sprint sync)
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; the status view surfaces open ones
+generated: 11-11-2026 09:40
+last_updated: 11-11-2026 10:55
+project: quiz-arena
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+development_status:
+  epic-1: in-progress
+  1-1-project-scaffold-runs-locally: review
+  1-2-minnal-is-live-on-the-production-server: backlog
+  1-3-design-foundation: backlog
+  1-4-a-seeded-psc-question-bank: backlog
+  1-5-a-guest-can-open-minnal-and-see-quick-match: backlog
+  1-6-matchmaking-with-bot-fallback: backlog
+  1-7-live-match-engine: backlog
+  1-8-live-match-screen-and-peak-moments: backlog
+  1-9-reconnect-forfeit-and-leave: backlog
+  1-10-results-and-rematch: backlog
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-sign-in-with-google: backlog
+  2-2-refresh-token-rotation-and-session-continuity: backlog
+  2-3-profile-setup-and-editing: backlog
+  2-4-guest-results-sign-in-prompt: backlog
+  2-5-ratings-service-computes-elo: backlog
+  2-6-rating-change-and-match-history: backlog
+  2-7-leaderboards: backlog
+  2-8-settings-and-account-deletion: backlog
+  epic-2-retrospective: optional
+
+  epic-3: backlog
+  3-1-admin-console-access-and-layout: backlog
+  3-2-add-and-edit-single-questions: backlog
+  3-3-csv-bulk-upload: backlog
+  3-4-draft-review-queue: backlog
+  3-5-players-report-a-wrong-question: backlog
+  3-6-report-queue-and-resolution: backlog
+  epic-3-retrospective: optional
+
+  epic-4: backlog
+  4-1-topic-picker: backlog
+  4-2-topic-duel: backlog
+  4-3-solo-practice: backlog
+  4-4-practise-this-topic: backlog
+  epic-4-retrospective: optional
+
+  epic-5: backlog
+  5-1-room-server-create-configure-and-expire: backlog
+  5-2-create-a-room-and-share-it: backlog
+  5-3-join-a-room-and-the-live-lobby: backlog
+  5-4-play-a-room-match: backlog
+  5-5-battle-room-results-and-podium: backlog
+  5-6-play-again: backlog
+  epic-5-retrospective: optional
+
+  epic-6: backlog
+  6-1-custom-topic-import-api: backlog
+  6-2-import-screen: backlog
+  6-3-manage-my-custom-topics: backlog
+  6-4-practise-a-custom-topic: backlog
+  6-5-battle-room-with-a-custom-topic: backlog
+  epic-6-retrospective: optional
+
+  epic-7: backlog
+  7-1-result-share-card: backlog
+  7-2-install-prompt: backlog
+  7-3-launch-metrics: backlog
+  7-4-launch-readiness: backlog
+  epic-7-retrospective: optional

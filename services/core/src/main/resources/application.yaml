@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: core-service
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:minnal}
+    username: ${CORE_DB_USER:core}
+    password: ${CORE_DB_PASSWORD}
+  flyway:
+    # Own schema only (AD-3). The schema is created and owned by the core login in
+    # deploy/postgres/init; Flyway never creates schemas.
+    schemas: core
+    default-schema: core
+    create-schemas: false
+  data:
+    redis:
+      host: ${VALKEY_HOST:localhost}
+      port: ${VALKEY_PORT:6379}
+      password: ${VALKEY_PASSWORD:}
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  port: ${SERVER_PORT:8081}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      probes:
+        # Public /health body is exactly {"status":"UP"}.
+        enabled: false
+
+logging:
+  structured:
+    format:
+      # JSON lines; MDC entries (requestId) become top-level fields.
+      console: logstash
+
+minnal:
+  valkey:
+    # Owner prefix for every key this service writes (AD-3). Applied when a story first writes keys.
+    key-prefix: "core:"

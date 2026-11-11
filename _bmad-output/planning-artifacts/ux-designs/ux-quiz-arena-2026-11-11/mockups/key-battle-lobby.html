@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="ml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minnal Key Screen Battle Room</title>
+<style>
+/* ============================================================
+   KEY SCREEN: Battle Room, host Rajeev sir (host also plays)
+   Col 1: lobby filling (23 joined), code K7M-Q2X, custom source -> unrated, 15 questions
+   Col 2: live scoreboard mid-match (Q6 / 15), Rajeev overtakes Arjun K -> peak
+
+   Governing spine sections (DESIGN.md / EXPERIENCE.md not yet written;
+   section names follow the bmad-ux spine template):
+   - DESIGN Colors (calm lobby; volt only on the overtake row), Typography, Components; Motion
+   - EXPERIENCE Information Architecture: Battle Room create / join / lobby / live scoreboard
+   - EXPERIENCE Voice and Tone: WhatsApp-group joining, alive lobby (PRD addendum)
+   - EXPERIENCE Component Patterns: Room code block, Share-to-WhatsApp button, Source row +
+     unrated note, Joined list (name chips), Host Start bar, Answered meter, Scoreboard row
+     (default / you-overtake / dropped), Overtake crack
+   - EXPERIENCE State Patterns: lobby-filling, live-question-with-answered-indicators,
+     overtake (peak)
+   - EXPERIENCE Accessibility Floor: flash rule (overtake uses the crack, no flash); reduced motion
+   - EXPERIENCE Key Flows: J2 Rajeev sir, steps "share code to WhatsApp -> batch joins ->
+     start (plays along) -> live scoreboard"
+   - Product rules: CAP-6 (2-50 humans, no bots, host starts, >= 2 humans, 5-30 questions,
+     code expires at end / 24 h), CAP-8 + game-modes Ratings (custom source = unrated)
+
+   Palette = directions-2 variation B:
+   #F4F5F7 cool paper  #FFFFFF card  #101216 ink  #666C78 muted  #E1E3E8 hairline
+   #9AA0AA dim  #C3C7CF not-yet-answered  #D4FF2A volt (peak only, on ink)  #2B3040 ink-raised
+   ============================================================ */
+:root{
+  --ml:"Noto Sans Malayalam","Nirmala UI","Kartika",sans-serif;
+  --sys:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --page-bg:#ECECEA; --page-ink:#1C1E22; --page-muted:#5E636C; --page-card:#FFFFFF; --page-line:#D9DAD6;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --page-bg:#141518; --page-ink:#E8E9EB; --page-muted:#9CA1AA; --page-card:#1D1F23; --page-line:#2F3238; }
+}
+:root[data-theme="dark"]{ --page-bg:#141518; --page-ink:#E8E9EB; --page-muted:#9CA1AA; --page-card:#1D1F23; --page-line:#2F3238; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--page-bg);color:var(--page-ink);font-family:var(--sys),var(--ml);line-height:1.4;padding:32px 16px 64px}
+.ml{font-family:var(--ml)}
+.tab{font-variant-numeric:tabular-nums}
+header.page{max-width:1180px;margin:0 auto 24px}
+header.page h1{font-size:24px;letter-spacing:-.01em}
+header.page p{color:var(--page-muted);max-width:860px;margin-top:6px;font-size:14px}
+.stage{max-width:1180px;margin:0 auto;display:flex;gap:32px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+.col{width:360px;max-width:100%}
+.col h2{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--page-muted);margin-bottom:10px}
+.cap{font-size:12px;color:var(--page-muted);margin-top:12px;line-height:1.55}
+.cap b{color:var(--page-ink);font-weight:600}
+.cap ul{padding-left:16px;margin-top:6px}
+
+.phone{--bg:#F4F5F7;--card:#FFFFFF;--ink:#101216;--muted:#666C78;--line:#E1E3E8;--dim:#9AA0AA;
+  width:360px;height:740px;border-radius:38px;border:8px solid #0E0F12;overflow:hidden;position:relative;
+  background:var(--bg);color:var(--ink);font-family:var(--sys),var(--ml);box-shadow:0 16px 36px rgba(0,0,0,.16)}
+.notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:104px;height:19px;background:#0E0F12;border-radius:0 0 14px 14px;z-index:5}
+.sb{height:26px;display:flex;justify-content:space-between;align-items:center;padding:0 18px;font:600 11px var(--sys);color:var(--muted)}
+
+/* ---- Lobby ---- */
+.top{display:flex;align-items:center;gap:10px;margin:8px 18px 0;font-family:var(--ml)}
+.top .x{font-size:18px;color:var(--muted)}
+.top b{font-size:16px;font-weight:600}
+.top .host{margin-left:auto;font-size:11px;border:1px solid var(--ink);border-radius:6px;padding:1px 7px;font-weight:600}
+.code{margin:12px 16px 0;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px 14px;text-align:center}
+.code .l{font-family:var(--ml);font-size:12px;color:var(--muted)}
+.code .c{font:700 40px/1.1 ui-monospace,"SF Mono",Menlo,Consolas,monospace;letter-spacing:.06em;margin-top:4px}
+.code .e{font-family:var(--ml);font-size:11.5px;color:var(--muted);margin-top:4px}
+.code .wa{margin-top:12px;display:flex;justify-content:center;align-items:center;gap:8px;background:#101216;color:#fff;border-radius:10px;padding:12px;font-family:var(--ml);font-weight:700;font-size:15px}
+.code .cp{font-family:var(--ml);font-size:12px;font-weight:600;margin-top:8px}
+.cfg{margin:10px 16px 0;background:var(--card);border:1px solid var(--line);border-radius:12px}
+.cfg .r{display:flex;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);align-items:flex-start}
+.cfg .r:last-child{border-bottom:0}
+.cfg .k{font-family:var(--ml);font-size:12px;color:var(--muted);width:62px;flex:none;padding-top:1px}
+.cfg .v{font-size:14px;font-weight:600;line-height:1.45}
+.cfg .v small{display:block;font-family:var(--ml);font-size:11.5px;font-weight:400;color:var(--muted);margin-top:2px}
+.cfg .v .tg{font-family:var(--ml);font-size:10.5px;font-weight:600;border:1px solid var(--muted);color:var(--muted);border-radius:5px;padding:0 5px;margin-left:4px;vertical-align:1px}
+.cfg .ed{margin-left:auto;font-family:var(--ml);font-size:12px;font-weight:600}
+.jn{margin:12px 20px 0;display:flex;align-items:baseline;gap:8px;font-family:var(--ml)}
+.jn b{font-size:20px;font-weight:700}
+.jn .live{width:7px;height:7px;border-radius:50%;background:#101216;display:inline-block;margin-right:2px;vertical-align:2px}
+.jn span{font-size:12px;color:var(--muted)}
+.chips{margin:8px 16px 0;display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:4px 10px;font-size:12.5px}
+.chip.new{border:1.5px solid #101216;font-weight:600}
+.chip.new i{font-style:normal;font-family:var(--ml);font-size:10.5px;color:var(--muted);margin-left:4px;font-weight:400}
+.chip.me{background:#101216;color:#fff;border-color:#101216;font-family:var(--ml)}
+.chip.more{color:var(--muted);border-style:dashed}
+.start{position:absolute;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px 14px 18px}
+.start .b{background:#101216;color:#fff;border-radius:12px;padding:14px;text-align:center;font-family:var(--ml);font-weight:700;font-size:16px}
+.start .n{font-family:var(--ml);font-size:11.5px;color:var(--muted);text-align:center;margin-top:6px}
+
+/* ---- Live scoreboard ---- */
+.bh{margin:10px 18px 0}
+.bh .t{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;font-family:var(--sys),var(--ml)}
+.bh h3{font-size:16.5px;font-weight:600;margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.bh h3 .tg{font-family:var(--ml);font-size:10.5px;font-weight:600;border:1px solid var(--muted);color:var(--muted);border-radius:5px;padding:0 5px}
+.bh .ans{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:12px;color:var(--muted);font-family:var(--ml)}
+.bh .ans .bar{flex:1;height:4px;border-radius:2px;background:#E1E3E8;position:relative;overflow:hidden}
+.bh .ans .bar i{position:absolute;left:0;top:0;bottom:0;width:74%;background:#101216}
+.board{margin:12px 14px 0;display:flex;flex-direction:column;gap:4px}
+.row{display:grid;grid-template-columns:24px 1fr auto 18px;gap:8px;align-items:center;height:47px;padding:0 12px;background:var(--card);border-radius:10px;font-size:14.5px}
+.row .p{color:var(--muted);font-size:13px}
+.row .n small{display:block;font-size:11px;color:var(--muted);font-family:var(--ml)}
+.row .s{font-weight:600}
+.row .d{font-size:12px;color:#101216;justify-self:center}
+.row .d.no{color:#C3C7CF}
+.row.you{background:#101216;color:#fff;height:56px}
+.row.you .n{font-family:var(--ml)}
+.row.you .p{color:#D4FF2A;font-weight:700}
+.row.you .s{color:#D4FF2A;font-size:16px}
+.row.you small{color:#D4FF2A;font-weight:600}
+.row.you .d{color:#D4FF2A}
+.row.dn{opacity:.85}
+.zap{height:10px;margin:-2px 20px -2px}
+.more{margin:8px 14px 0;font-family:var(--ml);font-size:12px;color:var(--muted);display:flex;justify-content:space-between}
+.more b{color:var(--ink);font-weight:600}
+.key{margin:10px 20px 0;font-size:11px;color:var(--muted);display:flex;gap:14px;font-family:var(--ml)}
+</style>
+</head>
+<body>
+<header class="page">
+  <h1>Key screen: Battle Room lobby and live scoreboard (host Rajeev sir)</h1>
+  <p>The lobby is calm (ink only) but alive: names drop in as the batch taps the WhatsApp link. Rajeev hosts and also plays, so he counts toward the 2-human minimum and appears in the list as "നിങ്ങൾ". The source is one of his custom topics, so the room is <b>unrated</b> (CAP-8) and says so up front. Column 2 is the same room mid-match: the overtake is the only volt on the screen.</p>
+</header>
+
+<div class="stage">
+
+<!-- ========== LOBBY ========== -->
+<div class="col">
+  <h2>1 · Lobby · filling</h2>
+  <div class="phone"><div class="notch"></div>
+    <div class="sb"><span>18:58</span><span>4G ▮▮▮</span></div>
+    <div class="top"><span class="x">✕</span><b>ബാറ്റിൽ റൂം</b><span class="host">ഹോസ്റ്റ്</span></div>
+    <div class="code">
+      <div class="l">റൂം കോഡ്</div>
+      <div class="c">K7M-Q2X</div>
+      <div class="e">മാച്ച് തീരും വരെ, പരമാവധി 24 മണിക്കൂർ</div>
+      <div class="wa">WhatsApp-ൽ ഷെയർ ചെയ്യൂ</div>
+      <div class="cp">കോഡ് കോപ്പി ചെയ്യാം</div>
+    </div>
+    <div class="cfg">
+      <div class="r"><span class="k">ചോദ്യങ്ങൾ</span><span class="v">Kerala Renaissance — Week 12<span class="tg">സ്വന്തം</span><small>സ്വന്തം ടോപ്പിക് ആയതിനാൽ റേറ്റിംഗ് മാറില്ല (unrated)</small></span></div>
+      <div class="r"><span class="k">എണ്ണം</span><span class="v ml">15 ചോദ്യം<small>15 സെ വീതം · ഏകദേശം 6 മിനിറ്റ്</small></span><span class="ed">മാറ്റാം</span></div>
+    </div>
+    <div class="jn"><b class="tab"><i class="live"></i>23 പേർ ചേർന്നു</b><span>· പരമാവധി 50</span></div>
+    <div class="chips">
+      <span class="chip new">Sneha P<i>ഇപ്പോൾ</i></span>
+      <span class="chip new">Akhil J<i>ഇപ്പോൾ</i></span>
+      <span class="chip me">നിങ്ങൾ</span>
+      <span class="chip">Fathima S</span>
+      <span class="chip">Rahul M</span>
+      <span class="chip">Arjun K</span>
+      <span class="chip">Nithya P</span>
+      <span class="chip">Sreelakshmi V</span>
+      <span class="chip">Vishnu T</span>
+      <span class="chip">Anju S</span>
+      <span class="chip">Midhun R</span>
+      <span class="chip">Aswathy K</span>
+      <span class="chip">Joseph M</span>
+      <span class="chip">Haritha N</span>
+      <span class="chip more ml">+9 പേർ</span>
+    </div>
+    <div class="start">
+      <div class="b">തുടങ്ങാം · <span class="tab">23</span> പേർ</div>
+      <div class="n">നിങ്ങളും കളിക്കും · നിങ്ങൾ പോയാൽ റൂം അടയും</div>
+    </div>
+  </div>
+  <p class="cap"><b>Lobby, filling.</b> The code is the biggest thing on screen, because people read it aloud in class. "Share to WhatsApp" is the one filled ink button: it opens the OS share sheet with the code and a join link. Joiners come in with no confirmation step, like joining a WhatsApp group. The custom source carries a "സ്വന്തം" tag and a plain-language unrated note. Count is editable (5–30). Start is host-only and enabled at ≥ 2 humans; below that it reads "ഒരാൾ കൂടി വേണം". The note under Start warns that the room closes if the host leaves.
+    <ul><li><b>Motion, names popping in:</b> a new chip enters at the front of the list (fade + scale .92 → 1, 160 ms, ease-out) with an ink outline and an "ഇപ്പോൾ" label for 3 s, then it settles into the plain chip style. The count number swaps with no count-up. If 5 or more people join within a second, the chips fade in together as one batch instead of popping one by one.</li>
+    <li>No volt and no flash: the lobby is alive but it isn't a peak.</li>
+    <li>Reduced motion: chips fade in only (120 ms), with no scale.</li></ul></p>
+</div>
+
+<!-- ========== LIVE SCOREBOARD ========== -->
+<div class="col">
+  <h2>2 · Live scoreboard · overtake</h2>
+  <div class="phone"><div class="notch"></div>
+    <div class="sb"><span>19:04</span><span>4G ▮▮▮</span></div>
+    <div class="bh">
+      <div class="t"><span>ബാറ്റിൽ റൂം · K7M-Q2X</span><span class="tab">ചോദ്യം 6 / 15 · 11 സെ</span></div>
+      <h3>Kerala Renaissance — Week 12 <span class="tg">unrated</span></h3>
+      <div class="ans"><span class="bar"><i></i></span><span class="tab">17 / 23 ഉത്തരം നൽകി</span></div>
+    </div>
+    <div class="board">
+      <div class="row"><span class="p">1</span><span class="n">Fathima S</span><span class="s tab">4,610</span><span class="d">●</span></div>
+      <div class="row"><span class="p">2</span><span class="n">Rahul M</span><span class="s tab">4,180</span><span class="d">●</span></div>
+      <div class="row you"><span class="p">3</span><span class="n">നിങ്ങൾ<small>▲ അർജുനെ മറികടന്നു</small></span><span class="s tab">3,960</span><span class="d">●</span></div>
+      <svg class="zap" viewBox="0 0 280 10" preserveAspectRatio="none" aria-hidden="true"><polyline points="0,5 40,5 52,1 64,9 76,1 88,9 100,5 280,5" fill="none" stroke="#101216" stroke-width="1.5"/></svg>
+      <div class="row dn"><span class="p">4</span><span class="n">Arjun K<small>▼ 1</small></span><span class="s tab">3,905</span><span class="d">●</span></div>
+      <div class="row"><span class="p">5</span><span class="n">Nithya P</span><span class="s tab">3,520</span><span class="d no">○</span></div>
+      <div class="row"><span class="p">6</span><span class="n">Sreelakshmi V</span><span class="s tab">3,300</span><span class="d">●</span></div>
+      <div class="row"><span class="p">7</span><span class="n">Vishnu T</span><span class="s tab">2,980</span><span class="d no">○</span></div>
+      <div class="row"><span class="p">8</span><span class="n">Akhil J</span><span class="s tab">2,760</span><span class="d">●</span></div>
+    </div>
+    <div class="more"><span>+15 പേർ കൂടി</span><b>മുഴുവൻ കാണാം</b></div>
+    <div class="key"><span>● ഉത്തരം നൽകി</span><span>○ ആലോചിക്കുന്നു</span></div>
+  </div>
+  <p class="cap"><b>Overtake peak.</b> After the Q5 reveal Rajeev's row jumps up a slot (180 ms, slight overshoot) and turns ink with volt. A one-shot zig-zag crack is drawn between him and Arjun and fades after 1.2 s. His row stays ink until the next question starts. During Q6, answered dots flip from ○ to ● with no animation, and the meter fills to match. Scores update within 500 ms of each reveal.
+    <ul><li>Flash rule: the crack is a line draw, not a flash. If several rank changes land in the same reveal, only your own row gets a crack.</li>
+    <li>Reduced motion: no jump and no crack. Rows swap with a 200 ms fade.</li>
+    <li>Being overtaken: the crack shows in muted grey and your row stays white. That reads as a loss with no volt.</li></ul></p>
+</div>
+
+</div>
+</body>
+</html>

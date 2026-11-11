@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="ml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minnal Key Screen Home</title>
+<style>
+/* ============================================================
+   KEY SCREEN: Home (Play tab)
+   Column 1: registered Anju, Malayalam UI (UI follows question language).
+   Column 2: guest, English UI (guest defaults to device language).
+
+   Governing spine sections (DESIGN.md / EXPERIENCE.md not yet written;
+   section names follow the bmad-ux spine template):
+   - DESIGN Colors, Typography, Shapes, Components (direction B "Quiet + Spark")
+   - EXPERIENCE Information Architecture: Home; Navigation: bottom tab bar Play / Rooms / Ranks / Me
+   - EXPERIENCE Voice and Tone: warm, lightly competitive, never shaming; no slang off-peak
+   - EXPERIENCE Component Patterns: Primary action card (Quick Match), Mode entry row,
+     Rank snippet, Rating trio, Tab bar, Sign-in nudge, Locked mode row
+   - EXPERIENCE State Patterns: registered home at rest; guest-locked
+   - EXPERIENCE Key Flows: J1 Anju, step "guest plays Quick Match" (col 2) and
+     step "registered, returns next day" (col 1)
+   - Product rules: CAP-1 guest = Quick Match only; CAP-2 three ratings; CAP-10 daily board
+
+   Palette = directions-2 variation B (calm state only, so NO volt on this screen):
+   #F4F5F7 cool paper  #FFFFFF card  #101216 ink  #666C78 muted
+   #E1E3E8 hairline    #9AA0AA dim   #2B3040 ink-raised
+   ============================================================ */
+:root{
+  --ml:"Noto Sans Malayalam","Nirmala UI","Kartika",sans-serif;
+  --sys:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --page-bg:#ECECEA; --page-ink:#1C1E22; --page-muted:#5E636C; --page-card:#FFFFFF; --page-line:#D9DAD6;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --page-bg:#141518; --page-ink:#E8E9EB; --page-muted:#9CA1AA; --page-card:#1D1F23; --page-line:#2F3238; }
+}
+:root[data-theme="dark"]{ --page-bg:#141518; --page-ink:#E8E9EB; --page-muted:#9CA1AA; --page-card:#1D1F23; --page-line:#2F3238; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--page-bg);color:var(--page-ink);font-family:var(--sys),var(--ml);line-height:1.4;padding:32px 16px 64px}
+.ml{font-family:var(--ml)}
+.tab{font-variant-numeric:tabular-nums}
+header.page{max-width:1180px;margin:0 auto 24px}
+header.page h1{font-size:24px;letter-spacing:-.01em}
+header.page p{color:var(--page-muted);max-width:820px;margin-top:6px;font-size:14px}
+.stage{max-width:1180px;margin:0 auto;display:flex;gap:32px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+.col{width:360px;max-width:100%}
+.col h2{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--page-muted);margin-bottom:10px}
+.cap{font-size:12px;color:var(--page-muted);margin-top:12px;line-height:1.55}
+.cap b{color:var(--page-ink);font-weight:600}
+.cap ul{padding-left:16px;margin-top:6px}
+
+/* ---------- product tokens: B light ---------- */
+.phone{--bg:#F4F5F7;--card:#FFFFFF;--ink:#101216;--muted:#666C78;--line:#E1E3E8;--dim:#9AA0AA;--raised:#2B3040;--tile:#F4F5F7;
+  width:360px;height:740px;border-radius:38px;border:8px solid #0E0F12;overflow:hidden;position:relative;
+  background:var(--bg);color:var(--ink);font-family:var(--sys),var(--ml);box-shadow:0 16px 36px rgba(0,0,0,.16)}
+.notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:104px;height:19px;background:#0E0F12;border-radius:0 0 14px 14px;z-index:5}
+.sb{height:26px;display:flex;justify-content:space-between;align-items:center;padding:0 18px;font:600 11px var(--sys);color:var(--muted)}
+
+/* top bar */
+.top{display:flex;justify-content:space-between;align-items:center;margin:10px 20px 0}
+.wm{display:flex;align-items:center;gap:6px;font-family:var(--ml);font-weight:700;font-size:19px}
+.wm svg{width:12px;height:16px}
+.av{width:32px;height:32px;border-radius:50%;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font:600 13px var(--sys)}
+.hi{margin:10px 20px 0}
+.hi span{font-size:12.5px;color:var(--muted)}
+.hi h3{font-family:var(--ml);font-size:21px;font-weight:600;line-height:1.5;margin-top:2px}
+.hi.en h3{font-family:var(--sys);font-size:21px}
+
+/* Primary action card: Quick Match (ink = calm accent; no volt) */
+.qm{margin:14px 16px 0;background:#101216;color:#fff;border-radius:16px;padding:18px 18px 16px;position:relative;overflow:hidden}
+.qm svg.bg{position:absolute;right:-4px;top:-6px;width:110px;height:138px}
+.qm .t{font-family:var(--ml);font-size:24px;font-weight:600;line-height:1.4;position:relative}
+.qm.en .t{font-family:var(--sys)}
+.qm .s{font-size:12.5px;color:#9AA0AA;margin-top:4px;position:relative}
+.qm .go{margin-top:12px;display:inline-flex;align-items:center;gap:8px;background:#fff;color:#101216;border-radius:10px;padding:11px 18px;font-weight:700;font-size:15px;position:relative}
+.qm .go.ml{font-family:var(--ml)}
+
+/* Rank snippet */
+.rank{margin:12px 16px 0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:12px}
+.rank .n{font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1}
+.rank .l{font-size:12px;color:var(--muted);line-height:1.5}
+.rank .l b{color:var(--ink);font-weight:600;display:block;font-size:13.5px}
+.rank .more{margin-left:auto;font-size:12px;font-weight:600;color:var(--ink)}
+
+/* Mode entry rows */
+.modes{margin:12px 16px 0;background:var(--card);border:1px solid var(--line);border-radius:12px}
+.mode{display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid var(--line)}
+.mode:last-child{border-bottom:0}
+.mode .k{width:32px;height:32px;border-radius:8px;background:var(--tile);display:flex;align-items:center;justify-content:center;flex:none}
+.mode .k svg{width:16px;height:16px}
+.mode .tx b{display:block;font-size:15px;font-weight:600;line-height:1.45}
+.mode .tx span{font-size:12px;color:var(--muted)}
+.mode .ch{margin-left:auto;color:var(--dim);font-size:16px}
+.mode.lock .tx b{color:var(--dim)}
+.mode.lock .k{opacity:.5}
+.mode .lk{margin-left:auto;font-size:11.5px;font-weight:600;color:var(--muted);display:flex;align-items:center;gap:4px}
+
+/* Rating trio */
+.rt{margin:12px 16px 0;display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.rt div{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.rt span{display:block;font-size:11px;color:var(--muted)}
+.rt b{font-size:15px;font-weight:600}
+.rth{margin:14px 20px 0;font-size:11.5px;color:var(--muted)}
+
+/* Sign-in nudge (guest) */
+.nudge{margin:12px 16px 0;background:var(--card);border:1.5px solid #101216;border-radius:12px;padding:14px}
+.nudge b{font-size:15px}
+.nudge p{font-size:12.5px;color:var(--muted);margin-top:4px;line-height:1.5}
+.nudge .btn{margin-top:12px;display:flex;justify-content:center;background:#101216;color:#fff;border-radius:10px;padding:11px;font-weight:700;font-size:14px}
+
+/* Tab bar */
+.tabs{position:absolute;left:0;right:0;bottom:0;height:66px;background:var(--card);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);padding:8px 0 14px}
+.tabs div{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;color:var(--muted)}
+.tabs.ml div{font-family:var(--ml)}
+.tabs svg{width:20px;height:20px}
+.tabs .on{color:var(--ink);font-weight:700}
+</style>
+</head>
+<body>
+<header class="page">
+  <h1>Key screen: Home (Play tab)</h1>
+  <p>Direction B "Quiet + Spark", calm state. Home has no peak moment, so there is no volt anywhere. Ink carries the one accent (the Quick Match card). Left: registered Anju with a Malayalam UI, because UI language follows her question language. Right: a guest on an English-language phone, so the UI defaults to English. Only Quick Match is open; the other modes stay visible but locked, with one sign-in nudge.</p>
+</header>
+
+<div class="stage">
+
+<!-- ================= REGISTERED: ANJU (ML) ================= -->
+<div class="col">
+  <h2>Registered · Anju · മലയാളം</h2>
+  <div class="phone"><div class="notch"></div>
+    <div class="sb"><span>9:41</span><span>3G ▮▮▯</span></div>
+    <div class="top">
+      <div class="wm"><svg viewBox="0 0 12 16" aria-hidden="true"><polygon points="7,0 1,9 5,9 3,16 11,6 7,6 9,0" fill="#101216"/></svg>മിന്നൽ</div>
+      <div class="av">A</div>
+    </div>
+    <div class="hi"><span class="ml">നമസ്കാരം, Anju</span><h3>ഇന്ന് ആരെ തോൽപ്പിക്കും?</h3></div>
+
+    <div class="qm">
+      <svg class="bg" viewBox="0 0 120 150" aria-hidden="true"><polygon points="70,4 26,82 56,82 40,146 96,58 64,58 84,4" fill="#2B3040"/></svg>
+      <div class="t">ക്വിക്ക് മാച്ച്</div>
+      <div class="s ml">10 ചോദ്യം · 15 സെ വീതം · ഏകദേശം 4 മിനിറ്റ്</div>
+      <div class="go ml">കളിക്കാം →</div>
+    </div>
+
+    <div class="rank">
+      <span class="n tab">#212</span>
+      <span class="l ml"><b>ഇന്ന് കേരളത്തിൽ</b>ക്വിക്ക് മാച്ച് · ഇന്ന് <span class="tab">+24</span></span>
+      <span class="more ml">റാങ്ക് ›</span>
+    </div>
+
+    <div class="modes ml">
+      <div class="mode">
+        <span class="k"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="#101216" stroke-width="1.6"/><circle cx="8" cy="8" r="2" fill="#101216"/></svg></span>
+        <span class="tx"><b>ടോപ്പിക് ഡ്യുവൽ</b><span>വിഷയം തിരഞ്ഞെടുത്ത് 1v1</span></span><span class="ch">›</span>
+      </div>
+      <div class="mode">
+        <span class="k"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="2" width="10" height="12" rx="1.5" fill="none" stroke="#101216" stroke-width="1.6"/><line x1="5.5" y1="6" x2="10.5" y2="6" stroke="#101216" stroke-width="1.4"/><line x1="5.5" y1="9" x2="10.5" y2="9" stroke="#101216" stroke-width="1.4"/></svg></span>
+        <span class="tx"><b>സോളോ പ്രാക്ടീസ്</b><span>ടൈമർ ഇല്ല · സ്വന്തം വേഗത്തിൽ</span></span><span class="ch">›</span>
+      </div>
+      <div class="mode">
+        <span class="k"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="5" cy="6" r="2.2" fill="#101216"/><circle cx="11" cy="6" r="2.2" fill="#101216"/><path d="M1.5 14c0-2.4 1.6-4 3.5-4s3.5 1.6 3.5 4M7.5 14c0-2.4 1.6-4 3.5-4s3.5 1.6 3.5 4" fill="none" stroke="#101216" stroke-width="1.4"/></svg></span>
+        <span class="tx"><b>ബാറ്റിൽ റൂം</b><span>ബാച്ചിനൊപ്പം · കോഡ് ഉണ്ടോ? ചേരാം</span></span><span class="ch">›</span>
+      </div>
+    </div>
+
+    <div class="rth ml">നിങ്ങളുടെ റേറ്റിംഗ്</div>
+    <div class="rt ml">
+      <div><span>ക്വിക്ക്</span><b class="tab">1,284</b></div>
+      <div><span>ടോപ്പിക്</span><b class="tab">1,236</b></div>
+      <div><span>ബാറ്റിൽ</span><b class="tab">1,200</b></div>
+    </div>
+
+    <div class="tabs ml">
+      <div class="on"><svg viewBox="0 0 20 20" aria-hidden="true"><polygon points="11.5,1 4,11 9,11 7.5,19 16,8 11,8 13,1" fill="currentColor"/></svg>കളി</div>
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="7" cy="7" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="14" cy="7" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2 17c0-3 2.2-5 5-5s5 2 5 5M10 17c0-3 1.8-5 4-5s4 2 4 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>റൂമുകൾ</div>
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="10" width="3.5" height="7" fill="currentColor"/><rect x="8.25" y="4" width="3.5" height="13" fill="currentColor"/><rect x="13.5" y="7" width="3.5" height="10" fill="currentColor"/></svg>റാങ്ക്</div>
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="7" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 18c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>ഞാൻ</div>
+    </div>
+  </div>
+  <p class="cap"><b>Registered, at rest.</b> Quick Match is the only filled ink element on screen, so it is the obvious first tap. The rank snippet ("#212 ഇന്ന് കേരളത്തിൽ") shows today's daily board (rating gained today, IST) and opens Ranks. The three ratings are small and secondary.
+    <ul><li>Motion: none on Home. The bolt watermark is static ink-raised (#2B3040), not volt. Volt is reserved for reveal, overtake and win.</li>
+    <li>Reduced motion: nothing to change.</li></ul></p>
+</div>
+
+<!-- ================= GUEST (EN) ================= -->
+<div class="col">
+  <h2>Guest · English (device language)</h2>
+  <div class="phone"><div class="notch"></div>
+    <div class="sb"><span>9:41</span><span>3G ▮▮▯</span></div>
+    <div class="top">
+      <div class="wm"><svg viewBox="0 0 12 16" aria-hidden="true"><polygon points="7,0 1,9 5,9 3,16 11,6 7,6 9,0" fill="#101216"/></svg>Minnal</div>
+      <div class="av" style="color:#666C78">G</div>
+    </div>
+    <div class="hi en"><span>Playing as guest</span><h3>Ready for a quick one?</h3></div>
+
+    <div class="qm en">
+      <svg class="bg" viewBox="0 0 120 150" aria-hidden="true"><polygon points="70,4 26,82 56,82 40,146 96,58 64,58 84,4" fill="#2B3040"/></svg>
+      <div class="t">Quick Match</div>
+      <div class="s">10 questions · 15 s each · about 4 min</div>
+      <div class="go">Play now →</div>
+    </div>
+
+    <div class="nudge">
+      <b>Sign in to unlock the rest</b>
+      <p>Topic Duel, Solo Practice and Battle Room need a free account. Your ratings start at 1200 and you join the Kerala leaderboard.</p>
+      <div class="btn">Continue with Google</div>
+    </div>
+
+    <div class="modes">
+      <div class="mode lock">
+        <span class="k"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="#101216" stroke-width="1.6"/><circle cx="8" cy="8" r="2" fill="#101216"/></svg></span>
+        <span class="tx"><b>Topic Duel</b><span>Pick a topic, 1v1</span></span>
+        <span class="lk"><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect x="1" y="5" width="8" height="6.5" rx="1" fill="#666C78"/><path d="M3 5V3.5a2 2 0 0 1 4 0V5" fill="none" stroke="#666C78" stroke-width="1.4"/></svg>Sign in</span>
+      </div>
+      <div class="mode lock">
+        <span class="k"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="2" width="10" height="12" rx="1.5" fill="none" stroke="#101216" stroke-width="1.6"/><line x1="5.5" y1="6" x2="10.5" y2="6" stroke="#101216" stroke-width="1.4"/><line x1="5.5" y1="9" x2="10.5" y2="9" stroke="#101216" stroke-width="1.4"/></svg></span>
+        <span class="tx"><b>Solo Practice</b><span>No timer, your own pace</span></span>
+        <span class="lk"><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect x="1" y="5" width="8" height="6.5" rx="1" fill="#666C78"/><path d="M3 5V3.5a2 2 0 0 1 4 0V5" fill="none" stroke="#666C78" stroke-width="1.4"/></svg>Sign in</span>
+      </div>
+      <div class="mode lock">
+        <span class="k"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="5" cy="6" r="2.2" fill="#101216"/><circle cx="11" cy="6" r="2.2" fill="#101216"/><path d="M1.5 14c0-2.4 1.6-4 3.5-4s3.5 1.6 3.5 4M7.5 14c0-2.4 1.6-4 3.5-4s3.5 1.6 3.5 4" fill="none" stroke="#101216" stroke-width="1.4"/></svg></span>
+        <span class="tx"><b>Battle Room</b><span>Play with your batch by code</span></span>
+        <span class="lk"><svg width="10" height="12" viewBox="0 0 10 12" aria-hidden="true"><rect x="1" y="5" width="8" height="6.5" rx="1" fill="#666C78"/><path d="M3 5V3.5a2 2 0 0 1 4 0V5" fill="none" stroke="#666C78" stroke-width="1.4"/></svg>Sign in</span>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="on"><svg viewBox="0 0 20 20" aria-hidden="true"><polygon points="11.5,1 4,11 9,11 7.5,19 16,8 11,8 13,1" fill="currentColor"/></svg>Play</div>
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="7" cy="7" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="14" cy="7" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2 17c0-3 2.2-5 5-5s5 2 5 5M10 17c0-3 1.8-5 4-5s4 2 4 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Rooms</div>
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="10" width="3.5" height="7" fill="currentColor"/><rect x="8.25" y="4" width="3.5" height="13" fill="currentColor"/><rect x="13.5" y="7" width="3.5" height="10" fill="currentColor"/></svg>Ranks</div>
+      <div><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="7" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M3.5 18c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Me</div>
+    </div>
+  </div>
+  <p class="cap"><b>Guest, locked.</b> Quick Match stays the same primary card. One sign-in nudge (ink outline, not a modal) explains what an account unlocks, in benefit terms and without any shaming. The locked modes stay visible so the guest can see what's on offer; tapping one opens the same Google sign-in prompt. The rank snippet and ratings are hidden, because guest play never touches a rating (CAP-1, CAP-10).
+    <ul><li>Motion: none. Reduced motion: nothing to change.</li></ul></p>
+</div>
+
+</div>
+</body>
+</html>

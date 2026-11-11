@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="ml">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minnal Key Screen Live Match</title>
+<style>
+/* ============================================================
+   KEY SCREEN: Live Quick Match vs a real opponent (Vishnu R), Q4 / 10
+   (a) question open, ~9 s left   (b) answer locked, waiting for reveal
+   (c) reveal peak, correct, +800 (500 + round(500 x 9000/15000))
+   (d) question open in DARK mode  (e) reconnecting, 8 s left of 10
+
+   Governing spine sections (DESIGN.md / EXPERIENCE.md not yet written;
+   section names follow the bmad-ux spine template):
+   - DESIGN Colors (B light + derived dark), Typography (large Malayalam, tall line-height),
+     Shapes, Components; Motion (peak strike ~400 ms)
+   - EXPERIENCE Information Architecture: Live match (question / waiting / reveal); no nav bar
+   - EXPERIENCE Voice and Tone: wrong answer always shows the correct one; errors say what to do
+   - EXPERIENCE Component Patterns: Hairline timer, Score strip, Answer option
+     (default / locked / correct / other's pick / muted), Peak band, Explanation + attribution,
+     Language toggle (EN tag), Reconnect banner
+   - EXPERIENCE State Patterns: question-open, waiting-for-reveal, reveal-correct,
+     reconnecting (10 s grace), dark theme
+   - EXPERIENCE Accessibility Floor: flash rule (max one flash per peak, never >= 3/s,
+     reduced-motion = simple fade); volt never on white
+   - EXPERIENCE Key Flows: J1 Anju, step "first Quick Match" (question -> lock -> reveal)
+   - Product rules: CAP-3 (answer never sent early; explanation + attribution), CAP-4,
+     CAP-12 (10 s reconnect), game-modes Scoring
+
+   Palette = directions-2 variation B:
+   #F4F5F7 cool paper  #FFFFFF card  #101216 ink  #666C78 muted  #E1E3E8 hairline
+   #9AA0AA dim  #D4FF2A volt (peak only, always on ink)  #2B3040 ink-raised
+   #B8463A brick (someone else's wrong pick)
+   Dark tokens (DERIVED from directions-2 page-chrome dark tokens, not a separate pick):
+   #141518 bg  #1D1F23 card  #E8E9EB text  #9CA1AA muted  #2F3238 hairline  #6E737C dim
+   ============================================================ */
+:root{
+  --ml:"Noto Sans Malayalam","Nirmala UI","Kartika",sans-serif;
+  --sys:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --page-bg:#ECECEA; --page-ink:#1C1E22; --page-muted:#5E636C; --page-card:#FFFFFF; --page-line:#D9DAD6;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --page-bg:#141518; --page-ink:#E8E9EB; --page-muted:#9CA1AA; --page-card:#1D1F23; --page-line:#2F3238; }
+}
+:root[data-theme="dark"]{ --page-bg:#141518; --page-ink:#E8E9EB; --page-muted:#9CA1AA; --page-card:#1D1F23; --page-line:#2F3238; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--page-bg);color:var(--page-ink);font-family:var(--sys),var(--ml);line-height:1.4;padding:32px 16px 64px}
+.ml{font-family:var(--ml)}
+.tab{font-variant-numeric:tabular-nums}
+header.page{max-width:1960px;margin:0 auto 24px}
+header.page h1{font-size:24px;letter-spacing:-.01em}
+header.page p{color:var(--page-muted);max-width:860px;margin-top:6px;font-size:14px}
+.stage{margin:0 auto;display:flex;gap:28px;flex-wrap:wrap;justify-content:center;align-items:flex-start}
+.col{width:360px;max-width:100%}
+.col h2{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--page-muted);margin-bottom:10px}
+.cap{font-size:12px;color:var(--page-muted);margin-top:12px;line-height:1.55}
+.cap b{color:var(--page-ink);font-weight:600}
+.cap ul{padding-left:16px;margin-top:6px}
+
+/* ---------- product tokens ---------- */
+.phone{--bg:#F4F5F7;--card:#FFFFFF;--ink:#101216;--muted:#666C78;--line:#E1E3E8;--dim:#9AA0AA;--tile:#F4F5F7;--brick:#B8463A;
+  width:360px;height:740px;border-radius:38px;border:8px solid #0E0F12;overflow:hidden;position:relative;
+  background:var(--bg);color:var(--ink);font-family:var(--sys),var(--ml);box-shadow:0 16px 36px rgba(0,0,0,.16)}
+.phone.dk{--bg:#141518;--card:#1D1F23;--ink:#E8E9EB;--muted:#9CA1AA;--line:#2F3238;--dim:#6E737C;--tile:#26292E;border-color:#000}
+.notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:104px;height:19px;background:#0E0F12;border-radius:0 0 14px 14px;z-index:5}
+.dk .notch{background:#000}
+.sb{height:26px;display:flex;justify-content:space-between;align-items:center;padding:0 18px;font:600 11px var(--sys);color:var(--muted)}
+
+.tl{height:2px;background:var(--line);margin:4px 22px 0;position:relative}
+.tl i{position:absolute;left:0;top:0;bottom:0;background:var(--ink)}
+.meta{display:flex;justify-content:space-between;margin:12px 22px 0;font-size:12px;color:var(--muted)}
+.meta b{color:var(--ink);font-weight:600}
+.scores{display:flex;justify-content:space-between;align-items:center;margin:18px 22px 0;padding:12px 14px;background:var(--card);border:1px solid var(--line);border-radius:10px}
+.scores div{display:flex;flex-direction:column}
+.scores .r{text-align:right}
+.scores span{font-size:11.5px;color:var(--muted)}
+.scores b{font-size:19px;font-weight:600}
+.scores .r b{color:var(--muted);font-weight:500}
+.scores .vs{font-size:11px;color:var(--dim);font-family:var(--ml)}
+.q{margin:30px 24px 0}
+.src{font-size:11.5px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.src .en{border:1px solid var(--ink);border-radius:6px;padding:1px 7px;font-weight:600;color:var(--ink);font-size:11px}
+.qt{font-family:var(--ml);font-size:23px;line-height:1.65;font-weight:500;margin-top:12px}
+.opts{margin:26px 20px 0;display:flex;flex-direction:column;gap:10px}
+.opt{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:14px;font-family:var(--ml);font-size:17.5px;min-height:56px}
+.opt .k{width:24px;height:24px;border-radius:6px;background:var(--tile);display:flex;align-items:center;justify-content:center;font:600 11px var(--sys);color:var(--muted);flex:none}
+.opt .st{margin-left:auto;font:500 11.5px var(--sys),var(--ml);color:var(--ink)}
+.opt.lock{border:1.5px solid var(--ink)}
+.opt.lock .k{background:#101216;color:#fff}
+.opt.ok{background:#101216;color:#fff;border-color:#101216}
+.opt.ok .k{background:#D4FF2A;color:#101216}
+.opt.ok .st{color:#D4FF2A}
+.opt.op .st{color:var(--brick)}
+.opt.mute{color:var(--dim)}
+.foot{position:absolute;left:0;right:0;bottom:22px;text-align:center;font-size:12.5px;color:var(--muted);font-family:var(--ml)}
+
+/* Peak band (reveal) */
+.band{margin:14px 14px 0;background:#101216;color:#fff;border-radius:14px;padding:18px 18px 16px;position:relative;overflow:hidden}
+.band svg{position:absolute;right:-6px;top:-8px;width:120px;height:150px}
+.band .l{font-size:12px;color:#9AA0AA;font-family:var(--ml)}
+.band .w{font-family:var(--ml);font-size:24px;font-weight:600;color:#fff;margin-top:2px}
+.band .p{font-size:44px;font-weight:700;color:#D4FF2A;line-height:1;margin-top:10px;letter-spacing:-.02em}
+.band .p small{font-size:12px;font-weight:500;color:#9AA0AA;letter-spacing:0;margin-left:6px;font-family:var(--ml)}
+.note{margin:16px 20px 0;font-family:var(--ml);font-size:14px;line-height:1.75;color:#2B3040;padding:0 2px}
+.note .attr{font:11.5px var(--sys),var(--ml);color:var(--muted);margin-top:6px;display:flex;justify-content:space-between}
+.note .attr a{color:var(--ink);font-weight:600}
+
+/* Reconnect banner */
+.rc{margin:8px 14px 0;background:var(--card);border:1.5px solid #101216;border-radius:12px;padding:12px 14px;display:flex;gap:12px;align-items:center}
+.rc .n{width:40px;height:40px;border-radius:50%;border:2px solid #101216;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;flex:none}
+.rc b{font-family:var(--ml);font-size:15px;font-weight:600;display:block;line-height:1.5}
+.rc span{font-family:var(--ml);font-size:12px;color:var(--muted);line-height:1.5;display:block}
+.stale{opacity:.42}
+</style>
+</head>
+<body>
+<header class="page">
+  <h1>Key screen: Live Quick Match (Q4 of 10, Anju vs Vishnu R)</h1>
+  <p>Full screen, no tab bar. While a question is open the screen is ink on cool paper only, with no colour. Volt shows up only at the reveal, on the ink band. Scoring: answering at 9.0 s remaining gives 500 + 500 × 9/15 = <b>+800</b>, so 2,340 becomes 3,140. Vishnu is a real player, so there is no bot badge (a bot would get a "BOT" tag beside the name in the score strip). There is no JS, so motion is described under each screen.</p>
+</header>
+
+<div class="stage">
+
+<!-- (a) QUESTION OPEN -->
+<div class="col">
+  <h2>(a) Question open · 9 s</h2>
+  <div class="phone"><div class="notch"></div>
+    <div class="sb"><span>9:41</span><span>3G ▮▮▯</span></div>
+    <div class="tl"><i style="width:62%"></i></div>
+    <div class="meta ml"><span>ചോദ്യം <b>4</b> / 10</span><span class="tab"><b>9</b> സെ</span></div>
+    <div class="scores">
+      <div><span class="ml">നിങ്ങൾ</span><b class="tab">2,340</b></div>
+      <span class="vs">ആലോചിക്കുന്നു…</span>
+      <div class="r"><span>Vishnu R</span><b class="tab">1,980</b></div>
+    </div>
+    <div class="q">
+      <div class="src"><span class="ml">ക്വിക്ക് മാച്ച്</span><span class="en">EN</span></div>
+      <div class="qt">കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി ഏത്?</div>
+    </div>
+    <div class="opts">
+      <div class="opt"><span class="k">A</span>പെരിയാർ</div>
+      <div class="opt"><span class="k">B</span>ഭാരതപ്പുഴ</div>
+      <div class="opt"><span class="k">C</span>പമ്പ</div>
+      <div class="opt"><span class="k">D</span>ചാലിയാർ</div>
+    </div>
+    <div class="foot">ഒന്നു തൊട്ടാൽ ഉത്തരം ലോക്ക് ആകും</div>
+  </div>
+  <p class="cap"><b>Calm, open.</b> The hairline timer shrinks linearly from server time; the seconds number ticks once a second with no animation. The opponent status in the score strip says "thinking" and changes to "answered" without showing what they picked. The footer explains that the first tap is final.
+    <ul><li>Motion: the timer line only. Reduced motion: the line steps once per second instead of moving continuously.</li></ul></p>
+</div>
+
+<!-- (b) LOCKED / WAITING -->
+<div class="col">
+  <h2>(b) Locked · waiting for reveal</h2>
+  <div class="phone"><div class="notch"></div>
+    <div class="sb"><span>9:41</span><span>3G ▮▮▯</span></div>
+    <div class="tl"><i style="width:47%"></i></div>
+    <div class="meta ml"><span>ചോദ്യം <b>4</b> / 10</span><span class="tab"><b>7</b> സെ</span></div>
+    <div class="scores">
+      <div><span class="ml">നിങ്ങൾ</span><b class="tab">2,340</b></div>
+      <span class="vs">Vishnu ഉത്തരം നൽകി</span>
+      <div class="r"><span>Vishnu R</span><b class="tab">1,980</b></div>
+    </div>
+    <div class="q">
+      <div class="src"><span class="ml">ക്വിക്ക് മാച്ച്</span><span class="en">EN</span></div>
+      <div class="qt">കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി ഏത്?</div>
+    </div>
+    <div class="opts">
+      <div class="opt lock"><span class="k">A</span>പെരിയാർ<span class="st ml">ലോക്ക്</span></div>
+      <div class="opt"><span class="k">B</span>ഭാരതപ്പുഴ</div>
+      <div class="opt"><span class="k">C</span>പമ്പ</div>
+      <div class="opt"><span class="k">D</span>ചാലിയാർ</div>
+    </div>
+    <div class="foot">ഉത്തരം ലോക്ക് ചെയ്തു · സമയം തീരുമ്പോൾ ഫലം</div>
+  </div>
+  <p class="cap"><b>Waiting for reveal.</b> The locked option gets a 1.5 px ink border and an ink letter tile, with no transition. There's no correctness hint, because the client doesn't know the answer until the window closes (CAP-3). The other options stay tappable-looking but ignore taps, since only the first answer counts.
+    <ul><li>Motion: none. Lock confirmation is server-acked within 200 ms; until the ack arrives, the label reads "…" in place of "ലോക്ക്".</li></ul></p>
+</div>
+
+<!-- (c) REVEAL PEAK -->
+<div class="col">
+  <h2>(c) Reveal peak · correct</h2>
+  <div class="phone"><div class="notch"></div>
+    <div class="sb"><span>9:41</span><span>3G ▮▮▯</span></div>
+    <div class="tl"><i style="width:100%;background:var(--line)"></i></div>
+    <div class="band">
+      <svg viewBox="0 0 120 150" aria-hidden="true"><polygon points="70,4 26,82 56,82 40,146 96,58 64,58 84,4" fill="#D4FF2A"/></svg>
+      <div class="l">ചോദ്യം 4 · ശരി</div>
+      <div class="w">പെരിയാർ</div>
+      <div class="p tab">+800<small>ആകെ 3,140</small></div>
+    </div>
+    <div class="opts" style="margin-top:16px">
+      <div class="opt ok"><span class="k">✓</span>പെരിയാർ<span class="st">നിങ്ങൾ · 6.0 സെ</span></div>
+      <div class="opt op"><span class="k">B</span>ഭാരതപ്പുഴ<span class="st">Vishnu</span></div>
+      <div class="opt mute"><span class="k">C</span>പമ്പ</div>
+      <div class="opt mute"><span class="k">D</span>ചാലിയാർ</div>
+    </div>
+    <div class="note">പെരിയാർ (244 കി.മീ) ആണ് കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി. ഭാരതപ്പുഴ (209 കി.മീ) രണ്ടാമത്.<div class="attr"><span>Kerala PSC LDC 2019</span><a class="ml">തെറ്റുണ്ടോ? അറിയിക്കൂ</a></div></div>
+  </div>
+  <p class="cap"><b>Spark.</b> The ink band drops in from the top (160 ms). The bolt strikes: full volt for 80 ms, <b>one</b> white frame flash, then it settles, all within about 400 ms. +800 snaps in with no count-up. Vishnu's wrong pick is labelled in brick; the other options fade to dim.
+    <ul><li>Flash rule: one flash for this peak, never repeated.</li>
+    <li>Reduced motion: no drop, no flash, no strike. The band and bolt fade in over 200 ms.</li>
+    <li>Wrong answer: the same band with no bolt and no volt, labelled "ശരിയുത്തരം: പെരിയാർ", so the correct answer is always shown.</li></ul></p>
+</div>
+
+<!-- (d) DARK -->
+<div class="col">
+  <h2>(d) Question open · dark</h2>
+  <div class="phone dk"><div class="notch"></div>
+    <div class="sb"><span>23:12</span><span>3G ▮▮▯</span></div>
+    <div class="tl"><i style="width:62%"></i></div>
+    <div class="meta ml"><span>ചോദ്യം <b>4</b> / 10</span><span class="tab"><b>9</b> സെ</span></div>
+    <div class="scores">
+      <div><span class="ml">നിങ്ങൾ</span><b class="tab">2,340</b></div>
+      <span class="vs">ആലോചിക്കുന്നു…</span>
+      <div class="r"><span>Vishnu R</span><b class="tab">1,980</b></div>
+    </div>
+    <div class="q">
+      <div class="src"><span class="ml">ക്വിക്ക് മാച്ച്</span><span class="en">EN</span></div>
+      <div class="qt">കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി ഏത്?</div>
+    </div>
+    <div class="opts">
+      <div class="opt"><span class="k">A</span>പെരിയാർ</div>
+      <div class="opt"><span class="k">B</span>ഭാരതപ്പുഴ</div>
+      <div class="opt"><span class="k">C</span>പമ്പ</div>
+      <div class="opt"><span class="k">D</span>ചാലിയാർ</div>
+    </div>
+    <div class="foot">ഒന്നു തൊട്ടാൽ ഉത്തരം ലോക്ക് ആകും</div>
+  </div>
+  <p class="cap"><b>Dark, follows the OS.</b> The same layout with inverted roles: near-white text and timer line on #141518, and cards on #1D1F23. Still no colour while answering.
+    <ul><li>Open: how the ink peak band separates from a near-black page in dark mode is not decided yet (it may need a #2F3238 rim). That choice belongs in DESIGN Colors.</li></ul></p>
+</div>
+
+<!-- (e) RECONNECTING -->
+<div class="col">
+  <h2>(e) Reconnecting · 8 s</h2>
+  <div class="phone"><div class="notch"></div>
+    <div class="sb"><span>9:41</span><span>— ▯▯▯</span></div>
+    <div class="rc">
+      <span class="n tab">8</span>
+      <div><b>കണക്ഷൻ പോയി, തിരിച്ചു വരുന്നു… 8</b><span>10 സെക്കൻഡിനുള്ളിൽ തിരിച്ചെത്തിയാൽ ഇതേ ചോദ്യത്തിൽ തുടരാം</span></div>
+    </div>
+    <div class="stale">
+      <div class="tl"><i style="width:55%;background:var(--dim)"></i></div>
+      <div class="meta ml"><span>ചോദ്യം <b>4</b> / 10</span><span>സെർവറിൽ സമയം തുടരുന്നു</span></div>
+      <div class="scores">
+        <div><span class="ml">നിങ്ങൾ</span><b class="tab">2,340</b></div>
+        <span class="vs"></span>
+        <div class="r"><span>Vishnu R</span><b class="tab">1,980</b></div>
+      </div>
+      <div class="q">
+        <div class="src"><span class="ml">ക്വിക്ക് മാച്ച്</span><span class="en">EN</span></div>
+        <div class="qt">കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി ഏത്?</div>
+      </div>
+      <div class="opts">
+        <div class="opt"><span class="k">A</span>പെരിയാർ</div>
+        <div class="opt"><span class="k">B</span>ഭാരതപ്പുഴ</div>
+        <div class="opt"><span class="k">C</span>പമ്പ</div>
+        <div class="opt"><span class="k">D</span>ചാലിയാർ</div>
+      </div>
+    </div>
+  </div>
+  <p class="cap"><b>Reconnecting (CAP-12).</b> The banner replaces the timer area. The countdown ticks 10 → 0 once a second, with no animation. Everything below it drops to 42% opacity and won't take taps, because the timer is still running on the server. Coming back within 10 s puts you on whatever question and score is current then. After 10 s the banner changes to "ബാക്കി ചോദ്യങ്ങൾ നഷ്ടമായി, മാച്ച് തുടരുന്നു" and you go to the results.
+    <ul><li>Motion: none; the banner is monochrome and never flashes. Reduced motion: no change.</li></ul></p>
+</div>
+
+</div>
+</body>
+</html>

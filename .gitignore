@@ -1,0 +1,17 @@
+.DS_Store
+
+# Build output
+target/
+dist/
+dev-dist/
+node_modules/
+*.tsbuildinfo
+
+# Secrets (only deploy/.env.example is committed)
+deploy/.env
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp

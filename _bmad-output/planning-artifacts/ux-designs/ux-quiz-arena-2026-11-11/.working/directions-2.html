@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minnal Directions Round 2</title>
+<style>
+/* ============================================================
+   Minnal (മിന്നൽ) — Visual directions, round 2
+   Four variations inside the "Quiet Focus" family.
+   Screens per variation:
+     1. Quick Match Q4/10, 9 s of 15 left, You 2,340 vs Nithya P 1,980,
+        pick locked (പെരിയാർ), waiting for reveal, no correctness shown.
+     2. Reveal: correct പെരിയാർ, player correct, +800 (500 + 500*9/15),
+        new total 3,140, explanation + "Kerala PSC LDC 2019".
+     3. Battle Room live scoreboard, 8 players, Q5 in progress,
+        6 of 8 answered, You just moved 4 -> 3 past Arjun K.
+   ============================================================ */
+:root{
+  --ml:"Noto Sans Malayalam","Nirmala UI","Kartika",sans-serif;
+  --sys:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --page-bg:#ECECEA; --page-ink:#1C1E22; --page-muted:#5E636C; --card:#FFFFFF; --line:#D9DAD6;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --page-bg:#141518; --page-ink:#E8E9EB; --page-muted:#9CA1AA; --card:#1D1F23; --line:#2F3238; }
+}
+:root[data-theme="dark"]{ --page-bg:#141518; --page-ink:#E8E9EB; --page-muted:#9CA1AA; --card:#1D1F23; --line:#2F3238; }
+
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--page-bg);color:var(--page-ink);font-family:var(--sys),var(--ml);line-height:1.4;padding:32px 16px 64px}
+.ml{font-family:var(--ml)}
+header.page{max-width:1180px;margin:0 auto 28px}
+header.page h1{font-size:26px;letter-spacing:-.01em}
+header.page p{color:var(--page-muted);max-width:820px;margin-top:6px;font-size:14.5px}
+.list{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+.dir{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:14px}
+.dir h2{font-size:20px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.dir h2 .num{font-size:12px;font-weight:700;color:var(--page-muted);letter-spacing:.08em}
+.dir h2 .tag{font-size:12.5px;font-weight:500;color:var(--page-muted)}
+.dir .why{font-size:14px;color:var(--page-muted);max-width:820px}
+.dir .why b{color:var(--page-ink)}
+.swatches{display:flex;gap:6px;flex-wrap:wrap}
+.sw{display:flex;align-items:center;gap:6px;font:11px/1 ui-monospace,Menlo,monospace;color:var(--page-muted);border:1px solid var(--line);border-radius:20px;padding:4px 8px 4px 4px}
+.sw i{width:14px;height:14px;border-radius:50%;display:block;border:1px solid rgba(0,0,0,.15)}
+.stage{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;justify-content:center;margin-top:6px}
+.stage > div{width:340px;max-width:100%}
+.cap{font-size:11.5px;color:var(--page-muted);margin-top:10px;line-height:1.5}
+.cap b{color:var(--page-ink);font-weight:600}
+.peak{font-size:13px;color:var(--page-muted);border-left:3px solid var(--line);padding-left:12px;max-width:900px}
+.peak b{color:var(--page-ink)}
+
+/* Phone frame (shared) */
+.phone{width:340px;height:700px;border-radius:36px;border:8px solid #0E0F12;overflow:hidden;position:relative;box-shadow:0 16px 36px rgba(0,0,0,.16)}
+.phone .notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:104px;height:19px;background:#0E0F12;border-radius:0 0 14px 14px;z-index:5}
+.phone .sb{height:26px;display:flex;justify-content:space-between;align-items:center;padding:0 18px;font:600 11px var(--sys);position:relative;z-index:4}
+.tab{font-variant-numeric:tabular-nums}
+.foot{position:absolute;left:0;right:0;bottom:20px;text-align:center;font-size:12px}
+@media (max-width:400px){
+  .stage > div{width:auto}
+  .phone{transform:scale(.86);transform-origin:top left;margin-bottom:-98px;margin-right:-48px}
+}
+
+/* ============================================================
+   A — PURE QUIET
+   #F7F6F2  paper (bg)
+   #FFFFFF  card
+   #1A1C20  ink
+   #6E717A  muted
+   #E5E3DD  hairline
+   #33507F  slate-blue accent (you / locked / correct)
+   #EBEFF6  accent wash
+   #A65A3A  clay (someone else's wrong pick, quiet)
+   ============================================================ */
+.A{background:#F7F6F2;color:#1A1C20;font-family:var(--sys),var(--ml)}
+.A .sb{color:#6E717A}
+.A .tl{height:2px;background:#E5E3DD;margin:4px 22px 0;position:relative}
+.A .tl i{position:absolute;left:0;top:0;bottom:0;width:60%;background:#33507F}
+.A .meta{display:flex;justify-content:space-between;margin:12px 22px 0;font-size:12px;color:#6E717A}
+.A .meta b{color:#1A1C20;font-weight:500}
+.A .scores{display:flex;justify-content:space-between;margin:20px 22px 0;padding-bottom:16px;border-bottom:1px solid #E5E3DD}
+.A .scores div{display:flex;flex-direction:column}
+.A .scores .r{text-align:right}
+.A .scores span{font-size:12px;color:#6E717A}
+.A .scores b{font-size:21px;font-weight:500;letter-spacing:-.01em}
+.A .scores .r b{color:#6E717A}
+.A .scores em{font-style:normal;font-size:11px;color:#6E717A}
+.A .q{margin:32px 24px 0}
+.A .src{font-size:11.5px;color:#6E717A;display:flex;justify-content:space-between}
+.A .src a{color:#33507F;font-weight:500}
+.A .qt{font-family:var(--ml);font-size:23px;line-height:1.65;font-weight:500;margin-top:12px}
+.A .opts{margin:28px 20px 0;display:flex;flex-direction:column;gap:10px}
+.A .opt{background:#fff;border:1px solid #E5E3DD;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:14px;font-family:var(--ml);font-size:17.5px}
+.A .opt .k{width:24px;height:24px;border-radius:50%;border:1px solid #D6D3CC;display:flex;align-items:center;justify-content:center;font:500 11px var(--sys);color:#6E717A;flex:none}
+.A .opt .st{margin-left:auto;font:500 11.5px var(--sys);color:#33507F}
+.A .opt.lock,.A .opt.ok{border-color:#33507F;background:#EBEFF6}
+.A .opt.lock .k,.A .opt.ok .k{background:#33507F;border-color:#33507F;color:#fff}
+.A .opt.op .st{color:#A65A3A}
+.A .opt.mute{color:#9A9DA4}
+.A .foot{color:#6E717A}
+.A .res{margin:26px 24px 0;display:flex;justify-content:space-between;align-items:flex-end}
+.A .res .l{font-size:12.5px;color:#6E717A}
+.A .res .l b{display:block;font-family:var(--ml);font-size:21px;font-weight:500;color:#33507F;margin-top:2px}
+.A .res .p{text-align:right;font-size:28px;font-weight:500;color:#1A1C20;line-height:1}
+.A .res .p small{display:block;font-size:11.5px;color:#6E717A;font-weight:400;margin-top:4px}
+.A .note{margin:20px 20px 0;background:#fff;border:1px solid #E5E3DD;border-radius:12px;padding:14px 16px;font-family:var(--ml);font-size:14px;line-height:1.75;color:#33363C}
+.A .note .h{font:500 11px var(--sys);color:#6E717A;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px;display:flex;justify-content:space-between}
+.A .note .attr{font:11.5px var(--sys);color:#6E717A;margin-top:8px}
+.A .bh{margin:14px 22px 0}
+.A .bh .t{font-size:12px;color:#6E717A;display:flex;justify-content:space-between}
+.A .bh h3{font-size:17px;font-weight:500;margin-top:4px}
+.A .bh .ans{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:#6E717A}
+.A .bh .ans .bar{flex:1;height:2px;background:#E5E3DD;position:relative}
+.A .bh .ans .bar i{position:absolute;left:0;top:0;bottom:0;width:75%;background:#1A1C20}
+.A .board{margin:16px 16px 0;border-top:1px solid #E5E3DD}
+.A .row{display:grid;grid-template-columns:26px 1fr auto 22px;gap:8px;align-items:center;height:52px;padding:0 8px;border-bottom:1px solid #E5E3DD;font-size:14.5px}
+.A .row .p{color:#6E717A;font-size:13px}
+.A .row .n small{display:block;font-size:11px;color:#6E717A}
+.A .row .s{font-weight:500}
+.A .row .d{width:8px;height:8px;border-radius:50%;background:#1A1C20;justify-self:center}
+.A .row .d.no{background:transparent;border:1px solid #B9BBC0}
+.A .row.you{background:#EBEFF6;border-radius:10px;border-bottom-color:transparent}
+.A .row.you .p,.A .row.you .s{color:#33507F}
+.A .row.you small{color:#33507F}
+.A .key{margin:12px 22px 0;font-size:11px;color:#6E717A;display:flex;gap:14px}
+.A .key i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#1A1C20;margin-right:5px}
+.A .key i.no{background:transparent;border:1px solid #B9BBC0}
+
+/* ============================================================
+   B — QUIET + SPARK
+   #F4F5F7  cool paper (bg, calm state)
+   #FFFFFF  card
+   #101216  ink (calm accent = ink itself; peak band bg)
+   #666C78  muted
+   #E1E3E8  hairline
+   #D4FF2A  volt (peak-only electric accent; always on ink, never on white)
+   #2B3040  ink-raised (peak band secondary)
+   #B8463A  brick (someone else's wrong pick)
+   ============================================================ */
+.B{background:#F4F5F7;color:#101216;font-family:var(--sys),var(--ml)}
+.B .sb{color:#666C78}
+.B .tl{height:2px;background:#E1E3E8;margin:4px 22px 0;position:relative}
+.B .tl i{position:absolute;left:0;top:0;bottom:0;width:60%;background:#101216}
+.B .meta{display:flex;justify-content:space-between;margin:12px 22px 0;font-size:12px;color:#666C78}
+.B .meta b{color:#101216;font-weight:600}
+.B .scores{display:flex;justify-content:space-between;align-items:center;margin:18px 22px 0;padding:12px 14px;background:#fff;border:1px solid #E1E3E8;border-radius:10px}
+.B .scores div{display:flex;flex-direction:column}
+.B .scores .r{text-align:right}
+.B .scores span{font-size:11.5px;color:#666C78}
+.B .scores b{font-size:19px;font-weight:600}
+.B .scores .r b{color:#666C78;font-weight:500}
+.B .scores .vs{font-size:11px;color:#9AA0AA}
+.B .q{margin:30px 24px 0}
+.B .src{font-size:11.5px;color:#666C78;display:flex;justify-content:space-between;align-items:center}
+.B .src .en{border:1px solid #101216;border-radius:6px;padding:1px 7px;font-weight:600;color:#101216;font-size:11px}
+.B .qt{font-family:var(--ml);font-size:23px;line-height:1.65;font-weight:500;margin-top:12px}
+.B .opts{margin:26px 20px 0;display:flex;flex-direction:column;gap:10px}
+.B .opt{background:#fff;border:1px solid #E1E3E8;border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:14px;font-family:var(--ml);font-size:17.5px}
+.B .opt .k{width:24px;height:24px;border-radius:6px;background:#F4F5F7;display:flex;align-items:center;justify-content:center;font:600 11px var(--sys);color:#666C78;flex:none}
+.B .opt .st{margin-left:auto;font:500 11.5px var(--sys);color:#101216}
+.B .opt.lock{border:1.5px solid #101216}
+.B .opt.lock .k{background:#101216;color:#fff}
+.B .opt.ok{background:#101216;color:#fff;border-color:#101216}
+.B .opt.ok .k{background:#D4FF2A;color:#101216}
+.B .opt.ok .st{color:#D4FF2A}
+.B .opt.op .st{color:#B8463A}
+.B .opt.mute{color:#9AA0AA}
+.B .foot{color:#666C78}
+.B .band{margin:14px 14px 0;background:#101216;color:#fff;border-radius:14px;padding:18px 18px 16px;position:relative;overflow:hidden}
+.B .band svg{position:absolute;right:-6px;top:-8px;width:120px;height:150px;opacity:.95}
+.B .band .l{font-size:12px;color:#9AA0AA}
+.B .band .w{font-family:var(--ml);font-size:24px;font-weight:600;color:#fff;margin-top:2px}
+.B .band .p{font-size:44px;font-weight:700;color:#D4FF2A;line-height:1;margin-top:10px;letter-spacing:-.02em}
+.B .band .p small{font-size:12px;font-weight:500;color:#9AA0AA;letter-spacing:0;margin-left:6px}
+.B .note{margin:16px 20px 0;font-family:var(--ml);font-size:14px;line-height:1.75;color:#2B3040;padding:0 2px}
+.B .note .attr{font:11.5px var(--sys);color:#666C78;margin-top:6px;display:flex;justify-content:space-between}
+.B .note .attr a{color:#101216;font-weight:600}
+.B .bh{margin:14px 22px 0}
+.B .bh .t{font-size:12px;color:#666C78;display:flex;justify-content:space-between}
+.B .bh h3{font-size:17px;font-weight:600;margin-top:4px}
+.B .bh .ans{display:flex;gap:4px;margin-top:12px;align-items:center;font-size:12px;color:#666C78}
+.B .bh .ans i{width:22px;height:4px;border-radius:2px;background:#101216}
+.B .bh .ans i.no{background:#E1E3E8}
+.B .bh .ans span{margin-left:8px}
+.B .board{margin:14px 14px 0;display:flex;flex-direction:column;gap:4px}
+.B .row{display:grid;grid-template-columns:24px 1fr auto 18px;gap:8px;align-items:center;height:47px;padding:0 12px;background:#fff;border-radius:10px;font-size:14.5px}
+.B .row .p{color:#666C78;font-size:13px}
+.B .row .n small{display:block;font-size:11px;color:#666C78}
+.B .row .s{font-weight:600}
+.B .row .d{font-size:12px;color:#101216;justify-self:center}
+.B .row .d.no{color:#C3C7CF}
+.B .row.you{background:#101216;color:#fff;height:54px;position:relative}
+.B .row.you .p{color:#D4FF2A;font-weight:700}
+.B .row.you .s{color:#D4FF2A;font-size:16px}
+.B .row.you small{color:#D4FF2A}
+.B .row.you .d{color:#D4FF2A}
+.B .zap{height:10px;margin:-2px 20px -2px}
+.B .row.dn{opacity:.85}
+
+/* ============================================================
+   C — WARM QUIET
+   #FBF3E8  warm paper (bg)
+   #FFFCF6  card cream
+   #2E2722  warm ink
+   #85776A  muted
+   #EFE2D0  hairline
+   #E07B39  mango (friendly accent: you / locked)
+   #FDEBDB  mango wash
+   #3E8E5E  leaf (correct)
+   #E4F2E8  leaf wash
+   #C9634F  terracotta (others' wrong pick)
+   Avatars: #F6D5C3 #D9E8D3 #D6E2F2 #F3E1A9 #E9D6EE
+   ============================================================ */
+.C{background:#FBF3E8;color:#2E2722;font-family:var(--sys),var(--ml)}
+.C .sb{color:#85776A}
+.C .tl{height:8px;background:#EFE2D0;margin:6px 20px 0;border-radius:8px;position:relative;overflow:hidden}
+.C .tl i{position:absolute;left:0;top:0;bottom:0;width:60%;background:#E07B39;border-radius:8px}
+.C .meta{display:flex;justify-content:space-between;margin:10px 22px 0;font-size:12.5px;color:#85776A}
+.C .meta b{color:#2E2722;font-weight:600}
+.C .scores{display:flex;justify-content:space-between;margin:16px 18px 0;gap:10px}
+.C .pl{flex:1;display:flex;align-items:center;gap:10px;background:#FFFCF6;border-radius:18px;padding:10px 12px}
+.C .pl.r{flex-direction:row-reverse;text-align:right}
+.C .av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:600 12px var(--sys);color:#2E2722;flex:none}
+.C .pl span{font-size:11.5px;color:#85776A;display:block}
+.C .pl b{font-size:18px;font-weight:600}
+.C .pl.r b{color:#85776A;font-weight:500}
+.C .q{margin:26px 24px 0}
+.C .src{font-size:11.5px;color:#85776A;display:flex;justify-content:space-between;align-items:center}
+.C .tog{display:flex;background:#F3E7D6;border-radius:20px;padding:2px;font-size:11px}
+.C .tog span{padding:2px 9px;border-radius:20px;color:#85776A}
+.C .tog .on{background:#FFFCF6;color:#2E2722;font-family:var(--ml);box-shadow:0 1px 2px rgba(46,39,34,.12)}
+.C .qt{font-family:var(--ml);font-size:23px;line-height:1.65;font-weight:600;margin-top:12px}
+.C .opts{margin:24px 18px 0;display:flex;flex-direction:column;gap:10px}
+.C .opt{background:#FFFCF6;border:1.5px solid transparent;border-radius:22px;padding:13px 16px;display:flex;align-items:center;gap:14px;font-family:var(--ml);font-size:17.5px;box-shadow:0 1px 0 #EFE2D0}
+.C .opt .k{width:28px;height:28px;border-radius:10px;background:#F3E7D6;display:flex;align-items:center;justify-content:center;font:600 12px var(--sys);color:#85776A;flex:none}
+.C .opt .st{margin-left:auto;font:500 11.5px var(--sys);color:#B8602A}
+.C .opt.lock{background:#FDEBDB;border-color:#E07B39}
+.C .opt.lock .k{background:#E07B39;color:#fff}
+.C .opt.ok{background:#E4F2E8;border-color:#3E8E5E}
+.C .opt.ok .k{background:#3E8E5E;color:#fff}
+.C .opt.ok .st{color:#2F7A4D}
+.C .opt.op .st{color:#C9634F}
+.C .opt.mute{color:#A99C8E;box-shadow:none;background:transparent;border-color:#EFE2D0}
+.C .foot{color:#85776A}
+.C .foot .ml{color:#2E2722}
+.C .hero{margin:20px 18px 0;background:#E4F2E8;border-radius:24px;padding:18px;display:flex;align-items:center;gap:14px}
+.C .hero .badge{width:56px;height:56px;border-radius:50%;background:#3E8E5E;color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;flex:none}
+.C .hero .w{font-family:var(--ml);font-size:20px;font-weight:600;color:#2F6E49}
+.C .hero .w small{display:block;font:12px var(--sys);color:#4E7E60;margin-top:2px}
+.C .hero .p{margin-left:auto;text-align:right;font-size:26px;font-weight:700;color:#2F6E49;line-height:1}
+.C .hero .p small{display:block;font-size:11px;font-weight:500;color:#4E7E60;margin-top:4px}
+.C .note{margin:14px 18px 0;background:#FFFCF6;border-radius:20px;padding:14px 16px;font-family:var(--ml);font-size:14px;line-height:1.75;color:#4A3F37}
+.C .note .attr{font:11.5px var(--sys);color:#85776A;margin-top:8px;display:flex;justify-content:space-between}
+.C .note .attr a{color:#B8602A;font-weight:600}
+.C .bh{margin:12px 20px 0}
+.C .bh .t{font-size:12px;color:#85776A;display:flex;justify-content:space-between}
+.C .bh h3{font-size:17px;font-weight:600;margin-top:4px}
+.C .faces{display:flex;align-items:center;margin-top:10px;font-size:12px;color:#85776A}
+.C .faces .av{width:26px;height:26px;font-size:10px;border:2px solid #FBF3E8;margin-right:-6px}
+.C .faces .av.wait{opacity:.35}
+.C .faces span{margin-left:14px}
+.C .board{margin:12px 14px 0;display:flex;flex-direction:column;gap:5px}
+.C .row{display:grid;grid-template-columns:20px 30px 1fr auto;gap:8px;align-items:center;height:47px;padding:0 12px;background:#FFFCF6;border-radius:18px;font-size:14.5px}
+.C .row .av{width:30px;height:30px;font-size:11px;position:relative}
+.C .row .av::after{content:"";position:absolute;right:-1px;bottom:-1px;width:9px;height:9px;border-radius:50%;background:#3E8E5E;border:2px solid #FFFCF6}
+.C .row .av.wait::after{background:#E6D8C5}
+.C .row .p{color:#85776A;font-size:12.5px}
+.C .row .n small{display:block;font-size:11px;color:#85776A}
+.C .row .s{font-weight:600}
+.C .row.you{background:#FDEBDB;box-shadow:0 0 0 1.5px #E07B39;height:52px}
+.C .row.you .p{color:#B8602A;font-weight:700}
+.C .row.you small{color:#B8602A;font-family:var(--ml)}
+.C .row.you .s{color:#B8602A}
+
+/* ============================================================
+   D — QUIET NIGHT
+   #0E1114  night ink (bg)
+   #161A1F  surface
+   #1E232A  surface raised
+   #262B33  hairline
+   #E7E9EC  text
+   #8B929D  muted
+   #5C636E  dim (chrome during answering)
+   #F0B44C  lamp amber (you / locked / peak)
+   #2A2316  amber wash
+   #7CC4A0  sage (correct)
+   #16251E  sage wash
+   #D98A7A  rose (others' wrong pick)
+   ============================================================ */
+.D{background:#0E1114;color:#E7E9EC;font-family:var(--sys),var(--ml)}
+.D .sb{color:#5C636E}
+.D .notch{background:#000}
+.D .tl{height:2px;background:#262B33;margin:4px 22px 0;position:relative}
+.D .tl i{position:absolute;left:0;top:0;bottom:0;width:60%;background:#F0B44C}
+.D .meta{display:flex;justify-content:space-between;align-items:flex-end;margin:16px 22px 0;font-size:12px;color:#5C636E}
+.D .meta .sec{font-size:40px;font-weight:200;color:#E7E9EC;line-height:.9;letter-spacing:-.02em}
+.D .meta .sec small{font-size:12px;color:#5C636E;font-weight:400;margin-left:2px}
+.D .scores{display:flex;gap:16px;margin:4px 22px 0;font-size:12px;color:#5C636E}
+.D .scores b{color:#8B929D;font-weight:500}
+.D .scores .me b{color:#F0B44C}
+.D .q{margin:30px 24px 0}
+.D .src{font-size:11.5px;color:#5C636E;display:flex;justify-content:space-between}
+.D .src a{color:#8B929D}
+.D .qt{font-family:var(--ml);font-size:24px;line-height:1.7;font-weight:500;margin-top:12px;color:#F2F3F5}
+.D .opts{margin:28px 20px 0;display:flex;flex-direction:column;gap:10px}
+.D .opt{background:#161A1F;border:1px solid #262B33;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:14px;font-family:var(--ml);font-size:17.5px;color:#D5D8DD}
+.D .opt .k{width:24px;height:24px;border-radius:50%;border:1px solid #3A404A;display:flex;align-items:center;justify-content:center;font:500 11px var(--sys);color:#8B929D;flex:none}
+.D .opt .st{margin-left:auto;font:500 11.5px var(--sys);color:#F0B44C}
+.D .opt.lock{border-color:#F0B44C;background:#2A2316;color:#FFF3DC}
+.D .opt.lock .k{background:#F0B44C;border-color:#F0B44C;color:#0E1114}
+.D .opt.ok{border-color:#7CC4A0;background:#16251E;color:#E3F4EA}
+.D .opt.ok .k{background:#7CC4A0;border-color:#7CC4A0;color:#0E1114}
+.D .opt.ok .st{color:#7CC4A0}
+.D .opt.op .st{color:#D98A7A}
+.D .opt.mute{color:#5C636E;background:transparent}
+.D .foot{color:#5C636E}
+.D .res{margin:30px 24px 0}
+.D .res .l{font-size:12px;color:#8B929D}
+.D .res .row1{display:flex;justify-content:space-between;align-items:baseline;margin-top:4px}
+.D .res .w{font-family:var(--ml);font-size:22px;color:#7CC4A0;font-weight:500}
+.D .res .p{font-size:40px;font-weight:200;color:#F0B44C;line-height:1}
+.D .res .tot{font-size:12px;color:#8B929D;text-align:right;margin-top:4px}
+.D .note{margin:22px 20px 0;border-top:1px solid #262B33;padding-top:14px;font-family:var(--ml);font-size:14px;line-height:1.8;color:#B9BEC6}
+.D .note .attr{font:11.5px var(--sys);color:#5C636E;margin-top:8px;display:flex;justify-content:space-between}
+.D .note .attr a{color:#8B929D}
+.D .bh{margin:14px 22px 0}
+.D .bh .t{font-size:12px;color:#5C636E;display:flex;justify-content:space-between}
+.D .bh h3{font-size:17px;font-weight:500;margin-top:4px}
+.D .bh .ans{margin-top:12px;font-size:12px;color:#8B929D;display:flex;justify-content:space-between}
+.D .bh .ans b{color:#E7E9EC;font-weight:500}
+.D .board{margin:14px 14px 0;background:#161A1F;border-radius:14px;padding:4px 0;border:1px solid #262B33}
+.D .row{display:grid;grid-template-columns:26px 1fr auto 18px;gap:8px;align-items:center;height:50px;padding:0 14px;font-size:14.5px;border-bottom:1px solid #1E232A}
+.D .row:last-child{border-bottom:0}
+.D .row .p{color:#5C636E;font-size:13px}
+.D .row .n{color:#C9CDD3}
+.D .row .n small{display:block;font-size:11px;color:#5C636E}
+.D .row .s{color:#C9CDD3}
+.D .row .d{width:6px;height:6px;border-radius:50%;background:#8B929D;justify-self:center}
+.D .row .d.no{background:transparent;border:1px solid #3A404A}
+.D .row.you{background:#2A2316;box-shadow:inset 3px 0 0 #F0B44C}
+.D .row.you .p,.D .row.you .s{color:#F0B44C}
+.D .row.you .n{color:#FFF3DC}
+.D .row.you small{color:#C99A45}
+.D .row.you .d{background:#F0B44C}
+</style>
+</head>
+<body>
+<header class="page">
+  <h1>Minnal: Quiet Focus, round 2</h1>
+  <p>Four variations on the round-1 pick. All keep the same base: lots of space, large Malayalam with tall line spacing, one hairline timer, scores kept small, and almost nothing to render. They differ in how loud the peak moments get, in warmth, and in light vs dark. Each row shows three screens: the live Q4 with the answer locked, the reveal, and the Battle Room scoreboard just after you overtake someone. There's no JS, so the motion notes under each screen say what would move.</p>
+</header>
+
+<div class="list">
+
+<!-- ======================= A PURE QUIET ======================= -->
+<section class="dir">
+  <h2><span class="num">A</span> Pure Quiet <span class="tag">refined round-1, calm all the way through</span></h2>
+  <p class="why">This is round-1 Quiet Focus with the rough edges fixed. The teal becomes a <b>slate-blue ink</b>, the paper gets warmer, and the hierarchy is cleaner: the question gets the screen and everything else steps back. Peaks are not dramatised at all. Rank changes and +800 come across through position and number alone, like a well-made study app that trusts the player.</p>
+  <div class="swatches"><span class="sw"><i style="background:#F7F6F2"></i>#F7F6F2</span><span class="sw"><i style="background:#1A1C20"></i>#1A1C20</span><span class="sw"><i style="background:#33507F"></i>#33507F</span><span class="sw"><i style="background:#EBEFF6"></i>#EBEFF6</span><span class="sw"><i style="background:#E5E3DD"></i>#E5E3DD</span><span class="sw"><i style="background:#A65A3A"></i>#A65A3A</span></div>
+  <div class="stage">
+    <div>
+      <div class="phone A"><div class="notch"></div>
+        <div class="sb"><span>9:41</span><span>3G ▮▮▯</span></div>
+        <div class="tl"><i></i></div>
+        <div class="meta"><span>Question <b>4</b> of 10</span><span class="tab"><b>9</b> s</span></div>
+        <div class="scores">
+          <div><span>You</span><b class="tab">2,340</b></div>
+          <div class="r"><span>Nithya P</span><b class="tab">1,980</b><em>answered</em></div>
+        </div>
+        <div class="q">
+          <div class="src"><span>Quick Match</span><a>Show in English</a></div>
+          <div class="qt">കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി ഏത്?</div>
+        </div>
+        <div class="opts">
+          <div class="opt lock"><span class="k">A</span>പെരിയാർ<span class="st">Locked</span></div>
+          <div class="opt"><span class="k">B</span>ഭാരതപ്പുഴ</div>
+          <div class="opt"><span class="k">C</span>പമ്പ</div>
+          <div class="opt"><span class="k">D</span>ചാലിയാർ</div>
+        </div>
+        <div class="foot">Answer saved. Reveal when the timer ends.</div>
+      </div>
+      <p class="cap"><b>1 · Locked, waiting.</b> The hairline timer shrinks linearly from server time. Tapping turns the option slate-blue with a "Locked" label, with no transition. Nothing else moves.</p>
+    </div>
+    <div>
+      <div class="phone A"><div class="notch"></div>
+        <div class="sb"><span>9:41</span><span>3G ▮▮▯</span></div>
+        <div class="tl"><i style="width:100%;background:#E5E3DD"></i></div>
+        <div class="meta"><span>Question <b>4</b> of 10</span><span>Revealed</span></div>
+        <div class="res">
+          <div class="l">Correct<b>പെരിയാർ</b></div>
+          <div class="p tab">+800<small>Total 3,140</small></div>
+        </div>
+        <div class="opts">
+          <div class="opt ok"><span class="k">✓</span>പെരിയാർ<span class="st">You · 6.0 s</span></div>
+          <div class="opt op"><span class="k">B</span>ഭാരതപ്പുഴ<span class="st">Nithya</span></div>
+          <div class="opt mute"><span class="k">C</span>പമ്പ</div>
+          <div class="opt mute"><span class="k">D</span>ചാലിയാർ</div>
+        </div>
+        <div class="note"><div class="h"><span>Why</span><span style="text-transform:none;letter-spacing:0;color:#33507F">Save to revise</span></div>പെരിയാർ (244 കി.മീ) ആണ് കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി. ഭാരതപ്പുഴ (209 കി.മീ) രണ്ടാമത്.<div class="attr">Kerala PSC LDC 2019</div></div>
+      </div>
+      <p class="cap"><b>2 · Reveal.</b> 200 ms crossfade from question to result. "+800" shows up already settled, with no count-up. Wrong options fade to grey. The pace stays the same as the question screen.</p>
+    </div>
+    <div>
+      <div class="phone A"><div class="notch"></div>
+        <div class="sb"><span>9:41</span><span>3G ▮▮▯</span></div>
+        <div class="bh">
+          <div class="t"><span>Battle Room · Code 4821</span><span class="tab">Q5 of 10 · 11 s</span></div>
+          <h3>LDC Batch, Thrissur</h3>
+          <div class="ans"><span class="tab">6 of 8 answered</span><span class="bar"><i></i></span></div>
+        </div>
+        <div class="board">
+          <div class="row"><span class="p">1</span><span class="n">Fathima S</span><span class="s tab">3,920</span><span class="d"></span></div>
+          <div class="row"><span class="p">2</span><span class="n">Rahul M</span><span class="s tab">3,410</span><span class="d"></span></div>
+          <div class="row you"><span class="p">3</span><span class="n">You<small>▲ 1 · passed Arjun K</small></span><span class="s tab">3,140</span><span class="d" style="background:#33507F"></span></div>
+          <div class="row"><span class="p">4</span><span class="n">Arjun K<small>▼ 1</small></span><span class="s tab">3,050</span><span class="d"></span></div>
+          <div class="row"><span class="p">5</span><span class="n">Nithya P</span><span class="s tab">2,780</span><span class="d no"></span></div>
+          <div class="row"><span class="p">6</span><span class="n">Sreelakshmi V</span><span class="s tab">2,260</span><span class="d"></span></div>
+          <div class="row"><span class="p">7</span><span class="n">Vishnu T</span><span class="s tab">1,940</span><span class="d no"></span></div>
+          <div class="row"><span class="p">8</span><span class="n">Akhil J</span><span class="s tab">1,500</span><span class="d"></span></div>
+        </div>
+        <div class="key"><span><i></i>Answered</span><span><i class="no"></i>Still thinking</span></div>
+      </div>
+      <p class="cap"><b>3 · Overtake.</b> Your row and Arjun's swap places in a 280 ms ease-out slide. The "▲ 1 · passed Arjun K" line stays until the next reveal. Answered dots fill in as players lock answers, with no animation.</p>
+    </div>
+  </div>
+  <p class="peak"><b>Peak behaviour:</b> none beyond position. One crossfade on reveal and one row slide on rank change. This is the cheapest option and the most exam-like. The risk is that Battle Room feels clinical next to the addendum's "make movement feel exciting".</p>
+</section>
+
+<!-- ======================= B QUIET + SPARK ======================= -->
+<section class="dir">
+  <h2><span class="num">B</span> Quiet + Spark <span class="tag">monochrome while thinking, one electric burst at the peaks</span></h2>
+  <p class="why">While you answer the screen is <b>entirely ink on cool paper</b>, with no colour at all, so the Malayalam is the only thing to look at. Electric volt appears only at three moments: the reveal, an overtake and a match win. It always sits on an ink band, with a small lightning bolt as the brand mark (മിന്നൽ). The contrast between calm and spark is what makes the peaks feel exciting, without making the whole app loud.</p>
+  <div class="swatches"><span class="sw"><i style="background:#F4F5F7"></i>#F4F5F7</span><span class="sw"><i style="background:#101216"></i>#101216</span><span class="sw"><i style="background:#D4FF2A"></i>#D4FF2A</span><span class="sw"><i style="background:#E1E3E8"></i>#E1E3E8</span><span class="sw"><i style="background:#666C78"></i>#666C78</span><span class="sw"><i style="background:#B8463A"></i>#B8463A</span></div>
+  <div class="stage">
+    <div>
+      <div class="phone B"><div class="notch"></div>
+        <div class="sb"><span>9:41</span><span>3G ▮▮▯</span></div>
+        <div class="tl"><i></i></div>
+        <div class="meta"><span>Question <b>4</b> / 10</span><span class="tab"><b>9</b> s</span></div>
+        <div class="scores">
+          <div><span>You</span><b class="tab">2,340</b></div>
+          <span class="vs">Nithya answered</span>
+          <div class="r"><span>Nithya P</span><b class="tab">1,980</b></div>
+        </div>
+        <div class="q">
+          <div class="src"><span>Quick Match</span><span class="en">EN</span></div>
+          <div class="qt">കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി ഏത്?</div>
+        </div>
+        <div class="opts">
+          <div class="opt lock"><span class="k">A</span>പെരിയാർ<span class="st">Locked</span></div>
+          <div class="opt"><span class="k">B</span>ഭാരതപ്പുഴ</div>
+          <div class="opt"><span class="k">C</span>പമ്പ</div>
+          <div class="opt"><span class="k">D</span>ചാലിയാർ</div>
+        </div>
+        <div class="foot">Locked in · waiting for reveal</div>
+      </div>
+      <p class="cap"><b>1 · Calm.</b> Pure monochrome, with an ink hairline timer. The locked option gets a 1.5 px ink border and an ink letter tile. No volt anywhere on this screen, on purpose.</p>
+    </div>
+    <div>
+      <div class="phone B"><div class="notch"></div>
+        <div class="sb"><span>9:41</span><span>3G ▮▮▯</span></div>
+        <div class="tl"><i style="width:100%;background:#E1E3E8"></i></div>
+        <div class="band">
+          <svg viewBox="0 0 120 150" aria-hidden="true"><polygon points="70,4 26,82 56,82 40,146 96,58 64,58 84,4" fill="#D4FF2A"/></svg>
+          <div class="l">Question 4 · Correct</div>
+          <div class="w">പെരിയാർ</div>
+          <div class="p tab">+800<small>Total 3,140</small></div>
+        </div>
+        <div class="opts" style="margin-top:16px">
+          <div class="opt ok"><span class="k">✓</span>പെരിയാർ<span class="st">You · 6.0 s</span></div>
+          <div class="opt op"><span class="k">B</span>ഭാരതപ്പുഴ<span class="st">Nithya</span></div>
+          <div class="opt mute"><span class="k">C</span>പമ്പ</div>
+          <div class="opt mute"><span class="k">D</span>ചാലിയാർ</div>
+        </div>
+        <div class="note">പെരിയാർ (244 കി.മീ) ആണ് കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി. ഭാരതപ്പുഴ (209 കി.മീ) രണ്ടാമത്.<div class="attr"><span>Kerala PSC LDC 2019</span><a>Save to revise</a></div></div>
+      </div>
+      <p class="cap"><b>2 · Spark.</b> The ink band drops in from the top (160 ms). The bolt "strikes": it's shown at full volt for 80 ms, a white frame flashes, then it settles. +800 snaps in with no count-up. The whole spark is done in about 400 ms. A wrong answer gets the same band with no bolt and no volt.</p>
+    </div>
+    <div>
+      <div class="phone B"><div class="notch"></div>
+        <div class="sb"><span>9:41</span><span>3G ▮▮▯</span></div>
+        <div class="bh">
+          <div class="t"><span>Battle Room · 4821</span><span class="tab">Q5 / 10 · 11 s</span></div>
+          <h3>LDC Batch, Thrissur</h3>
+          <div class="ans"><i></i><i></i><i></i><i></i><i></i><i></i><i class="no"></i><i class="no"></i><span class="tab">6 / 8 answered</span></div>
+        </div>
+        <div class="board">
+          <div class="row"><span class="p">1</span><span class="n">Fathima S</span><span class="s tab">3,920</span><span class="d">●</span></div>
+          <div class="row"><span class="p">2</span><span class="n">Rahul M</span><span class="s tab">3,410</span><span class="d">●</span></div>
+          <div class="row you"><span class="p">3</span><span class="n">You<small>⚡ passed Arjun K</small></span><span class="s tab">3,140</span><span class="d">●</span></div>
+          <svg class="zap" viewBox="0 0 280 10" preserveAspectRatio="none" aria-hidden="true"><polyline points="0,5 40,5 52,1 64,9 76,1 88,9 100,5 280,5" fill="none" stroke="#101216" stroke-width="1.5"/></svg>
+          <div class="row dn"><span class="p">4</span><span class="n">Arjun K<small>▼ 1</small></span><span class="s tab">3,050</span><span class="d">●</span></div>
+          <div class="row"><span class="p">5</span><span class="n">Nithya P</span><span class="s tab">2,780</span><span class="d no">○</span></div>
+          <div class="row"><span class="p">6</span><span class="n">Sreelakshmi V</span><span class="s tab">2,260</span><span class="d">●</span></div>
+          <div class="row"><span class="p">7</span><span class="n">Vishnu T</span><span class="s tab">1,940</span><span class="d no">○</span></div>
+          <div class="row"><span class="p">8</span><span class="n">Akhil J</span><span class="s tab">1,500</span><span class="d">●</span></div>
+        </div>
+      </div>
+      <p class="cap"><b>3 · Overtake spark.</b> Your row jumps up a slot (180 ms, slight overshoot) and turns ink and volt. A one-shot zig-zag "crack" is drawn between you and Arjun, then fades after 1.2 s. Your row stays ink until the next question starts. When someone overtakes <i>you</i>, the crack shows in muted grey and your row stays white, so it reads as a loss without volt.</p>
+    </div>
+  </div>
+  <p class="peak"><b>Peak behaviour:</b> three moments use volt: correct reveal, your overtake, and match win (the match win is a full-screen ink takeover with a large bolt). Everything else is monochrome. It's still cheap: transforms and opacity only, one SVG polygon, no particles. Volt is never put on white, since it fails contrast there.</p>
+</section>
+
+<!-- ======================= C WARM QUIET ======================= -->
+<section class="dir">
+  <h2><span class="num">C</span> Warm Quiet <span class="tag">soft cream, round shapes, a friendly mango accent</span></h2>
+  <p class="why">Same calm, but it feels like a <b>friend's study table</b> rather than an exam hall. Cream paper, pill-shaped options, initials avatars in pastel, and a mango accent that reads friendly, not urgent. The peaks are warm rather than loud: a soft pop, a green badge, and a bit of Kerala banter ("പൊളി!") when you climb, which matches the addendum's WhatsApp-batch tone.</p>
+  <div class="swatches"><span class="sw"><i style="background:#FBF3E8"></i>#FBF3E8</span><span class="sw"><i style="background:#2E2722"></i>#2E2722</span><span class="sw"><i style="background:#E07B39"></i>#E07B39</span><span class="sw"><i style="background:#FDEBDB"></i>#FDEBDB</span><span class="sw"><i style="background:#3E8E5E"></i>#3E8E5E</span><span class="sw"><i style="background:#EFE2D0"></i>#EFE2D0</span><span class="sw"><i style="background:#C9634F"></i>#C9634F</span></div>
+  <div class="stage">
+    <div>
+      <div class="phone C"><div class="notch"></div>
+        <div class="sb"><span>9:41</span><span>3G ▮▮▯</span></div>
+        <div class="tl"><i></i></div>
+        <div class="meta"><span>Question <b>4</b> of 10</span><span class="tab"><b>9</b> s left</span></div>
+        <div class="scores">
+          <div class="pl"><span class="av" style="background:#F6D5C3">SA</span><div><span>You</span><b class="tab">2,340</b></div></div>
+          <div class="pl r"><span class="av" style="background:#D6E2F2">NP</span><div><span>Nithya · answered</span><b class="tab">1,980</b></div></div>
+        </div>
+        <div class="q">
+          <div class="src"><span>Quick Match</span><span class="tog"><span class="on">മലയാളം</span><span>English</span></span></div>
+          <div class="qt">കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി ഏത്?</div>
+        </div>
+        <div class="opts">
+          <div class="opt lock"><span class="k">A</span>പെരിയാർ<span class="st">Locked in</span></div>
+          <div class="opt"><span class="k">B</span>ഭാരതപ്പുഴ</div>
+          <div class="opt"><span class="k">C</span>പമ്പ</div>
+          <div class="opt"><span class="k">D</span>ചാലിയാർ</div>
+        </div>
+        <div class="foot">Locked in. Let's see… <span class="ml">ഉത്തരം ഉടൻ</span></div>
+      </div>
+      <p class="cap"><b>1 · Locked, waiting.</b> The 8 px rounded timer bar drains in mango. Tapping gives the option a 120 ms press-in (scale .98 → 1) and fills it mango. The language toggle is a pill you can see, not a hidden link.</p>
+    </div>
+    <div>
+      <div class="phone C"><div class="notch"></div>
+        <div class="sb"><span>9:41</span><span>3G ▮▮▯</span></div>
+        <div class="tl"><i style="width:100%;background:#E4D4BE"></i></div>
+        <div class="meta"><span>Question <b>4</b> of 10</span><span>Revealed</span></div>
+        <div class="hero">
+          <span class="badge">✓</span>
+          <div class="w">ശരിയുത്തരം!<small>പെരിയാർ · 6.0 s</small></div>
+          <div class="p tab">+800<small>Total 3,140</small></div>
+        </div>
+        <div class="opts" style="margin-top:14px">
+          <div class="opt ok"><span class="k">✓</span>പെരിയാർ<span class="st">You</span></div>
+          <div class="opt op"><span class="k">B</span>ഭാരതപ്പുഴ<span class="st">Nithya</span></div>
+          <div class="opt mute"><span class="k">C</span>പമ്പ</div>
+          <div class="opt mute"><span class="k">D</span>ചാലിയാർ</div>
+        </div>
+        <div class="note">പെരിയാർ (244 കി.മീ) ആണ് കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി. ഭാരതപ്പുഴ (209 കി.മീ) രണ്ടാമത്.<div class="attr"><span>Kerala PSC LDC 2019</span><a>Save to revise</a></div></div>
+      </div>
+      <p class="cap"><b>2 · Warm reveal.</b> The leaf card fades in while the badge pops (scale .8 → 1.06 → 1, 260 ms). +800 counts up over 400 ms using tabular digits, so the layout doesn't shift. Wrong options turn into hollow outlines.</p>
+    </div>
+    <div>
+      <div class="phone C"><div class="notch"></div>
+        <div class="sb"><span>9:41</span><span>3G ▮▮▯</span></div>
+        <div class="bh">
+          <div class="t"><span>Battle Room · 4821</span><span class="tab">Q5 of 10 · 11 s</span></div>
+          <h3>LDC Batch, Thrissur</h3>
+          <div class="faces"><span class="av" style="background:#F3E1A9">FS</span><span class="av" style="background:#D9E8D3">RM</span><span class="av" style="background:#F6D5C3">SA</span><span class="av" style="background:#D6E2F2">AK</span><span class="av" style="background:#E9D6EE">SV</span><span class="av" style="background:#D9E8D3">AJ</span><span class="av wait" style="background:#D6E2F2">NP</span><span class="av wait" style="background:#F3E1A9">VT</span><span class="tab">6 of 8 answered</span></div>
+        </div>
+        <div class="board">
+          <div class="row"><span class="p">1</span><span class="av" style="background:#F3E1A9">FS</span><span class="n">Fathima S</span><span class="s tab">3,920</span></div>
+          <div class="row"><span class="p">2</span><span class="av" style="background:#D9E8D3">RM</span><span class="n">Rahul M</span><span class="s tab">3,410</span></div>
+          <div class="row you"><span class="p">3</span><span class="av" style="background:#F6D5C3">SA</span><span class="n">You<small>↑ പൊളി! Arjun-നെ കടന്നു</small></span><span class="s tab">3,140</span></div>
+          <div class="row"><span class="p">4</span><span class="av" style="background:#D6E2F2">AK</span><span class="n">Arjun K<small>↓ 1</small></span><span class="s tab">3,050</span></div>
+          <div class="row"><span class="p">5</span><span class="av wait" style="background:#D6E2F2">NP</span><span class="n">Nithya P</span><span class="s tab">2,780</span></div>
+          <div class="row"><span class="p">6</span><span class="av" style="background:#E9D6EE">SV</span><span class="n">Sreelakshmi V</span><span class="s tab">2,260</span></div>
+          <div class="row"><span class="p">7</span><span class="av wait" style="background:#F3E1A9">VT</span><span class="n">Vishnu T</span><span class="s tab">1,940</span></div>
+          <div class="row"><span class="p">8</span><span class="av" style="background:#D9E8D3">AJ</span><span class="n">Akhil J</span><span class="s tab">1,500</span></div>
+        </div>
+      </div>
+      <p class="cap"><b>3 · Friendly climb.</b> Your row floats up one slot (320 ms ease-out) and does a gentle 1.03 pop. The "പൊളി!" line slides in from the left. Each avatar gets a green dot when that player answers. The face strip at the top makes who's answered visible at a glance, like seen-ticks in WhatsApp.</p>
+    </div>
+  </div>
+  <p class="peak"><b>Peak behaviour:</b> soft and social. Pops, floats and count-ups, with no flashes. The banter strings (പൊളി!, കിടു!, GG) carry the excitement instead of motion. It costs slightly more than A (box-shadow, more rounded rects) but is still fine on low-end GPUs.</p>
+</section>
+
+<!-- ======================= D QUIET NIGHT ======================= -->
+<section class="dir">
+  <h2><span class="num">D</span> Quiet Night <span class="tag">dark-first, a study lamp at 11 pm</span></h2>
+  <p class="why">Designed for the late-night revision session. A <b>near-black ink background with one warm lamp-amber</b>, and everything that isn't the question is dimmed to the edge of visibility, so it feels like a desk lamp lighting just the page. The intensity comes from focus, not noise. A big thin seconds number and the amber line add quiet pressure, and peaks show up as the lamp brightening on your row.</p>
+  <div class="swatches"><span class="sw"><i style="background:#0E1114"></i>#0E1114</span><span class="sw"><i style="background:#161A1F"></i>#161A1F</span><span class="sw"><i style="background:#E7E9EC"></i>#E7E9EC</span><span class="sw"><i style="background:#F0B44C"></i>#F0B44C</span><span class="sw"><i style="background:#7CC4A0"></i>#7CC4A0</span><span class="sw"><i style="background:#5C636E"></i>#5C636E</span><span class="sw"><i style="background:#D98A7A"></i>#D98A7A</span></div>
+  <div class="stage">
+    <div>
+      <div class="phone D"><div class="notch"></div>
+        <div class="sb"><span>23:12</span><span>3G ▮▮▯</span></div>
+        <div class="tl"><i></i></div>
+        <div class="meta"><span>Q4 / 10</span><span class="sec tab">09<small>s</small></span></div>
+        <div class="scores"><span class="me">You <b class="tab">2,340</b></span><span>Nithya P <b class="tab">1,980</b> · answered</span></div>
+        <div class="q">
+          <div class="src"><span>Quick Match</span><a>EN</a></div>
+          <div class="qt">കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി ഏത്?</div>
+        </div>
+        <div class="opts">
+          <div class="opt lock"><span class="k">A</span>പെരിയാർ<span class="st">Locked</span></div>
+          <div class="opt"><span class="k">B</span>ഭാരതപ്പുഴ</div>
+          <div class="opt"><span class="k">C</span>പമ്പ</div>
+          <div class="opt"><span class="k">D</span>ചാലിയാർ</div>
+        </div>
+        <div class="foot">Answer saved · reveal at 0</div>
+      </div>
+      <p class="cap"><b>1 · Focused.</b> All chrome sits at #5C636E so the question is the brightest thing on screen. The seconds tick once per second with no animation. The locked option glows amber through fill colour only, with no blur or shadow.</p>
+    </div>
+    <div>
+      <div class="phone D"><div class="notch"></div>
+        <div class="sb"><span>23:12</span><span>3G ▮▮▯</span></div>
+        <div class="tl"><i style="width:100%;background:#262B33"></i></div>
+        <div class="res">
+          <div class="l">Question 4 · Correct</div>
+          <div class="row1"><span class="w">പെരിയാർ</span><span class="p tab">+800</span></div>
+          <div class="tot tab">Total 3,140</div>
+        </div>
+        <div class="opts">
+          <div class="opt ok"><span class="k">✓</span>പെരിയാർ<span class="st">You · 6.0 s</span></div>
+          <div class="opt op"><span class="k">B</span>ഭാരതപ്പുഴ<span class="st">Nithya</span></div>
+          <div class="opt mute"><span class="k">C</span>പമ്പ</div>
+          <div class="opt mute"><span class="k">D</span>ചാലിയാർ</div>
+        </div>
+        <div class="note">പെരിയാർ (244 കി.മീ) ആണ് കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി. ഭാരതപ്പുഴ (209 കി.മീ) രണ്ടാമത്.<div class="attr"><span>Kerala PSC LDC 2019</span><a>Save to revise</a></div></div>
+      </div>
+      <p class="cap"><b>2 · Lamp-up.</b> At reveal the amber line sweeps right to left (250 ms) and the correct option turns sage. "+800" fades in at large, thin weight. Wrong options drop to the dim colour. No pop or flash, because at night a flash is harsh on the eyes.</p>
+    </div>
+    <div>
+      <div class="phone D"><div class="notch"></div>
+        <div class="sb"><span>23:12</span><span>3G ▮▮▯</span></div>
+        <div class="bh">
+          <div class="t"><span>Battle Room · 4821</span><span class="tab">Q5 / 10 · 11 s</span></div>
+          <h3>LDC Batch, Thrissur</h3>
+          <div class="ans"><span><b class="tab">6</b> of 8 answered</span><span>Waiting: Nithya, Vishnu</span></div>
+        </div>
+        <div class="board">
+          <div class="row"><span class="p">1</span><span class="n">Fathima S</span><span class="s tab">3,920</span><span class="d"></span></div>
+          <div class="row"><span class="p">2</span><span class="n">Rahul M</span><span class="s tab">3,410</span><span class="d"></span></div>
+          <div class="row you"><span class="p">▲3</span><span class="n">You<small>passed Arjun K</small></span><span class="s tab">3,140</span><span class="d"></span></div>
+          <div class="row"><span class="p">4</span><span class="n">Arjun K<small>▼ 1</small></span><span class="s tab">3,050</span><span class="d"></span></div>
+          <div class="row"><span class="p">5</span><span class="n">Nithya P</span><span class="s tab">2,780</span><span class="d no"></span></div>
+          <div class="row"><span class="p">6</span><span class="n">Sreelakshmi V</span><span class="s tab">2,260</span><span class="d"></span></div>
+          <div class="row"><span class="p">7</span><span class="n">Vishnu T</span><span class="s tab">1,940</span><span class="d no"></span></div>
+          <div class="row"><span class="p">8</span><span class="n">Akhil J</span><span class="s tab">1,500</span><span class="d"></span></div>
+        </div>
+      </div>
+      <p class="cap"><b>3 · Lamp moves.</b> Your row slides up (260 ms) and the amber edge bar draws top to bottom, like the lamp moving onto you. The score counts up over 300 ms. The text names who you're waiting on ("Waiting: Nithya, Vishnu"), which adds some social pressure without any noise.</p>
+    </div>
+  </div>
+  <p class="peak"><b>Peak behaviour:</b> intensity through contrast. The rest of the screen stays dark and only your row or result brightens. Motion is slides and line sweeps only. A light theme would ship as a secondary option. Watch-out: on cheap LCD panels, near-black #0E1114 can look washed out, so test on a real ₹7k phone.</p>
+</section>
+
+</div>
+</body>
+</html>
