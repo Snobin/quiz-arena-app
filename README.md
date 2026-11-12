@@ -115,8 +115,9 @@ points Caddy at the services on your Mac, so the web app and `:8080` work unchan
    ```
 
 3. Run **all services** (or `core-service`, `game-service`, `ratings-service`) from the Run menu.
-   These shared configurations live in `.run/`: profile `local`, the IDE ports above, and the
-   repository root as working directory.
+   These shared configurations live in `.run/`. Clicking ▶ next to `main()` also works: with no
+   profile set the services default to `local`, and the `local` profile defaults to the published
+   ports above (inside Docker the container's own variables still win).
 
 Under the `local` profile each service imports `deploy/.env` (`spring.config.import`), so the
 passwords and `MINNAL_INTERNAL_TOKEN` come from that file; nothing secret is in the run

@@ -1,6 +1,10 @@
 spring:
   application:
     name: game-service
+  profiles:
+    # No profile chosen (e.g. Run on main() in the IDE) means local. Docker and prod always set
+    # SPRING_PROFILES_ACTIVE explicitly, so this only applies to runs on the developer machine.
+    default: local
   data:
     redis:
       host: ${VALKEY_HOST:localhost}
