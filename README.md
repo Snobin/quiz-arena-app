@@ -26,8 +26,9 @@ A Maven Enforcer rule fails the build if a service module depends on another ser
 ./mvnw verify
 ```
 
-This builds every module, runs the Enforcer rules and the three context-load tests. The tests use a
-`test` profile without Postgres, Flyway or Valkey, so they need no Docker.
+This builds every module, runs the Enforcer rules and all tests. **Docker must be running**: core-service's
+integration tests start a throwaway Postgres 18 with Testcontainers. The three context-load tests use a
+`test` profile without Flyway or Valkey (and never open a DB connection), so they need no Docker.
 
 ## Run the stack locally
 
@@ -59,6 +60,39 @@ docker compose -f deploy/compose.yaml --env-file deploy/.env down        # stop 
 
 The Postgres init script runs only on an empty `pgdata` volume. After changing it, or the DB passwords
 in `deploy/.env`, recreate the volume with `down -v`.
+
+### Internal service token
+
+game-service calls `POST core-service:8081/internal/question-sets` on the private Compose network with an
+`X-Internal-Token` header. Set the shared value once in `deploy/.env`:
+
+```sh
+openssl rand -hex 32     # paste as MINNAL_INTERNAL_TOKEN=... in deploy/.env, then recreate core and game
+```
+
+Both services read `MINNAL_INTERNAL_TOKEN`. If it is unset (or still the `change-me…` placeholder), core-service still starts but logs a WARN and
+answers every `/internal/**` call with 401. Caddy never routes `/internal/**` (404). Rotate it by changing
+the value and redeploying both services.
+
+### Seed the question bank
+
+The starter questions live in `services/core/src/main/resources/seed/kerala-psc-starter.csv` (columns:
+category, subject, topic, examLevel, difficulty, textMl, textEn, optionA–D, answerIndex, explanation,
+attribution, sourceRef, reviewedBy, reviewedAt). Load them with the one-shot `seed` profile, with the stack up:
+
+```sh
+docker compose -f deploy/compose.yaml --env-file deploy/.env run --rm -e SPRING_PROFILES_ACTIVE=local,seed core-service
+```
+
+It logs one `row N · field · problem` line per problem, then `N loaded · M rows skipped · K unchanged`,
+and exits (0, or 1 if the file can't be read). Running it again is safe: rows are matched by `sourceRef`,
+and an existing one counts as unchanged (later edits go through admin versions, not the CSV).
+
+Every row needs `reviewedBy` (the admin who checked it); `reviewedAt` is ISO-8601 and defaults to the load
+time; an empty `attribution` is stored as none ("source not available"). The committed rows are drafts with
+`reviewedBy`, `reviewedAt` and `attribution` left blank, so a fresh run reports `0 loaded · 30 rows skipped · 0 unchanged`
+until each row is checked, signed and attributed. The image bakes the CSV in, so rebuild core-service
+(`up -d --build`) after editing it. To load another file, add `-e MINNAL_SEED_FILE=file:/path/in/container.csv`.
 
 Profiles: `SPRING_PROFILES_ACTIVE` in `deploy/.env` selects `local` or `prod`. All secrets come from
 environment variables; only `deploy/.env.example` is committed.

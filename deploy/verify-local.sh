@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stack-level acceptance checks for Story 1.1. Run after:
+# Stack-level acceptance checks (Stories 1.1 and 1.4). Run after:
 #   docker compose -f deploy/compose.yaml --env-file deploy/.env up -d --wait
 # Usage: bash deploy/verify-local.sh
 #   BASE_URL defaults to http://localhost:<CADDY_HTTP_PORT> (from the environment, else deploy/.env, else 8080).
@@ -62,6 +62,12 @@ service_hits=$(logs_of "${SERVICES[@]}" | grep -cF -- "$rid")
 [ "$code" = "404" ] && [ "$caddy_saw" -eq 0 ] && [ "$service_hits" -eq 0 ]
 check "GET /internal/anything -> 404 from Caddy, no service log line" $? "status=$code caddy-logged=$((1 - caddy_saw)) service-hits=$service_hits"
 
+# Story 1.4: the real question-set endpoint is not reachable through Caddy either.
+code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
+  -H 'X-Internal-Token: guess' -d '{"source":"BANK","filters":{"category":"KERALA_PSC"},"count":1,"requesterId":"x"}' \
+  "$BASE_URL/internal/question-sets")
+[ "$code" = "404" ]; check "POST /internal/question-sets through Caddy -> 404" $? "status=$code"
+
 # 4. /actuator/** is not public
 code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL/actuator/health")
 [ "$code" = "404" ]; check "GET /actuator/health is not routed (404)" $? "status=$code"
@@ -122,8 +128,16 @@ check "core login cannot create in the public schema" $? "$out"
 out=$(psql_as postgres POSTGRES_PASSWORD "SELECT (SELECT count(*) FROM pg_namespace WHERE nspname = 'game') + (SELECT count(*) FROM pg_roles WHERE rolname = 'game');")
 [ "$(tr -d '[:space:]' <<<"$out")" = "0" ]; check "no game schema or login" $? "count=$out"
 
-out=$(psql_as postgres POSTGRES_PASSWORD "SELECT count(*) FROM pg_tables WHERE schemaname IN ('core','ratings') AND tablename <> 'flyway_schema_history';")
-[ "$(tr -d '[:space:]' <<<"$out")" = "0" ]; check "no application tables" $? "count=$out"
+# Story 1.4's question-bank tables exist in core (later stories may add more); ratings has none yet.
+out=$(psql_as postgres POSTGRES_PASSWORD "SELECT count(*) FROM pg_tables WHERE schemaname = 'core' AND tablename IN ('subject','topic','question','question_version');")
+[ "$(tr -d '[:space:]' <<<"$out")" = "4" ]; check "core has the four question-bank tables" $? "found=$out"
+
+out=$(psql_as postgres POSTGRES_PASSWORD "SELECT count(*) FROM pg_tables WHERE schemaname = 'ratings' AND tablename <> 'flyway_schema_history';")
+[ "$(tr -d '[:space:]' <<<"$out")" = "0" ]; check "no ratings application tables" $? "count=$out"
+
+# core-service received a real MINNAL_INTERNAL_TOKEN (else it boots healthy but logs this WARN and 401s every internal call).
+token_warn=$(logs_of core-service | grep -cF 'MINNAL_INTERNAL_TOKEN) is not set')
+[ "$token_warn" -eq 0 ]; check "core-service has MINNAL_INTERNAL_TOKEN set (no token-not-set WARN)" $? "warnings=$token_warn: set a non-placeholder MINNAL_INTERNAL_TOKEN in deploy/.env and recreate core-service"
 
 # 9. Valkey AOF settings
 aof=$("${COMPOSE[@]}" exec -T valkey sh -c 'export REDISCLI_AUTH="$VALKEY_PASSWORD"; valkey-cli CONFIG GET appendonly; valkey-cli CONFIG GET appendfsync' | tr '\n' ' ')

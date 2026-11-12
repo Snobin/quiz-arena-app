@@ -64,6 +64,8 @@ services:
       POSTGRES_DB: minnal
       CORE_DB_USER: core
       CORE_DB_PASSWORD: ${CORE_DB_PASSWORD:?set CORE_DB_PASSWORD in deploy/.env}
+      # Service token for /internal/** (AD-12). Unset = core boots but answers every internal call with 401.
+      MINNAL_INTERNAL_TOKEN: ${MINNAL_INTERNAL_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -84,6 +86,8 @@ services:
     environment:
       <<: *service-env
       SERVER_PORT: "8082"
+      # Sent as X-Internal-Token on POST core-service:8081/internal/question-sets.
+      MINNAL_INTERNAL_TOKEN: ${MINNAL_INTERNAL_TOKEN:-}
     depends_on:
       valkey:
         condition: service_healthy

@@ -33,3 +33,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-shell-motion-safety-and-offline.md`
   summary: Decide how the flash scheduler treats requests queued while the tab is hidden (expire them, or have peak callers cancel on `visibilitychange`) when Story 1.8 adds the first peaks.
   evidence: rAF pauses in a hidden tab but the queue does not, so on return a backlog plays one flash per second after its trigger has passed (medium, needs peak semantics).
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-seeded-psc-question-bank.md`
+  summary: Add a Spring context test that starts core-service with the `seed` profile (behind an overridable exit hook) and proves `minnal.seed.file`, `application-seed.yaml` and the `SeedRunner` bean wire up without a web server.
+  evidence: Only the package-private `SeedRunner` constructor is tested; renaming `minnal.seed.file` or deleting `application-seed.yaml` breaks the documented seed command with every test still green.
