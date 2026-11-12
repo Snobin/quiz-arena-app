@@ -116,9 +116,8 @@ and exits (0, or 1 if the file can't be read). Running it again is safe: rows ar
 and an existing one counts as unchanged (later edits go through admin versions, not the CSV).
 
 Every row needs `reviewedBy` (the admin who checked it); `reviewedAt` is ISO-8601 and defaults to the load
-time; an empty `attribution` is stored as none ("source not available"). The committed rows are drafts with
-`reviewedBy`, `reviewedAt` and `attribution` left blank, so a fresh run reports `0 loaded · 30 rows skipped · 0 unchanged`
-until each row is checked, signed and attributed. The image bakes the CSV in, so rebuild core-service
+time; an empty `attribution` is stored as none ("source not available"). The committed rows are signed
+(`reviewedBy`, `reviewedAt`) but not yet attributed, so a fresh run reports `30 loaded · 0 rows skipped · 0 unchanged`. The image bakes the CSV in, so rebuild core-service
 (`up -d --build`) after editing it. To load another file, add `-e MINNAL_SEED_FILE=file:/path/in/container.csv`.
 
 Profiles: `SPRING_PROFILES_ACTIVE` in `deploy/.env` selects `local` or `prod`. All secrets come from

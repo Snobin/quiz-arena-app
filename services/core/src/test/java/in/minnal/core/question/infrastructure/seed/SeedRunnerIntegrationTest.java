@@ -18,13 +18,17 @@ class SeedRunnerIntegrationTest extends PostgresIntegrationTest {
     StarterSeedService seedService;
 
     @Test
-    void unsignedStarterFileLoadsNothingAndEverySkipNamesReviewedBy() throws IOException {
+    void signedStarterFileLoadsThirtyPublishedQuestionsAndARerunChangesNothing() throws IOException {
         SeedReport report = seedService.load(SeedCsvReader.read(new ClassPathResource("seed/kerala-psc-starter.csv")));
 
-        assertThat(report.summary()).isEqualTo("0 loaded · 30 rows skipped · 0 unchanged");
-        assertThat(report.problems()).hasSize(30).allMatch(line -> line.matches(
-                "row \\d+ · reviewedBy · required: every seeded question must name the admin who reviewed it"));
-        assertThat(jdbc.sql("SELECT count(*) FROM question").query(Long.class).single()).isZero();
+        assertThat(report.summary()).isEqualTo("30 loaded · 0 rows skipped · 0 unchanged");
+        assertThat(report.problems()).isEmpty();
+        assertThat(jdbc.sql("SELECT count(*) FROM question_version WHERE status = 'PUBLISHED'").query(Long.class).single())
+                .isEqualTo(30);
+
+        SeedReport again = seedService.load(SeedCsvReader.read(new ClassPathResource("seed/kerala-psc-starter.csv")));
+        assertThat(again.summary()).isEqualTo("0 loaded · 0 rows skipped · 30 unchanged");
+        assertThat(jdbc.sql("SELECT count(*) FROM question").query(Long.class).single()).isEqualTo(30);
     }
 
     @Test
