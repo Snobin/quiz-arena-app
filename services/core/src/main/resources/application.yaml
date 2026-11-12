@@ -1,6 +1,10 @@
 spring:
   application:
     name: core-service
+  profiles:
+    # No profile chosen (e.g. Run on main() in the IDE) means local. Docker and prod always set
+    # SPRING_PROFILES_ACTIVE explicitly, so this only applies to runs on the developer machine.
+    default: local
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:minnal}
     username: ${CORE_DB_USER:core}
