@@ -8,12 +8,15 @@ import {
   parseErrorPayload,
   parseIncoming,
   parseMatchFound,
+  parseMatchAborted,
   parseMatchmakingFailed,
+  parseParticipantForfeited,
   parseQuestionRevealed,
   parseQuestionStarted,
   parseQuestionView,
   parseScoreboard,
   parseServerMessage,
+  parseSnapshot,
   type AnswerRequest,
 } from './protocol.ts';
 
@@ -51,6 +54,10 @@ describe('contracts/samples', () => {
         'error-answer-rejected.json',
         'error-not-in-match.json',
         'error-rate-limited.json',
+        'snapshot.json',
+        'snapshot-forfeited.json',
+        'participant-forfeited.json',
+        'match-aborted.json',
       ]),
     );
   });
@@ -162,6 +169,35 @@ describe('contracts/samples', () => {
     });
   });
 
+  it('snapshot*.json: a private reply with refSeq; the open question without its answer, her 1v1 result (Story 1.9)', () => {
+    const message = parseServerMessage(read('snapshot.json'))!;
+    expect(message.refSeq).toBe(12);
+    expect(message).not.toHaveProperty('seq');
+    const open = parseSnapshot(message.payload)!;
+    expect(open.phase).toBe('QUESTION_OPEN');
+    expect(open.question).not.toBeNull();
+    expect(open.question).not.toHaveProperty('answerIndex');
+    expect(open.deadline).toBe('2026-11-12T10:15:39.123Z');
+    expect(open.lastReveal!.questionIndex).toBe(2);
+    expect(open.myAnswer).toEqual({ pickedIndex: 1, result: { correct: true, points: 900, answerIndex: 1, totalScore: 3040 } });
+    expect(open.scores.map((s) => s.forfeited)).toEqual([false, false]);
+
+    const forfeited = parseSnapshot(parseServerMessage(read('snapshot-forfeited.json'))!.payload)!;
+    expect(forfeited).toMatchObject({ phase: 'REVEAL', question: null, deadline: null, myAnswer: null, youForfeited: true });
+  });
+
+  it('participant-forfeited.json and match-aborted.json are broadcasts with seq', () => {
+    const forfeited = parseServerMessage(read('participant-forfeited.json'))!;
+    expect(forfeited.seq).toBe(13);
+    expect(parseParticipantForfeited(forfeited.payload)).toEqual({
+      participantId: '0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d',
+      questionIndex: 3,
+    });
+    const aborted = parseServerMessage(read('match-aborted.json'))!;
+    expect(aborted.seq).toBe(2);
+    expect(parseMatchAborted(aborted.payload)).toEqual({ reason: 'ALL_LEFT' });
+  });
+
   it('client-answer.json is exactly the AnswerRequest the client sends', () => {
     const body: AnswerRequest = { questionIndex: 0, optionIndex: 2 };
     expect(read('client-answer.json')).toEqual(body);
@@ -239,5 +275,21 @@ describe('parsers reject what the contract does not allow', () => {
     expect(parseErrorPayload({ code: 'TEAPOT' })).toBeNull();
     expect(parseIncoming('{"type":"ERROR","serverTime":"2026-11-12T10:00:00Z","payload":{"code":"TEAPOT"}}')).toBeNull();
     expect(parseIncoming('not json')).toBeNull();
+  });
+
+  const snap = (read('snapshot.json') as Record<string, unknown>).payload as Record<string, unknown>;
+
+  it.each([
+    ['an unknown phase', { ...snap, phase: 'PAUSED' }],
+    ['a question outside an open phase', { ...snap, phase: 'REVEAL' }],
+    ['an open phase without a deadline', { ...snap, deadline: undefined }],
+    ['a partial own result', { ...snap, myAnswer: { pickedIndex: 1, correct: true } }],
+    ['a score without forfeited', { ...snap, scores: [{ participantId: 'a', score: 0 }] }],
+  ])('SNAPSHOT payload: %s', (_, value) => {
+    expect(parseSnapshot(value)).toBeNull();
+  });
+
+  it('an unknown abort reason is ignored', () => {
+    expect(parseMatchAborted({ reason: 'BORED' })).toBeNull();
   });
 });

@@ -239,3 +239,57 @@ export function questionRevealed(
     },
   };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Reconnect, forfeit and leave (Story 1.9).
+
+export type SnapshotOptions = {
+  refSeq: number;
+  phase?: 'LEAD_IN' | 'QUESTION_OPEN' | 'REVEAL' | 'ENDED';
+  questionIndex?: number;
+  /** startedAt (ms since epoch) of the open question; with `phase` QUESTION_OPEN. */
+  startedAt?: number;
+  windowMs?: number;
+  lastReveal?: ReturnType<typeof questionRevealed>['payload'];
+  answered?: string[];
+  scores: { participantId: string; score: number; forfeited?: boolean }[];
+  participants: { participantId: string; displayName: string; kind: string }[];
+  youForfeited?: boolean;
+  myAnswer?: { pickedIndex: number; correct?: boolean; points?: number; answerIndex?: number; totalScore?: number };
+  serverTime?: string;
+};
+
+/** A private SNAPSHOT (the reply to `resync`). */
+export function snapshot(matchId: string, o: SnapshotOptions) {
+  const phase = o.phase ?? 'QUESTION_OPEN';
+  const index = o.questionIndex ?? 0;
+  const open = phase === 'QUESTION_OPEN';
+  const startedAt = o.startedAt ?? Date.parse(SERVER_TIME);
+  const started = questionStarted(matchId, { seq: 0, questionIndex: index, startedAt, windowMs: o.windowMs }).payload;
+  return {
+    type: 'SNAPSHOT',
+    matchId,
+    refSeq: o.refSeq,
+    serverTime: o.serverTime ?? SERVER_TIME,
+    payload: {
+      phase,
+      questionIndex: index,
+      total: 10,
+      ...(open ? { question: started.question, startedAt: started.startedAt, deadline: started.deadline } : {}),
+      ...(o.lastReveal ? { lastReveal: o.lastReveal } : {}),
+      answered: o.answered ?? [],
+      scores: o.scores.map((s) => ({ participantId: s.participantId, score: s.score, forfeited: s.forfeited ?? false })),
+      participants: o.participants,
+      youForfeited: o.youForfeited ?? false,
+      ...(o.myAnswer ? { myAnswer: o.myAnswer } : {}),
+    },
+  };
+}
+
+export function participantForfeited(matchId: string, seq: number, participantId: string, questionIndex = 0) {
+  return { type: 'PARTICIPANT_FORFEITED', matchId, seq, serverTime: SERVER_TIME, payload: { participantId, questionIndex } };
+}
+
+export function matchAborted(matchId: string, seq: number, reason: 'ALL_LEFT' | 'ERROR' = 'ALL_LEFT') {
+  return { type: 'MATCH_ABORTED', matchId, seq, serverTime: SERVER_TIME, payload: { reason } };
+}

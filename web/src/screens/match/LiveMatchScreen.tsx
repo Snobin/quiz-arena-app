@@ -1,24 +1,41 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '../../design/Button.tsx';
 import { PageColumn } from '../../design/PageColumn.tsx';
 import { RevealBand } from '../../design/peak/RevealBand.tsx';
 import { formatSigned } from '../../i18n/format.ts';
 import { detectLanguage } from '../../i18n/Lang.tsx';
 import { useDocumentTitle } from '../../i18n/useDocumentTitle.ts';
 import { useReducedEffects } from '../../motion/reduceEffects.ts';
-import { submitAnswer, useLiveGame, type LiveMatch } from '../../realtime/liveGameStore.ts';
+import { leaveMatch, submitAnswer, useLiveGame, type LiveMatch } from '../../realtime/liveGameStore.ts';
 import { announce } from '../../shell/announce.ts';
 import { Link } from '../../shell/Link.tsx';
-import { searchParam } from '../../shell/router.ts';
+import { navigate, searchParam } from '../../shell/router.ts';
 import { useHideTabBar } from '../../shell/useHideTabBar.ts';
+import { LeaveDialog } from './LeaveDialog.tsx';
 import { OptionList, type OptionReveal } from './OptionList.tsx';
 import { QuestionCard } from './QuestionCard.tsx';
+import { ReconnectBanner } from './ReconnectBanner.tsx';
 import { RevealDetails } from './RevealDetails.tsx';
 import { opponentsOf } from './opponents.tsx';
 import { ScoreStrip } from './ScoreStrip.tsx';
 import { TimerBar } from './TimerBar.tsx';
 
 const HOME_LINK = 'hit-target inline-flex min-h-target-min items-center text-body underline';
+
+/** The Back guard: a duplicate /match history entry, marked so it can be told apart. */
+function pushGuard(): void {
+  const state: unknown = window.history.state;
+  const base = typeof state === 'object' && state !== null ? state : {};
+  window.history.pushState({ ...base, minnalGuard: true }, '', window.location.href);
+}
+
+function isGuardEntry(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && (state as { minnalGuard?: unknown }).minnalGuard === true;
+}
+
+/** How long the Forfeited notice shows before the results open. */
+export const FORFEIT_NOTICE_MS = 2_000;
 
 /**
  * `/match` (Story 1.8): the live match screen. Full screen (no tab bar), in the
@@ -28,6 +45,12 @@ const HOME_LINK = 'hit-target inline-flex min-h-target-min items-center text-bod
  *
  * With `?matchId=` it shows the store's match only when the ids match; with no live match it
  * shows the "no match" line and Home.
+ *
+ * Story 1.9: while the socket is down the reconnect banner replaces the timer and everything below
+ * it is dimmed to 42%, `inert` and `aria-hidden` (the countdown never pauses). A quiet Leave text
+ * button ends the score strip row; it, and Android back, open the Leave dialog. Her own forfeit
+ * shows the Forfeited notice, then the results; Leave goes to the results; an abort goes Home
+ * (which shows the notice). An opponent who left gets a one-line notice and keeps her score.
  */
 export function LiveMatchScreen() {
   const { t } = useTranslation();
@@ -151,13 +174,117 @@ function LiveMatchView({ live }: { live: LiveMatch }) {
   }
   const waitingFor = opponents[0]?.displayName ?? '';
 
-  const answerable = live.phase === 'open' && live.myAnswer === null && reveal === null;
+  // ---- Story 1.9: reconnect, forfeit and leave ----
+  const outcome = live.outcome;
+  const reconnecting = live.connection === 'reconnecting' && outcome === null;
+  const inPlay = outcome === null && live.phase !== 'ended';
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const dialogOpenRef = useRef(dialogOpen);
+  dialogOpenRef.current = dialogOpen;
+  const inPlayRef = useRef(inPlay);
+  inPlayRef.current = inPlay;
+  const showDialog = dialogOpen && inPlay;
+
+  // The reconnect banner: assertive once at its start, polite once at its end; nothing per second.
+  const wasReconnecting = useRef(false);
+  useEffect(() => {
+    if (reconnecting && !wasReconnecting.current) {
+      announce(t('match.reconnecting', { seconds: 10 }), { assertive: true });
+    } else if (!reconnecting && wasReconnecting.current && outcome === null) {
+      announce(t('match.reconnected'));
+    }
+    wasReconnecting.current = reconnecting;
+  }, [reconnecting]);
+
+  // An opponent who left: one polite announcement each.
+  const leftAnnounced = useRef(new Set<string>());
+  const leftOpponents = opponents.filter((o) => live.forfeited.includes(o.participantId));
+  useEffect(() => {
+    for (const opponent of leftOpponents) {
+      if (leftAnnounced.current.has(opponent.participantId)) continue;
+      leftAnnounced.current.add(opponent.participantId);
+      announce(t('match.opponentLeft', { name: opponent.displayName }));
+    }
+  }, [leftOpponents.length]);
+
+  // The outcome as it arrives while she is here: forfeited (notice, then results), left
+  // (results), aborted (Home, which shows the notice). One she already had when the screen
+  // opened (Back from the results) does not navigate again.
+  const initialOutcome = useRef(outcome);
+  useEffect(() => {
+    if (!outcome || outcome === initialOutcome.current) return undefined;
+    if (outcome.kind === 'aborted') {
+      announce(t('match.aborted'));
+      navigate('/', { replace: true });
+      return undefined;
+    }
+    if (outcome.kind === 'left') {
+      navigate('/results', { replace: true });
+      return undefined;
+    }
+    if (outcome.kind === 'forfeited') {
+      announce(t('match.forfeited'));
+      const timer = setTimeout(() => navigate('/results', { replace: true }), FORFEIT_NOTICE_MS);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [outcome?.kind]);
+
+  const stay = () => {
+    setDialogOpen(false);
+    // Focus goes back to the question heading.
+    setTimeout(() => headingRef.current?.focus(), 0);
+  };
+  const leave = () => {
+    setDialogOpen(false);
+    leaveMatch();
+  };
+
+  // Android back during the match opens the dialog (and Back again means Stay): a guard entry is
+  // pushed once, and re-pushed each time Back lands on it while the match is in play.
+  const guardArmed = useRef(false);
+  useEffect(() => {
+    if (!inPlayRef.current) return undefined;
+    pushGuard();
+    guardArmed.current = true;
+    const onPopState = () => {
+      if (!inPlayRef.current) return;
+      pushGuard();
+      if (dialogOpenRef.current) stay();
+      else setDialogOpen(true);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  // Play ended here without navigating away (the last reveal): drop the guard entry once, so the
+  // next Back leaves /match. Outcomes that navigate (left, forfeited, aborted) keep their own path.
+  useEffect(() => {
+    if (inPlay || !guardArmed.current) return;
+    const kind = outcome?.kind;
+    if (kind === 'left' || kind === 'forfeited' || kind === 'aborted') return;
+    guardArmed.current = false;
+    if (isGuardEntry(window.history.state)) window.history.back();
+  }, [inPlay, outcome?.kind]);
+
+  const blocked = reconnecting || showDialog;
+
+  const answerable =
+    live.phase === 'open' && live.myAnswer === null && reveal === null && !reconnecting && outcome === null;
   const windowSeconds = started ? Math.round((Date.parse(started.deadline) - Date.parse(started.startedAt)) / 1000) : 0;
 
   return (
     <PageColumn className="font-face-live pb-6">
       <main className="flex flex-col">
+        {reconnecting && live.reconnectDeadline !== null ? <ReconnectBanner deadline={live.reconnectDeadline} /> : null}
+        <div
+          data-testid="match-content"
+          className={blocked ? 'flex flex-col opacity-[0.42]' : 'flex flex-col'}
+          inert={blocked}
+          aria-hidden={blocked ? true : undefined}
+        >
         {started ? (
+          <div hidden={reconnecting}>
           <TimerBar
             questionIndex={started.questionIndex}
             total={started.total}
@@ -167,12 +294,45 @@ function LiveMatchView({ live }: { live: LiveMatch }) {
             reduced={reduced}
             closed={reveal !== null}
           />
+          </div>
         ) : null}
 
-        <ScoreStrip live={live} />
+        <ScoreStrip
+          live={live}
+          trailing={
+            inPlay ? (
+              <Button
+                variant="danger-text"
+                data-testid="leave-button"
+                className="ml-auto"
+                onClick={() => setDialogOpen(true)}
+              >
+                {t('match.leave')}
+              </Button>
+            ) : null
+          }
+        />
+
+        {leftOpponents.map((opponent) => (
+          <p key={opponent.participantId} data-testid="notice-opponent-left" className="mt-2 text-label text-muted">
+            {t('match.opponentLeft', { name: opponent.displayName })}
+          </p>
+        ))}
+        {outcome?.kind === 'forfeited' ? (
+          <div className="mt-2 flex flex-col items-start gap-2">
+            <p data-testid="notice-forfeited" className="text-body font-bold text-ink">
+              {t('match.forfeited')}
+            </p>
+            {outcome === initialOutcome.current ? (
+              <Link to="/results" className={HOME_LINK}>
+                {t('results.title')}
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
 
         {!started || !view ? (
-          <h1 tabIndex={-1} className="mt-8 font-title text-title">
+          <h1 ref={headingRef} tabIndex={-1} className="mt-8 font-title text-title">
             {t('match.getReady')}
           </h1>
         ) : (
@@ -227,7 +387,7 @@ function LiveMatchView({ live }: { live: LiveMatch }) {
               </p>
             )}
 
-            {live.phase === 'ended' ? (
+            {live.phase === 'ended' && outcome?.kind !== 'aborted' ? (
               <div className="mt-6 flex flex-col items-start gap-2">
                 <p data-testid="match-over" className="font-title text-title">
                   {t('match.over', { total: selfTotal })}
@@ -239,7 +399,9 @@ function LiveMatchView({ live }: { live: LiveMatch }) {
             ) : null}
           </>
         )}
+        </div>
       </main>
+      {showDialog ? <LeaveDialog onStay={stay} onLeave={leave} /> : null}
     </PageColumn>
   );
 }

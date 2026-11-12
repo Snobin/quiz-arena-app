@@ -4,14 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import in.minnal.contracts.internal.InternalQuestion;
+import in.minnal.contracts.realtime.AbortReason;
 import in.minnal.contracts.realtime.AnswerAcceptedPayload;
 import in.minnal.contracts.realtime.ErrorPayload;
+import in.minnal.contracts.realtime.MatchAbortedPayload;
 import in.minnal.contracts.realtime.MessageType;
+import in.minnal.contracts.realtime.ParticipantForfeitedPayload;
 import in.minnal.contracts.realtime.ParticipantResult;
 import in.minnal.contracts.realtime.QuestionRevealedPayload;
 import in.minnal.contracts.realtime.QuestionStartedPayload;
 import in.minnal.contracts.realtime.ScoreboardPayload;
 import in.minnal.contracts.realtime.ServerMessage;
+import in.minnal.contracts.realtime.SnapshotPayload;
+import in.minnal.contracts.realtime.SnapshotPhase;
 import in.minnal.contracts.scoring.Scoring;
 import in.minnal.game.match.application.MatchTestKit.RecordingBroadcaster;
 import in.minnal.game.match.application.MatchTestKit.RecordingChannel;
@@ -29,7 +34,9 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.function.Predicate;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -42,6 +49,7 @@ class MatchActorTest {
     final SimpleMeterRegistry meters = new SimpleMeterRegistry();
     final AtomicReference<MatchActor> endedWith = new AtomicReference<>();
     final List<MatchActor> actors = new ArrayList<>();
+    final List<String> released = new CopyOnWriteArrayList<>();
 
     @AfterEach
     void stop() {
@@ -54,9 +62,13 @@ class MatchActorTest {
     }
 
     MatchActor actor(MatchSetup setup, MatchSettings settings, BotBrain bots) {
+        return actor(setup, settings, bots, sub -> false);
+    }
+
+    MatchActor actor(MatchSetup setup, MatchSettings settings, BotBrain bots, Predicate<String> hasSession) {
         MatchState state = MatchState.of(setup, settings.window(), sub -> true);
         MatchActor actor = new MatchActor(setup, state, settings, Clock.systemUTC(), timers, channel, broadcaster, bots,
-                new MatchMetrics(meters), endedWith::set);
+                new MatchMetrics(meters), endedWith::set, hasSession, released::add);
         actors.add(actor);
         return actor;
     }
@@ -402,5 +414,155 @@ class MatchActorTest {
         for (int i = 0; i < 50; i++) {
             assertThat(again.decide(question)).isEqualTo(first.decide(question));
         }
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Story 1.9: grace, forfeit, leave, abort, resync
+
+    static MatchSettings graced(Duration window, Duration grace) {
+        return new MatchSettings(Duration.ofMillis(10), window, Duration.ofMillis(50), Duration.ofMillis(10), grace);
+    }
+
+    @Test
+    void theGraceForfeitsAfterItRunsOutReleasesHerAndRejectsHerLaterAnswers() throws Exception {
+        MatchSetup setup = MatchTestKit.setup(2, 0, 2);
+        UUID h0 = setup.humans().get("h0");
+        MatchActor actor = actor(setup, graced(Duration.ofSeconds(5), Duration.ofMillis(150)), silentBots());
+        actor.tell(new MatchEvent.Begin());
+        broadcaster.next(MessageType.QUESTION_STARTED, Duration.ofSeconds(2));
+        Instant droppedAt = Instant.now();
+        actor.tell(new MatchEvent.Disconnect("h0"));
+        ServerMessage<?> forfeited = broadcaster.next(MessageType.PARTICIPANT_FORFEITED, Duration.ofSeconds(2));
+        assertThat(Duration.between(droppedAt, forfeited.serverTime())).isGreaterThanOrEqualTo(Duration.ofMillis(140));
+        assertThat(forfeited.payload()).isEqualTo(new ParticipantForfeitedPayload(h0, 0));
+        assertThat(released).containsExactly("h0");
+
+        actor.tell(new MatchEvent.Answer(h0, 0, 0, Instant.now(), new MatchEvent.ReplyTo("h0", "s0")));
+        await().atMost(Duration.ofSeconds(2)).until(() -> !channel.to("h0").isEmpty());
+        assertThat(((ErrorPayload) channel.to("h0").getFirst().message().payload()).code().name())
+                .isEqualTo("ANSWER_REJECTED");
+        // The other plays on, and now closes the question early on her own answer.
+        actor.tell(new MatchEvent.Answer(setup.humans().get("h1"), 0, 0, Instant.now(), new MatchEvent.ReplyTo("h1", "s1")));
+        broadcaster.next(MessageType.QUESTION_REVEALED, Duration.ofSeconds(1));
+        assertThat(actor.isEnded()).isFalse();
+    }
+
+    @Test
+    void aReconnectInsideTheGraceCancelsItAndAStaleTimerDoesNothing() throws Exception {
+        MatchSetup setup = MatchTestKit.setup(2, 0, 1);
+        MatchActor actor = actor(setup, graced(Duration.ofSeconds(3), Duration.ofMillis(200)), silentBots());
+        actor.tell(new MatchEvent.Begin());
+        broadcaster.next(MessageType.QUESTION_STARTED, Duration.ofSeconds(2));
+        actor.tell(new MatchEvent.Disconnect("h0"));
+        Thread.sleep(80);
+        actor.tell(new MatchEvent.Reconnected("h0"));
+        // A grace timer of an older epoch firing late is a no-op.
+        actor.tell(new MatchEvent.GraceExpired("h0", 1));
+        Thread.sleep(400);
+        assertThat(broadcaster.ofType(MessageType.PARTICIPANT_FORFEITED)).isEmpty();
+        assertThat(released).isEmpty();
+    }
+
+    @Test
+    void aGraceThatRunsOutWhileASessionIsOpenAgainDoesNotForfeit() throws Exception {
+        MatchSetup setup = MatchTestKit.setup(2, 0, 1);
+        MatchActor actor = actor(setup, graced(Duration.ofSeconds(3), Duration.ofMillis(100)), silentBots(), sub -> true);
+        actor.tell(new MatchEvent.Begin());
+        broadcaster.next(MessageType.QUESTION_STARTED, Duration.ofSeconds(2));
+        actor.tell(new MatchEvent.Disconnect("h0"));
+        Thread.sleep(400);
+        assertThat(broadcaster.ofType(MessageType.PARTICIPANT_FORFEITED)).isEmpty();
+    }
+
+    @Test
+    void leavingBeforeTheFirstRevealAbortsTheMatch() throws Exception {
+        MatchSetup setup = MatchTestKit.setup(1, 1, 10);
+        MatchActor actor = actor(setup, graced(Duration.ofSeconds(3), Duration.ofSeconds(10)), silentBots());
+        actor.tell(new MatchEvent.Begin());
+        broadcaster.next(MessageType.QUESTION_STARTED, Duration.ofSeconds(2));
+        actor.tell(new MatchEvent.Leave("h0"));
+        actor.tell(new MatchEvent.Leave("h0")); // idempotent
+        ServerMessage<?> aborted = broadcaster.next(MessageType.MATCH_ABORTED, Duration.ofSeconds(2));
+        assertThat(aborted.payload()).isEqualTo(new MatchAbortedPayload(AbortReason.ALL_LEFT));
+        await().atMost(Duration.ofSeconds(2)).until(() -> endedWith.get() == actor);
+        assertThat(actor.isAborted()).isTrue();
+        assertThat(actor.isCompleted()).isFalse();
+        assertThat(broadcaster.all).extracting(ServerMessage::type).containsExactly(MessageType.QUESTION_STARTED,
+                MessageType.PARTICIPANT_FORFEITED, MessageType.MATCH_ABORTED);
+        assertThat(broadcaster.all).extracting(ServerMessage::seq).containsExactly(1L, 2L, 3L);
+    }
+
+    @Test
+    void whenTheOnlyHumanLeavesAfterTheFirstRevealTheMatchFinishesAtOnceAsCompleted() throws Exception {
+        MatchSetup setup = MatchTestKit.setup(1, 1, 10);
+        MatchActor actor = actor(setup, graced(Duration.ofMillis(300), Duration.ofSeconds(10)), silentBots());
+        actor.tell(new MatchEvent.Begin());
+        broadcaster.next(MessageType.QUESTION_REVEALED, Duration.ofSeconds(2));
+        broadcaster.next(MessageType.QUESTION_STARTED, Duration.ofSeconds(2)); // Q2 open
+        Instant leftAt = Instant.now();
+        actor.tell(new MatchEvent.Leave("h0"));
+        await().atMost(Duration.ofMillis(250)).until(() -> endedWith.get() == actor);
+        assertThat(Duration.between(leftAt, Instant.now())).isLessThan(Duration.ofMillis(250));
+        assertThat(actor.isCompleted()).isTrue();
+        assertThat(actor.isAborted()).isFalse();
+        assertThat(broadcaster.ofType(MessageType.QUESTION_STARTED)).as("no further questions").hasSize(2);
+        assertThat(broadcaster.ofType(MessageType.QUESTION_REVEALED)).as("Q2 closed at once").hasSize(2);
+        assertThat(broadcaster.ofType(MessageType.MATCH_ABORTED)).isEmpty();
+        assertThat(broadcaster.all.getLast().type()).isEqualTo(MessageType.QUESTION_REVEALED);
+    }
+
+    @Test
+    void inAFiveWayMatchAForfeitClosesTheQuestionOnceTheRestHaveAnswered() throws Exception {
+        MatchSetup setup = MatchTestKit.setup(5, 0, 2);
+        MatchActor actor = actor(setup, graced(Duration.ofSeconds(5), Duration.ofSeconds(10)), silentBots());
+        actor.tell(new MatchEvent.Begin());
+        QuestionStartedPayload started = (QuestionStartedPayload) broadcaster
+                .next(MessageType.QUESTION_STARTED, Duration.ofSeconds(2)).payload();
+        for (int i = 1; i < 5; i++) {
+            actor.tell(new MatchEvent.Answer(setup.humans().get("h" + i), 0, 0, Instant.now(),
+                    new MatchEvent.ReplyTo("h" + i, "s" + i)));
+        }
+        Thread.sleep(100);
+        assertThat(broadcaster.ofType(MessageType.QUESTION_REVEALED)).isEmpty();
+        actor.tell(new MatchEvent.Leave("h0"));
+        ServerMessage<?> reveal = broadcaster.next(MessageType.QUESTION_REVEALED, Duration.ofSeconds(1));
+        assertThat(reveal.serverTime()).isBefore(started.deadline());
+        assertThat(actor.isEnded()).isFalse();
+    }
+
+    @Test
+    void resyncSendsThatSessionASnapshotWithHerOwnResult() throws Exception {
+        MatchSetup setup = MatchTestKit.setup(1, 1, 3);
+        MatchActor actor = actor(setup, graced(Duration.ofSeconds(5), Duration.ofSeconds(10)), silentBots());
+        actor.tell(new MatchEvent.Begin());
+        broadcaster.next(MessageType.QUESTION_STARTED, Duration.ofSeconds(2));
+        int answer = setup.questions().getFirst().answerIndex();
+        actor.tell(new MatchEvent.Answer(setup.humans().get("h0"), 0, answer, Instant.now(), new MatchEvent.ReplyTo("h0", "s0")));
+        actor.tell(new MatchEvent.Disconnect("h0"));
+        actor.tell(new MatchEvent.Resync("h0", "s2"));
+        await().atMost(Duration.ofSeconds(2)).until(() -> channel.to("h0").size() == 2);
+        Sent reply = channel.to("h0").get(1);
+        assertThat(reply.sessionId()).isEqualTo("s2");
+        assertThat(reply.message().type()).isEqualTo(MessageType.SNAPSHOT);
+        assertThat(reply.message().refSeq()).isEqualTo(2);
+        SnapshotPayload snapshot = (SnapshotPayload) reply.message().payload();
+        assertThat(snapshot.phase()).isEqualTo(SnapshotPhase.QUESTION_OPEN);
+        assertThat(snapshot.myAnswer().pickedIndex()).isEqualTo(answer);
+        assertThat(snapshot.myAnswer().correct()).isTrue();
+        assertThat(actor.state().participants().getFirst().connection().name()).isEqualTo("CONNECTED");
+    }
+
+    @Test
+    void aHandlerErrorBroadcastsTheErrorAbortAndEndsAsFailed() throws Exception {
+        MatchSetup setup = MatchTestKit.setup(1, 1, 3);
+        MatchActor actor = actor(setup, graced(Duration.ofSeconds(5), Duration.ofSeconds(10)), silentBots());
+        actor.tell(new MatchEvent.Begin());
+        broadcaster.next(MessageType.QUESTION_STARTED, Duration.ofSeconds(2));
+        // A NextQuestion out of order makes the state throw.
+        actor.tell(new MatchEvent.NextQuestion(2, Instant.now()));
+        ServerMessage<?> aborted = broadcaster.next(MessageType.MATCH_ABORTED, Duration.ofSeconds(2));
+        assertThat(aborted.payload()).isEqualTo(new MatchAbortedPayload(AbortReason.ERROR));
+        await().atMost(Duration.ofSeconds(2)).until(() -> endedWith.get() == actor);
+        assertThat(actor.isFailed()).isTrue();
     }
 }

@@ -19,8 +19,9 @@ class MatchConfiguration {
             @Value("${minnal.match.lead-in:3s}") Duration leadIn,
             @Value("${minnal.match.window:15s}") Duration window,
             @Value("${minnal.match.close-grace:50ms}") Duration closeGrace,
-            @Value("${minnal.match.reveal-hold:2s}") Duration revealHold) {
-        return new MatchSettings(leadIn, window, closeGrace, revealHold);
+            @Value("${minnal.match.reveal-hold:2s}") Duration revealHold,
+            @Value("${minnal.match.grace:10s}") Duration grace) {
+        return new MatchSettings(leadIn, window, closeGrace, revealHold, grace);
     }
 
     /** Thread-safe: every match actor draws from it. Tests replace it with a seeded one. */

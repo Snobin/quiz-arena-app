@@ -49,6 +49,17 @@ export type MyAnswer = {
 };
 
 /**
+ * How a match ended for this player (Story 1.9): `forfeited` (the reconnect grace ran out, on the
+ * server or on her own ring), `left` (she chose Leave), `aborted` (MATCH_ABORTED: Home with a
+ * notice) or `completed` (the last reveal). `scores` are the server's numbers as last seen, in
+ * participant order; her own includes an accepted 1v1 answer to the open question.
+ */
+export type MatchOutcome = {
+  kind: 'forfeited' | 'left' | 'aborted' | 'completed';
+  scores: { participantId: string; score: number }[];
+};
+
+/**
  * The live match (Story 1.8), written only from match messages. Everything a component shows
  * comes from here as the server sent it: no correctness, points or totals are computed.
  */
@@ -70,6 +81,14 @@ export type LiveMatch = {
   totals: Record<string, number>;
   /** The last applied broadcast `seq`; broadcasts at or below it are duplicates. */
   lastSeq: number;
+  /** `reconnecting` from the socket dropping mid-match until the SNAPSHOT (Story 1.9). */
+  connection: 'live' | 'reconnecting';
+  /** While reconnecting: when her grace runs out, in device ms (`Date.now()`); null otherwise. */
+  reconnectDeadline: number | null;
+  /** Participants who have forfeited (PARTICIPANT_FORFEITED or a SNAPSHOT). */
+  forfeited: string[];
+  /** How the match ended for her, once it has; null while she is still playing. */
+  outcome: MatchOutcome | null;
 };
 
 export type LiveGameState = {
@@ -105,6 +124,10 @@ export function liveMatchFor(found: MatchFoundPayload): LiveMatch {
     reveal: null,
     totals: Object.fromEntries(found.participants.map((p) => [p.participantId, 0])),
     lastSeq: 0,
+    connection: 'live',
+    reconnectDeadline: null,
+    forfeited: [],
+    outcome: null,
   };
 }
 
@@ -115,4 +138,4 @@ export function useLiveGame<T>(selector: (state: LiveGameState) => T): T {
   return useStore(liveGameStore, selector);
 }
 
-export { cancelMatchmaking, joinQuickMatch, submitAnswer } from './connection.ts';
+export { cancelMatchmaking, joinQuickMatch, leaveMatch, submitAnswer } from './connection.ts';

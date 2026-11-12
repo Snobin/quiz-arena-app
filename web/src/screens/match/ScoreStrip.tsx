@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BotBadge } from '../../design/BotBadge.tsx';
 import { formatNumber } from '../../i18n/format.ts';
@@ -10,8 +11,10 @@ import { opponentsOf } from './opponents.tsx';
  * the unchanged name, the BOT badge for a bot, a "thinking" → "answered" status (only from
  * SCOREBOARD, never what they picked) and their total. Totals are the last reveal's values.
  * The status shows only while a question is open: not in the lead-in, over a reveal, or after the end.
+ * An opponent who has forfeited shows "left" instead, from then on (Story 1.9). `trailing` (the
+ * Leave button) sits at the end of the row.
  */
-export function ScoreStrip({ live }: { live: LiveMatch }) {
+export function ScoreStrip({ live, trailing }: { live: LiveMatch; trailing?: ReactNode }) {
   const { t } = useTranslation();
   const revealed = live.reveal !== null && live.reveal.questionIndex === live.question?.questionIndex;
   const showStatus = live.question !== null && !revealed && live.phase !== 'ended';
@@ -28,7 +31,11 @@ export function ScoreStrip({ live }: { live: LiveMatch }) {
       </div>
       {opponentsOf(live).map((opponent) => (
         <div key={opponent.participantId} className="flex flex-wrap items-center justify-end gap-3">
-          {showStatus ? (
+          {live.forfeited.includes(opponent.participantId) ? (
+            <span data-testid="opponent-status" className="text-label text-muted">
+              {t('match.leftStatus')}
+            </span>
+          ) : showStatus ? (
             <span data-testid="opponent-status" className="text-label text-muted">
               {live.answered.includes(opponent.participantId) ? t('match.answered') : t('match.thinking')}
             </span>
@@ -43,6 +50,7 @@ export function ScoreStrip({ live }: { live: LiveMatch }) {
           </div>
         </div>
       ))}
+      {trailing}
     </div>
   );
 }

@@ -8,15 +8,18 @@ import {
   SERVER_TIME,
   answerAccepted,
   answerAcceptedWithResult,
+  matchAborted,
   matchFound,
+  participantForfeited,
   questionRevealed,
   questionStarted,
   scoreboard,
   serverError,
+  snapshot,
 } from '../test-utils/realtime.ts';
-import { createRealtime, sameOriginUrl, type Realtime, type RealtimeEnv } from './connection.ts';
+import { createRealtime, GRACE_MS, LEAVE_TIMEOUT_MS, RESYNC_RETRY_MS, sameOriginUrl, type Realtime, type RealtimeEnv } from './connection.ts';
 import { INITIAL_LIVE_GAME, liveGameStore } from './liveGameStore.ts';
-import { matchAnswer, matchTopic, USER_PRIVATE_QUEUE } from './protocol.ts';
+import { matchAnswer, matchLeave, matchResync, matchTopic, USER_PRIVATE_QUEUE } from './protocol.ts';
 
 let clients: FakeStomp[];
 let tokens: string[];
@@ -292,7 +295,7 @@ describe('the live match', () => {
     expect(state().clockOffsetMs).toBe(4000 + 1500);
   });
 
-  it('drops broadcasts with seq ≤ lastSeq, and those for another match; a gap is applied anyway', async () => {
+  it('drops broadcasts with seq ≤ lastSeq, and those for another match; a gap asks for a SNAPSHOT instead', async () => {
     const { matchId, opponent } = await found();
     last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 0, startedAt: T0 }));
     last().deliverTopic(matchId, scoreboard(matchId, 2, 0, [opponent]));
@@ -302,7 +305,8 @@ describe('the live match', () => {
     last().deliverTopic(matchId, scoreboard('another-match', 3, 0, []));
     expect(state().live!.answered).toEqual([opponent]);
     last().deliverTopic(matchId, scoreboard(matchId, 7, 0, []));
-    expect(state().live).toMatchObject({ answered: [], lastSeq: 7 });
+    expect(state().live).toMatchObject({ answered: [opponent], lastSeq: 2 });
+    expect(last().sentTo(matchResync(matchId))).toBe(1);
   });
 
   it('submitAnswer: only while open and unanswered; pending → locked on ANSWER_ACCEPTED', async () => {
@@ -464,5 +468,329 @@ describe('the live match', () => {
     realtime.reset();
     expect(client.unsubscribed).toEqual([matchTopic(matchId)]);
     expect(state().live).toBeNull();
+  });
+});
+
+describe('reconnect, forfeit and leave (Story 1.9)', () => {
+  const T0 = Date.parse(SERVER_TIME);
+  const tick = (ms = 0) => vi.advanceTimersByTimeAsync(ms);
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    tokens = ['token-1', 'token-2', 'token-3', 'token-4', 'token-5'];
+    // A fresh token per CONNECT, as the guest session would mint after the old one expired.
+    env.getAccessToken = vi.fn(async () => tokens.shift() ?? 'token-x');
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function inMatch() {
+    realtime.joinQuickMatch();
+    await tick();
+    last().open();
+    const message = matchFound({ name: 'Minnal Bot', kind: 'BOT' });
+    last().deliver(message);
+    const { matchId, selfParticipantId: self, participants } = message.payload;
+    const opponent = participants.find((p) => p.participantId !== self)!.participantId;
+    return { matchId, self, opponent, participants };
+  }
+
+  it('a drop mid-match reconnects with backoff and a fresh token, resyncs, and the SNAPSHOT restores her answer', async () => {
+    const { matchId, self, opponent, participants } = await inMatch();
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 0, startedAt: T0 }));
+    last().deliverTopic(matchId, questionRevealed(matchId, { seq: 2, questionIndex: 0, answerIndex: 0, results: [
+      { participantId: self, pickedIndex: 0, correct: true, points: 900, totalScore: 900 },
+      { participantId: opponent, pickedIndex: 1, correct: false, points: 0, totalScore: 0 },
+    ] }));
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 3, questionIndex: 1, startedAt: T0 }));
+    realtime.submitAnswer(1);
+    last().drop();
+
+    expect(state().live).toMatchObject({ connection: 'reconnecting', outcome: null });
+    expect(state().live!.reconnectDeadline).toBeGreaterThan(Date.now() + GRACE_MS - 100);
+    expect(realtime.submitAnswer(2)).toBe(false);
+    expect(clients).toHaveLength(1);
+    await tick(499);
+    expect(clients).toHaveLength(1);
+    await tick(1);
+    expect(clients).toHaveLength(2);
+    // The first retry fails; the next waits 1 s.
+    last().drop();
+    await tick(999);
+    expect(clients).toHaveLength(2);
+    await tick(1);
+    expect(clients).toHaveLength(3);
+    expect(last().authorization).toBe('Bearer token-3');
+
+    last().open();
+    expect(last().isSubscribed(USER_PRIVATE_QUEUE)).toBe(true);
+    expect(last().isSubscribed(matchTopic(matchId))).toBe(true);
+    expect(last().sentTo(matchResync(matchId))).toBe(1);
+    expect(last().sentTo(matchLeave(matchId))).toBe(0);
+
+    // Out of order: 12 and 13 arrive before the SNAPSHOT at 12; 12 is dropped, 13 applied after it.
+    last().deliverTopic(matchId, scoreboard(matchId, 13, 1, [self, opponent]));
+    last().deliverTopic(matchId, scoreboard(matchId, 12, 1, [self]));
+    expect(state().live!.lastSeq).toBe(3);
+    last().deliver(
+      snapshot(matchId, {
+        refSeq: 12,
+        questionIndex: 1,
+        answered: [self],
+        scores: [{ participantId: self, score: 900 }, { participantId: opponent, score: 0 }],
+        participants,
+        myAnswer: { pickedIndex: 1, correct: true, points: 750, answerIndex: 1, totalScore: 1650 },
+      }),
+    );
+    expect(state().live).toMatchObject({
+      connection: 'live',
+      reconnectDeadline: null,
+      phase: 'open',
+      lastSeq: 13,
+      answered: [self, opponent],
+      totals: { [self]: 900, [opponent]: 0 },
+      myAnswer: {
+        questionIndex: 1,
+        optionIndex: 1,
+        status: 'locked',
+        result: { correct: true, points: 750, answerIndex: 1, totalScore: 1650 },
+      },
+      outcome: null,
+    });
+    expect(state().live!.question!.questionIndex).toBe(1);
+    // The local grace was cancelled: nothing happens when it would have run out.
+    await tick(GRACE_MS);
+    expect(state().live!.outcome).toBeNull();
+    expect(clients).toHaveLength(3);
+  });
+
+  it('a seq gap sends one resync, holds frames until the SNAPSHOT, then applies those after refSeq', async () => {
+    const { matchId, self, opponent, participants } = await inMatch();
+    for (let seq = 1; seq <= 7; seq++) {
+      last().deliverTopic(matchId, seq === 1
+        ? questionStarted(matchId, { seq, questionIndex: 0, startedAt: T0 })
+        : scoreboard(matchId, seq, 0, []));
+    }
+    last().deliverTopic(matchId, scoreboard(matchId, 9, 0, [opponent]));
+    last().deliverTopic(matchId, scoreboard(matchId, 10, 0, [opponent, self]));
+    expect(last().sentTo(matchResync(matchId))).toBe(1);
+    expect(state().live!.lastSeq).toBe(7);
+    last().deliver(snapshot(matchId, {
+      refSeq: 9,
+      answered: [opponent],
+      scores: [{ participantId: self, score: 0 }, { participantId: opponent, score: 0 }],
+      participants,
+    }));
+    expect(state().live).toMatchObject({ lastSeq: 10, answered: [opponent, self] });
+    expect(last().sentTo(matchResync(matchId))).toBe(1);
+  });
+
+  it('when her ring reaches 0 offline she has forfeited; when the socket returns it sends leave, not resync', async () => {
+    const { matchId, self, opponent } = await inMatch();
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 0, startedAt: T0 }));
+    last().deliverTopic(matchId, questionRevealed(matchId, { seq: 2, questionIndex: 0, answerIndex: 0, results: [
+      { participantId: self, pickedIndex: 0, correct: true, points: 700, totalScore: 700 },
+      { participantId: opponent, correct: false, points: 0, totalScore: 0 },
+    ] }));
+    last().drop();
+    // Every attempt fails until the grace is over.
+    for (let elapsed = 0; elapsed < GRACE_MS; elapsed += 500) {
+      await tick(500);
+      if (last().activations > 0 && !last().connected && state().live!.outcome === null) last().drop();
+    }
+    expect(state().live!.outcome).toEqual({
+      kind: 'forfeited',
+      scores: [{ participantId: self, score: 700 }, { participantId: opponent, score: 0 }],
+    });
+    await tick(2_000);
+    last().open();
+    expect(last().sentTo(matchLeave(matchId))).toBe(1);
+    expect(last().sentTo(matchResync(matchId))).toBe(0);
+    expect(last().isSubscribed(matchTopic(matchId))).toBe(false);
+  });
+
+  it('a SNAPSHOT saying she forfeited ends the match for her', async () => {
+    const { matchId, self, opponent, participants } = await inMatch();
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 0, startedAt: T0 }));
+    last().drop();
+    await tick(500);
+    last().open();
+    last().deliver(snapshot(matchId, {
+      refSeq: 4,
+      phase: 'REVEAL',
+      scores: [{ participantId: self, score: 0, forfeited: true }, { participantId: opponent, score: 800 }],
+      participants,
+      youForfeited: true,
+    }));
+    expect(state().live).toMatchObject({ forfeited: [self], outcome: { kind: 'forfeited' }, connection: 'live' });
+  });
+
+  it('leaveMatch sends leave; her own PARTICIPANT_FORFEITED ends it as left with her earned score', async () => {
+    const { matchId, self, opponent } = await inMatch();
+    expect(realtime.leaveMatch()).toBe(true); // the lead-in is in play
+    expect(last().sentTo(matchLeave(matchId))).toBe(1);
+    expect(realtime.leaveMatch()).toBe(true);
+    expect(last().sentTo(matchLeave(matchId))).toBe(1);
+    last().deliverTopic(matchId, participantForfeited(matchId, 1, self));
+    expect(state().live!.outcome).toEqual({
+      kind: 'left',
+      scores: [{ participantId: self, score: 0 }, { participantId: opponent, score: 0 }],
+    });
+    expect(realtime.leaveMatch()).toBe(false);
+    // Before the first reveal the abort follows, and wins.
+    last().deliverTopic(matchId, matchAborted(matchId, 2));
+    expect(state().live).toMatchObject({ phase: 'ended', outcome: { kind: 'aborted' } });
+    expect(last().isSubscribed(matchTopic(matchId))).toBe(false);
+  });
+
+  it('a leave with no reply within 3 s ends it as left anyway', async () => {
+    const { matchId } = await inMatch();
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 0, startedAt: T0 }));
+    realtime.leaveMatch();
+    expect(realtime.submitAnswer(0)).toBe(false);
+    await tick(LEAVE_TIMEOUT_MS - 1);
+    expect(state().live!.outcome).toBeNull();
+    await tick(1);
+    expect(state().live!.outcome!.kind).toBe('left');
+  });
+
+  it('an opponent forfeit is recorded and the match goes on', async () => {
+    const { matchId, opponent } = await inMatch();
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 0, startedAt: T0 }));
+    last().deliverTopic(matchId, participantForfeited(matchId, 2, opponent));
+    expect(state().live).toMatchObject({ forfeited: [opponent], outcome: null, lastSeq: 2 });
+    expect(realtime.submitAnswer(0)).toBe(true);
+  });
+
+  it('MATCH_ABORTED ends it as aborted; a drop after the end does not reconnect', async () => {
+    const { matchId } = await inMatch();
+    last().deliverTopic(matchId, matchAborted(matchId, 1, 'ERROR'));
+    expect(state().live).toMatchObject({ phase: 'ended', outcome: { kind: 'aborted' } });
+    last().drop();
+    await tick(5_000);
+    expect(clients).toHaveLength(1);
+  });
+
+  it('the last reveal marks the match completed with the final totals', async () => {
+    const { matchId, self, opponent } = await inMatch();
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 9, startedAt: T0 }));
+    last().deliverTopic(matchId, questionRevealed(matchId, { seq: 2, questionIndex: 9, answerIndex: 0, results: [
+      { participantId: self, pickedIndex: 0, correct: true, points: 600, totalScore: 5_000 },
+      { participantId: opponent, correct: false, points: 0, totalScore: 4_000 },
+    ] }));
+    expect(state().live!.outcome).toEqual({
+      kind: 'completed',
+      scores: [{ participantId: self, score: 5_000 }, { participantId: opponent, score: 4_000 }],
+    });
+  });
+
+  it('leaveMatch while reconnecting: the next socket sends leave, not resync, and does not subscribe the topic', async () => {
+    const { matchId } = await inMatch();
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 0, startedAt: T0 }));
+    last().drop();
+    expect(realtime.leaveMatch()).toBe(true);
+    await tick(500);
+    last().open();
+    expect(last().sentTo(matchLeave(matchId))).toBe(1);
+    expect(last().sentTo(matchResync(matchId))).toBe(0);
+    expect(last().isSubscribed(matchTopic(matchId))).toBe(false);
+  });
+
+  it('leaving with an accepted 1v1 answer to the open question keeps its totalScore as her score', async () => {
+    const { matchId, self } = await inMatch();
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 0, startedAt: T0 }));
+    realtime.submitAnswer(0);
+    last().deliver(answerAcceptedWithResult(matchId, 0, { correct: true, points: 870, answerIndex: 0, totalScore: 870 }));
+    realtime.leaveMatch();
+    last().deliverTopic(matchId, participantForfeited(matchId, 2, self));
+    expect(state().live!.outcome!.kind).toBe('left');
+    expect(state().live!.outcome!.scores.find((r) => r.participantId === self)!.score).toBe(870);
+  });
+
+  it('NOT_IN_MATCH after Q1 was revealed settles as completed and ended', async () => {
+    const { matchId, self, opponent } = await inMatch();
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 0, startedAt: T0 }));
+    last().deliverTopic(matchId, questionRevealed(matchId, { seq: 2, questionIndex: 0, answerIndex: 0, results: [
+      { participantId: self, pickedIndex: 0, correct: true, points: 700, totalScore: 700 },
+      { participantId: opponent, correct: false, points: 0, totalScore: 0 },
+    ] }));
+    last().drop();
+    await tick(500);
+    last().open();
+    last().deliver(serverError('NOT_IN_MATCH', matchId));
+    expect(state().live).toMatchObject({ phase: 'ended', connection: 'live', outcome: { kind: 'completed' } });
+    expect(state().live!.outcome!.scores.find((r) => r.participantId === self)!.score).toBe(700);
+  });
+
+  it('NOT_IN_MATCH first replays the held frames after lastSeq in order (a held final reveal counts)', async () => {
+    const { matchId, self, opponent } = await inMatch();
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 9, startedAt: T0 }));
+    last().drop();
+    await tick(500);
+    last().open();
+    last().deliverTopic(matchId, questionRevealed(matchId, { seq: 3, questionIndex: 9, answerIndex: 0, results: [
+      { participantId: self, pickedIndex: 0, correct: true, points: 600, totalScore: 6_000 },
+      { participantId: opponent, correct: false, points: 0, totalScore: 5_000 },
+    ] }));
+    last().deliverTopic(matchId, scoreboard(matchId, 2, 9, [self]));
+    last().deliverTopic(matchId, scoreboard(matchId, 1, 9, []));
+    last().deliver(serverError('NOT_IN_MATCH', matchId));
+    expect(state().live).toMatchObject({
+      phase: 'ended',
+      lastSeq: 3,
+      answered: [self],
+      totals: { [self]: 6_000, [opponent]: 5_000 },
+      outcome: { kind: 'completed', scores: [{ participantId: self, score: 6_000 }, { participantId: opponent, score: 5_000 }] },
+    });
+  });
+
+  it('a resync with no SNAPSHOT is sent again every 3 s until one arrives', async () => {
+    const { matchId, self, opponent, participants } = await inMatch();
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 0, startedAt: T0 }));
+    last().deliverTopic(matchId, scoreboard(matchId, 3, 0, [opponent]));
+    expect(last().sentTo(matchResync(matchId))).toBe(1);
+    await tick(RESYNC_RETRY_MS - 1);
+    expect(last().sentTo(matchResync(matchId))).toBe(1);
+    await tick(1);
+    expect(last().sentTo(matchResync(matchId))).toBe(2);
+    await tick(RESYNC_RETRY_MS);
+    expect(last().sentTo(matchResync(matchId))).toBe(3);
+    last().deliver(snapshot(matchId, {
+      refSeq: 2,
+      scores: [{ participantId: self, score: 0 }, { participantId: opponent, score: 0 }],
+      participants,
+    }));
+    expect(state().live).toMatchObject({ lastSeq: 3, answered: [opponent] });
+    await tick(RESYNC_RETRY_MS * 2);
+    expect(last().sentTo(matchResync(matchId))).toBe(3);
+  });
+
+  it('Quick Match after a local give-up sends the pending leave before the join', async () => {
+    const { matchId } = await inMatch();
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 0, startedAt: T0 }));
+    last().drop();
+    for (let elapsed = 0; elapsed < GRACE_MS; elapsed += 500) {
+      await tick(500);
+      if (last().activations > 0 && !last().connected && state().live!.outcome === null) last().drop();
+    }
+    expect(state().live!.outcome!.kind).toBe('forfeited');
+    realtime.joinQuickMatch();
+    await tick(2_000);
+    last().open();
+    expect(last().published.map((p) => p.destination)).toEqual([matchLeave(matchId), JOIN]);
+    expect(state().live).toBeNull();
+  });
+
+  it('NOT_IN_MATCH in reply to a resync settles a match that ended while she was away', async () => {
+    const { matchId } = await inMatch();
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 0, startedAt: T0 }));
+    last().drop();
+    await tick(500);
+    last().open();
+    last().deliver(serverError('NOT_IN_MATCH', matchId));
+    expect(state().live).toMatchObject({ connection: 'live', phase: 'ended', outcome: { kind: 'aborted' } });
+    expect(state().phase).toBe('found');
   });
 });

@@ -78,3 +78,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-instant-1v1-feedback-and-early-close.md`
   summary: In Story 1.9, re-check `allAnswered()` → early close whenever a participant forfeits mid-question, reject answers from forfeited participants, and keep `allAnswered()` false when every participant is forfeited.
   evidence: `MatchActor` checks early close only after an accepted answer, and `MatchState.answer` does not reject forfeited senders; unreachable today because nothing calls `MatchParticipant.forfeit()` outside tests (unverified, would be medium once 1.9 lands).
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-9-reconnect-forfeit-and-leave.md`
+  summary: Bound the time to detect a silent network drop (tune STOMP heartbeats or the server's inactivity timeout) so the 10 s reconnect grace starts close to the real drop.
+  evidence: The server publishes `LastSessionClosed` only when the socket closes; a silent drop is seen at the heartbeat timeout (10 s heartbeats plus Spring's inactivity margin), so the forfeit lands at about heartbeat timeout + 10 s and the opponent waits full windows meanwhile. Every `MatchReconnectFlowTest` case uses a clean close.

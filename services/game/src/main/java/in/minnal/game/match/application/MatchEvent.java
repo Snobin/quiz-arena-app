@@ -40,4 +40,20 @@ public sealed interface MatchEvent {
     /** The player's last session closed. */
     record Disconnect(String sub) implements MatchEvent {
     }
+
+    /** A new session of {@code sub} opened while she is in the match: she is connected again (cancels the grace). */
+    record Reconnected(String sub) implements MatchEvent {
+    }
+
+    /** Timer: {@code sub}'s reconnect grace ran out; stale unless {@code epoch} is her current grace epoch. */
+    record GraceExpired(String sub, long epoch) implements MatchEvent {
+    }
+
+    /** She left on purpose: forfeit at once. */
+    record Leave(String sub) implements MatchEvent {
+    }
+
+    /** She asks for a {@code SNAPSHOT}, sent to that one session (after a reconnect or a {@code seq} gap). */
+    record Resync(String sub, String sessionId) implements MatchEvent {
+    }
 }

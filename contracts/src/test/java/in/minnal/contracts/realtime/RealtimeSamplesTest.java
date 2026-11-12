@@ -97,6 +97,27 @@ class RealtimeSamplesTest {
                                         new ParticipantResult(ANJU, null, false, 0, 875),
                                         new ParticipantResult(BOT, 3, true, 642, 642)))),
                         new TypeReference<ServerMessage<QuestionRevealedPayload>>() { }),
+                new Sample("snapshot.json",
+                        ServerMessage.reply(MessageType.SNAPSHOT, MATCH_ID, 12, SERVER_TIME, new SnapshotPayload(
+                                SnapshotPhase.QUESTION_OPEN, 3, 10, questionView(), SERVER_TIME.minusSeconds(6),
+                                SERVER_TIME.plusSeconds(9), revealed(2), List.of(ANJU),
+                                List.of(new ParticipantScore(ANJU, 2140, false), new ParticipantScore(BOT, 1310, false)),
+                                participants, false, MyAnswer.withResult(1, true, 900, 1, 3040))),
+                        new TypeReference<ServerMessage<SnapshotPayload>>() { }),
+                new Sample("snapshot-forfeited.json",
+                        ServerMessage.reply(MessageType.SNAPSHOT, MATCH_ID, 14, SERVER_TIME, new SnapshotPayload(
+                                SnapshotPhase.REVEAL, 3, 10, null, null, null, revealed(3), List.of(),
+                                List.of(new ParticipantScore(ANJU, 2140, true), new ParticipantScore(BOT, 1310, false)),
+                                participants, true, null)),
+                        new TypeReference<ServerMessage<SnapshotPayload>>() { }),
+                new Sample("participant-forfeited.json",
+                        ServerMessage.broadcast(MessageType.PARTICIPANT_FORFEITED, MATCH_ID, 13, SERVER_TIME,
+                                new ParticipantForfeitedPayload(ANJU, 3)),
+                        new TypeReference<ServerMessage<ParticipantForfeitedPayload>>() { }),
+                new Sample("match-aborted.json",
+                        ServerMessage.broadcast(MessageType.MATCH_ABORTED, MATCH_ID, 2, SERVER_TIME,
+                                new MatchAbortedPayload(AbortReason.ALL_LEFT)),
+                        new TypeReference<ServerMessage<MatchAbortedPayload>>() { }),
                 new Sample("error-answer-rejected.json",
                         ServerMessage.error(ErrorCode.ANSWER_REJECTED, MATCH_ID, 3L, SERVER_TIME),
                         new TypeReference<ServerMessage<ErrorPayload>>() { }),
@@ -121,6 +142,13 @@ class RealtimeSamplesTest {
                         new TypeReference<QuestionSetResponse>() { }));
     }
 
+    /** The reveal of question {@code index} (the last one revealed before the snapshot). */
+    static QuestionRevealedPayload revealed(int index) {
+        return new QuestionRevealedPayload(index, 10, QUESTION_ID, 2, 0, "x", null, List.of(
+                new ParticipantResult(ANJU, 0, true, 800, 2140),
+                new ParticipantResult(BOT, null, false, 0, 1310)));
+    }
+
     static QuestionView questionView() {
         return new QuestionView(QUESTION_ID, 2, "കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി?", "Which is the longest river in Kerala?",
                 List.of("പെരിയാർ", "ഭാരതപ്പുഴ", "പമ്പ", "ചാലിയാർ"));
@@ -140,7 +168,7 @@ class RealtimeSamplesTest {
     void enumsJsonListsEveryEnumValue() throws IOException {
         Map<String, List<String>> enums = new LinkedHashMap<>();
         for (Class<? extends Enum<?>> type : List.<Class<? extends Enum<?>>>of(MessageType.class, ErrorCode.class,
-                MatchMode.class, ParticipantKind.class, QuestionSource.class)) {
+                MatchMode.class, ParticipantKind.class, QuestionSource.class, SnapshotPhase.class, AbortReason.class)) {
             enums.put(type.getSimpleName(), Arrays.stream(type.getEnumConstants()).map(Enum::name).toList());
         }
         assertGolden("enums.json", ContractJson.MAPPER.writeValueAsString(enums) + "\n");
@@ -222,6 +250,17 @@ class RealtimeSamplesTest {
         assertThat(Destinations.matchTopic(MATCH_ID)).isEqualTo("/topic/match/" + MATCH_ID);
         assertThat(Destinations.roomTopic(MATCH_ID)).isEqualTo("/topic/room/" + MATCH_ID);
         assertThat(Destinations.USER_PRIVATE_QUEUE).isEqualTo("/user/queue/game");
+    }
+
+    /** Story 1.9: a snapshot outside an open question carries no question, times or own answer. */
+    @Test
+    void aSnapshotOutsideAnOpenQuestionOmitsTheQuestionFields() {
+        JsonNode snapshot = ContractJson.MAPPER.valueToTree(new SnapshotPayload(SnapshotPhase.LEAD_IN, 0, 10, null, null,
+                null, null, List.of(), List.of(), List.of(), false, null));
+        assertThat(snapshot.propertyNames()).containsExactly("phase", "questionIndex", "total", "answered", "scores",
+                "participants", "youForfeited");
+        JsonNode receipt = ContractJson.MAPPER.valueToTree(MyAnswer.receipt(2));
+        assertThat(receipt.propertyNames()).containsExactly("pickedIndex");
     }
 
     /**

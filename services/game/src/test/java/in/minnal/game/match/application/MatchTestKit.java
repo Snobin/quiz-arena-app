@@ -110,4 +110,9 @@ final class MatchTestKit {
     static MatchSettings fast(Duration window) {
         return new MatchSettings(Duration.ofMillis(10), window, Duration.ofMillis(50), Duration.ofMillis(10));
     }
+
+    /** {@link #fast(Duration)} with a reconnect grace of {@code grace}. */
+    static MatchSettings fast(Duration window, Duration grace) {
+        return new MatchSettings(Duration.ofMillis(10), window, Duration.ofMillis(50), Duration.ofMillis(10), grace);
+    }
 }

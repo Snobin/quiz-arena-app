@@ -20,6 +20,7 @@ public enum MessageType {
     /** Broadcast: the window closed; answer and results ({@link QuestionRevealedPayload}). */
     QUESTION_REVEALED,
     MATCH_ENDED,
+    /** Private, with {@code refSeq}: the match as it stands, in reply to {@code resync} ({@link SnapshotPayload}). */
     SNAPSHOT,
     REMATCH_REQUESTED,
     REMATCH_ACCEPTED,
@@ -32,5 +33,9 @@ public enum MessageType {
     ROOM_MATCH_STARTED,
     ROOM_SUCCEEDED,
     /** Private: a request was refused ({@link ErrorPayload}). */
-    ERROR
+    ERROR,
+    /** Broadcast: a participant left the match ({@link ParticipantForfeitedPayload}). */
+    PARTICIPANT_FORFEITED,
+    /** Broadcast: the match ended without results ({@link MatchAbortedPayload}). */
+    MATCH_ABORTED
 }

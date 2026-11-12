@@ -1,6 +1,7 @@
 import { useId, type ButtonHTMLAttributes, type MouseEvent, type ReactNode } from 'react';
 
-type Variant = 'primary' | 'secondary';
+type FilledVariant = 'primary' | 'secondary';
+type Variant = FilledVariant | 'danger-text';
 
 type BaseProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'disabled' | 'aria-disabled' | 'children'> & {
   variant?: Variant;
@@ -16,10 +17,13 @@ const BASE = 'hit-target inline-flex min-h-target-min items-center justify-cente
 // Primary: ink fill with an on-band label. `bg-band` is ink in light and band-dark in dark,
 // which is how DESIGN.md renders calm ink surfaces in dark mode (an ink-dark fill would put
 // white on light grey).
-const VARIANTS: Record<Variant, string> = {
+const VARIANTS: Record<FilledVariant, string> = {
   primary: 'bg-band text-on-band',
   secondary: 'bg-card text-ink border-[1.5px] border-ink',
 };
+
+/** `danger-text`: a quiet brick text button (Leave). No fill, no border; the hit area stays 48 px. */
+const DANGER_TEXT = 'bg-transparent font-bold text-brick';
 
 const DISABLED = 'bg-card text-muted border border-dim cursor-not-allowed';
 
@@ -30,7 +34,8 @@ const DISABLED = 'bg-card text-muted border border-dim cursor-not-allowed';
 export function Button(props: ButtonProps) {
   const { variant = 'primary', disabled, disabledReason, className, onClick, type, children, ...rest } = props;
   const reasonId = useId();
-  const classes = [BASE, disabled ? DISABLED : VARIANTS[variant], className].filter(Boolean).join(' ');
+  const look = variant === 'danger-text' ? DANGER_TEXT : VARIANTS[variant];
+  const classes = [BASE, disabled ? DISABLED : look, className].filter(Boolean).join(' ');
 
   const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
     if (disabled) {

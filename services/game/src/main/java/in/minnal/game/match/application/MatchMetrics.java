@@ -16,7 +16,8 @@ import java.util.Map;
  *   <li>{@code minnal.match.answer.ack}: an answer's server receive instant → its {@code ANSWER_ACCEPTED} send;
  *   <li>{@code minnal.match.broadcast.lag{type}}: the triggering instant (the answer's receive
  *       instant, or the timer's due instant) → the broadcast send;
- *   <li>{@code minnal.match.ended}: matches that reached their last reveal;
+ *   <li>{@code minnal.match.ended}: completed matches (Q1 was revealed; Story 1.9);
+ *   <li>{@code minnal.match.aborted}: matches every human left before Q1 was revealed;
  *   <li>{@code minnal.match.failed}: matches ended early by an unexpected error.
  * </ul>
  */
@@ -25,11 +26,13 @@ public final class MatchMetrics {
     public static final String ACK = "minnal.match.answer.ack";
     public static final String BROADCAST_LAG = "minnal.match.broadcast.lag";
     public static final String ENDED = "minnal.match.ended";
+    public static final String ABORTED = "minnal.match.aborted";
     public static final String FAILED = "minnal.match.failed";
 
     private final Timer ack;
     private final Map<MessageType, Timer> lag = new EnumMap<>(MessageType.class);
     private final Counter ended;
+    private final Counter aborted;
     private final Counter failed;
 
     public MatchMetrics(MeterRegistry meters) {
@@ -44,7 +47,9 @@ public final class MatchMetrics {
                     .publishPercentiles(0.5, 0.95, 0.99)
                     .register(meters));
         }
-        ended = Counter.builder(ENDED).description("Matches that reached their final reveal").register(meters);
+        ended = Counter.builder(ENDED).description("Completed matches (the first question was revealed)").register(meters);
+        aborted = Counter.builder(ABORTED).description("Matches every human left before the first reveal")
+                .register(meters);
         failed = Counter.builder(FAILED).description("Matches ended early by an unexpected error").register(meters);
     }
 
@@ -61,6 +66,10 @@ public final class MatchMetrics {
 
     void ended() {
         ended.increment();
+    }
+
+    void aborted() {
+        aborted.increment();
     }
 
     void failed() {

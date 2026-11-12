@@ -1,18 +1,25 @@
 package in.minnal.game.match.domain;
 
 import in.minnal.contracts.internal.InternalQuestion;
+import in.minnal.contracts.realtime.AbortReason;
 import in.minnal.contracts.realtime.AnswerAcceptedPayload;
 import in.minnal.contracts.realtime.ErrorCode;
 import in.minnal.contracts.realtime.ErrorPayload;
+import in.minnal.contracts.realtime.MatchAbortedPayload;
 import in.minnal.contracts.realtime.MatchMode;
 import in.minnal.contracts.realtime.MessageType;
+import in.minnal.contracts.realtime.MyAnswer;
 import in.minnal.contracts.realtime.Participant;
+import in.minnal.contracts.realtime.ParticipantForfeitedPayload;
 import in.minnal.contracts.realtime.ParticipantResult;
+import in.minnal.contracts.realtime.ParticipantScore;
 import in.minnal.contracts.realtime.QuestionRevealedPayload;
 import in.minnal.contracts.realtime.QuestionStartedPayload;
 import in.minnal.contracts.realtime.QuestionView;
 import in.minnal.contracts.realtime.ScoreboardPayload;
 import in.minnal.contracts.realtime.ServerMessage;
+import in.minnal.contracts.realtime.SnapshotPayload;
+import in.minnal.contracts.realtime.SnapshotPhase;
 import in.minnal.contracts.scoring.Scoring;
 import java.time.Duration;
 import java.time.Instant;
@@ -36,6 +43,10 @@ import java.util.function.Predicate;
  * <p>The mode decides only the shape of {@code ANSWER_ACCEPTED} ({@link MatchMode#revealsOwnAnswerAtAck()}):
  * in 1v1 modes it carries the sender's own result; in Battle Room it is a receipt (AD-5, Story 1.11).
  *
+ * <p>Resilience (Story 1.9): a participant who forfeits keeps the points she already earned, scores
+ * 0 on the rest and is no longer waited for; {@link #snapshot} rebuilds a player's view after a
+ * reconnect without leaking anyone else's pick or the open question's answer.
+ *
  * <p>Confined to the actor's thread; not thread-safe.
  */
 public final class MatchState {
@@ -56,6 +67,8 @@ public final class MatchState {
     private Instant startedAt;
     private Instant deadline;
     private long seq;
+    /** The last {@code QUESTION_REVEALED} payload; null before Q1 is revealed. */
+    private QuestionRevealedPayload lastReveal;
 
     public MatchState(UUID matchId, MatchMode mode, List<MatchParticipant> participants, List<InternalQuestion> questions,
             Duration window) {
@@ -151,6 +164,9 @@ public final class MatchState {
         if (participant == null) {
             return new AnswerOutcome.Rejected(ServerMessage.error(ErrorCode.NOT_IN_MATCH, matchId, seq, now));
         }
+        if (participant.forfeited()) {
+            return new AnswerOutcome.Rejected(ServerMessage.error(ErrorCode.ANSWER_REJECTED, matchId, seq, now));
+        }
         if (questionIndex != null && questionIndex >= 0 && questionIndex < total()
                 && participant.answer(questionIndex).isPresent()) {
             return new AnswerOutcome.Duplicate();
@@ -203,32 +219,162 @@ public final class MatchState {
         phase = index == total() - 1 ? MatchPhase.ENDED : MatchPhase.REVEALED;
         QuestionRevealedPayload payload = new QuestionRevealedPayload(index, total(), question.questionId(),
                 question.version(), question.answerIndex(), question.explanation(), question.attribution(), results);
+        lastReveal = payload;
         return Optional.of(ServerMessage.broadcast(MessageType.QUESTION_REVEALED, matchId, ++seq, now, payload));
     }
 
     /**
      * Whether every participant still in the match (not forfeited; bots and disconnected players
      * included) has an answer for the open question, so it can close at once (AD-6, Story 1.11).
-     * False when no question is open.
+     * False when no question is open, and when nobody is left in the match.
      */
     public boolean allAnswered() {
         if (phase != MatchPhase.QUESTION_OPEN) {
             return false;
         }
+        boolean anyoneLeft = false;
         for (MatchParticipant participant : participants) {
-            if (!participant.forfeited() && participant.answer(current).isEmpty()) {
+            if (participant.forfeited()) {
+                continue;
+            }
+            anyoneLeft = true;
+            if (participant.answer(current).isEmpty()) {
                 return false;
             }
         }
+        return anyoneLeft;
+    }
+
+    /**
+     * The participant's last session closed: she is {@code DISCONNECTED} (the actor arms the
+     * reconnect grace). No-op for an unknown or forfeited participant.
+     *
+     * @return whether she was marked disconnected
+     */
+    public boolean disconnect(UUID participantId) {
+        MatchParticipant participant = byId.get(participantId);
+        if (participant == null || participant.forfeited()) {
+            return false;
+        }
+        participant.connection(Connection.DISCONNECTED);
         return true;
     }
 
-    /** The participant's last session closed. The match carries on regardless (grace and forfeit: Story 1.9). */
-    public void disconnect(UUID participantId) {
+    /** She has a session again: {@code CONNECTED}. No-op for an unknown or forfeited participant. */
+    public void reconnect(UUID participantId) {
         MatchParticipant participant = byId.get(participantId);
-        if (participant != null) {
-            participant.connection(Connection.DISCONNECTED);
+        if (participant != null && !participant.forfeited()) {
+            participant.connection(Connection.CONNECTED);
         }
+    }
+
+    /**
+     * She is out of the match for good (the reconnect grace ran out, or she left): her recorded
+     * answers keep their points, the rest score 0, and her later answers are rejected. Idempotent.
+     *
+     * @return the {@code PARTICIPANT_FORFEITED} broadcast, or empty when she is unknown, already
+     *         forfeited, or the match has ended
+     */
+    public Optional<ServerMessage<ParticipantForfeitedPayload>> forfeit(UUID participantId, Instant now) {
+        MatchParticipant participant = byId.get(participantId);
+        if (participant == null || participant.forfeited() || phase == MatchPhase.ENDED) {
+            return Optional.empty();
+        }
+        participant.forfeit();
+        return Optional.of(ServerMessage.broadcast(MessageType.PARTICIPANT_FORFEITED, matchId, ++seq, now,
+                new ParticipantForfeitedPayload(participantId, Math.max(current, 0))));
+    }
+
+    /**
+     * Ends the match without results ({@code MATCH_ABORTED}): every human left before Q1 was
+     * revealed, or the match failed.
+     *
+     * @return the {@code MATCH_ABORTED} broadcast
+     */
+    public ServerMessage<MatchAbortedPayload> abort(AbortReason reason, Instant now) {
+        phase = MatchPhase.ENDED;
+        return ServerMessage.broadcast(MessageType.MATCH_ABORTED, matchId, ++seq, now, new MatchAbortedPayload(reason));
+    }
+
+    /**
+     * Every human has gone after Q1 was revealed: the open question (if any) closes at once and the
+     * questions never asked score 0 for everyone, with no further {@code QUESTION_STARTED} and no
+     * reveal of a question that never opened (its answer stays secret). The match is then
+     * {@link MatchPhase#ENDED} and counts as completed.
+     *
+     * @return the open question's {@code QUESTION_REVEALED}, if one was open
+     */
+    public Optional<ServerMessage<QuestionRevealedPayload>> finishNow(Instant now) {
+        Optional<ServerMessage<QuestionRevealedPayload>> reveal = phase == MatchPhase.QUESTION_OPEN
+                ? closeWindow(current, now)
+                : Optional.empty();
+        phase = MatchPhase.ENDED;
+        return reveal;
+    }
+
+    /** Whether at least one human (a participant with a {@code sub}) is in the match and every one has forfeited. */
+    public boolean humansAllForfeited() {
+        boolean anyHuman = false;
+        for (MatchParticipant participant : participants) {
+            if (participant.sub().isEmpty()) {
+                continue;
+            }
+            anyHuman = true;
+            if (!participant.forfeited()) {
+                return false;
+            }
+        }
+        return anyHuman;
+    }
+
+    /** Whether Q1 has been revealed: from then on the match counts as completed (not aborted). */
+    public boolean q1Revealed() {
+        return lastReveal != null;
+    }
+
+    /**
+     * The match as {@code participantId} should see it now, as a private {@code SNAPSHOT} with
+     * {@code refSeq} = the last broadcast {@code seq}. The open question appears without its answer;
+     * no other participant's pick appears for it; her own accepted answer does, with her result in
+     * 1v1 modes, as her ack had it.
+     */
+    public ServerMessage<SnapshotPayload> snapshot(UUID participantId, Instant now) {
+        MatchParticipant self = byId.get(participantId);
+        boolean open = phase == MatchPhase.QUESTION_OPEN;
+        SnapshotPhase snapshotPhase = switch (phase) {
+            case LEAD_IN -> SnapshotPhase.LEAD_IN;
+            case QUESTION_OPEN -> SnapshotPhase.QUESTION_OPEN;
+            case REVEALED -> SnapshotPhase.REVEAL;
+            case ENDED -> SnapshotPhase.ENDED;
+        };
+        List<ParticipantScore> scores = new ArrayList<>();
+        List<Participant> views = new ArrayList<>();
+        for (MatchParticipant participant : participants) {
+            scores.add(new ParticipantScore(participant.participantId(), participant.score(), participant.forfeited()));
+            views.add(participant.participant());
+        }
+        MyAnswer myAnswer = null;
+        if (open && self != null) {
+            Optional<RecordedAnswer> own = self.answer(current);
+            if (own.isPresent()) {
+                RecordedAnswer answer = own.get();
+                int answerIndex = questions.get(current).answerIndex();
+                myAnswer = mode.revealsOwnAnswerAtAck()
+                        ? MyAnswer.withResult(answer.pickedIndex(), answer.pickedIndex() == answerIndex, answer.points(),
+                                answerIndex, self.score() + answer.points())
+                        : MyAnswer.receipt(answer.pickedIndex());
+            }
+        }
+        SnapshotPayload payload = new SnapshotPayload(snapshotPhase, Math.max(current, 0), total(),
+                open ? QuestionView.of(questions.get(current)) : null,
+                open ? startedAt : null,
+                open ? deadline : null,
+                lastReveal,
+                open ? answered : List.of(),
+                scores, views,
+                self != null && self.forfeited(),
+                myAnswer);
+        return ServerMessage.reply(MessageType.SNAPSHOT, matchId, seq, now, payload);
     }
 
     // -----------------------------------------------------------------------------------------
@@ -278,6 +424,11 @@ public final class MatchState {
 
     public Instant deadline() {
         return deadline;
+    }
+
+    /** The last {@code QUESTION_REVEALED} payload, if any question has been revealed. */
+    public Optional<QuestionRevealedPayload> lastReveal() {
+        return Optional.ofNullable(lastReveal);
     }
 
     /** The {@code seq} of the last broadcast (0 before the first). */
