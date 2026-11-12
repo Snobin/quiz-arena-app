@@ -132,7 +132,7 @@ Behavioural. Visual specs live in `DESIGN.md` › Components.
 | Score strip | Live match | Opponent status reads "thinking" → "answered", never what they picked. |
 | Answer option | Live match, Solo Practice | Commits on `click` (the up-event) only. Sliding off before lifting cancels; a touch that moves > 10 px is a scroll, not a tap; `touch-action: manipulation`. Pressed shows on down; "…" after lift until the server acks (< 200 ms), then "ലോക്ക്". The first committed tap is final, with no confirm; later taps are ignored. No correctness until reveal. |
 | Language toggle (EN tag) | Live match, Solo Practice | See Bilingual Behavior. Accessible name "Show in English" / "മലയാളത്തിൽ കാണിക്കുക", with `aria-pressed`. |
-| Peak band | Reveal | Drops in when the window closes. Correct: bolt + volt + points. Wrong: no bolt or volt; the correct answer is always named. |
+| Peak band | Reveal | Drops in when the player's own result is known: at her accepted answer in 1v1 modes, at the question's close in Battle Room (or when she did not answer). Correct: bolt + volt + points. Wrong: no bolt or volt; the correct answer is always named. The question-close reveal adds the opponent's pick, explanation and attribution without a second drop or strike. |
 | Explanation + attribution | Reveal, Solo Practice, breakdown | Always shown with the answer; attribution when available, else "ഉറവിടം ലഭ്യമല്ല". |
 | Report link | Explanation, breakdown row | Registered players, bank questions only. Opens a note field and submits against the exact question version. Hidden for custom topics. No revise or save list. |
 | Reconnect banner | Live match | Replaces the timer area; counts 10 → 0; everything below is dimmed, `inert` and `aria-hidden`. |
@@ -202,7 +202,7 @@ Behavioural. Visual specs live in `DESIGN.md` › Components.
 | Matchmaking | Matchmaking | "Finding an opponent…" with cancel. At ~8 s "Minnal Bot joined" and the Bot badge. Under reduced effects: static text + an elapsed-seconds count, no spinner. `MATCHMAKING_FAILED` → [ASSUMPTION] inline retry. |
 | Already in match | Any start | `ALREADY_IN_MATCH` → [ASSUMPTION] offer to return to the active match. |
 | Question open | Live match | Monochrome; timer line; first-tap hint in the footer. |
-| Locked / waiting | Live match | Locked option styled; footer "Locked in · result when time runs out"; no correctness hint. |
+| Locked / waiting | Live match | 1v1: own result band at once; footer "Waiting for <opponent>…" until the question closes. Battle Room: locked option styled; footer "Locked in · result when time runs out"; no correctness hint. |
 | Reveal (correct / wrong) | Live match | Peak band per Component Patterns; explanation + attribution + report link. |
 | Leave confirm | Live match | Dialog over a 42% dim; Leave → Results with the score earned so far (forfeit). Stay → back to the live question. |
 | Reconnecting | Live match | 10 s grace. Back in time → resume from `SNAPSHOT` at the current question and scores. |
@@ -239,7 +239,7 @@ Behavioural. Visual specs live in `DESIGN.md` › Components.
 - Countdown = server deadline + `serverTime` clock offset. It never pauses on the client, including during reconnect ("the timer is still running on the server").
 - Answer ack < 200 ms; the "…" status covers the gap.
 - Opponent and room answered states show *that* someone answered, never *what*.
-- Correctness and explanation arrive only with `QUESTION_REVEALED`.
+- In Battle Room, correctness and explanation arrive only with `QUESTION_REVEALED`. In 1v1 modes, the player's own correctness, points and the correct answer arrive with `ANSWER_ACCEPTED`; the opponent's pick, explanation and attribution arrive with `QUESTION_REVEALED`. A question closes as soon as everyone has answered.
 - Scoreboards update within 500 ms of a reveal.
 - At 5 s remaining, a single `navigator.vibrate(30)` where supported.
 
@@ -281,7 +281,7 @@ Behavioural. Contrast, focus-ring, hit-area, type and reflow specs live in `DESI
 - `:focus-visible` always shows the focus ring; fixed bars never hide the focused item.
 - **Question start:** focus moves to the question heading (`tabindex="-1"`). Its accessible name is the question text first, then "ചോദ്യം 4 / 10, 15 സെക്കൻഡ്". Remaining time is announced once at 5 s, never per tick.
 - **Lock:** "Locked in", polite.
-- **Reveal:** focus stays put; the polite region announces "<Correct|Wrong>. Answer: <option>. +800, total 3,140".
+- **Reveal:** focus stays put; the polite region announces "<Correct|Wrong>. Answer: <option>. +800, total 3,140". In 1v1 the result is announced at the accepted answer ("Correct. +800, total 3,140" / "Wrong. Answer: <option>"); the close adds nothing spoken unless the player did not answer.
 - **Match end:** focus moves to the results heading, which carries the result ("You won, 3,140 to 2,980, rating +24").
 - **One polite announcement each** for: forfeited, aborted, bot joined, opponent left, your rank change (once per reveal: "Up to 2nd, passed Arjun K"), 1v1 opponent "answered" (once per question), lobby joins (debounced to one per 5 s: "3 joined, 23 in room"), copy, share fallback, rematch timeout/cancel, offline banner, admin row actions.
 - **Reconnect:** assertive at start, polite at end, never per second.
@@ -311,7 +311,7 @@ Mocks: [key-home](mockups/key-home.html), [key-live-match](mockups/key-live-matc
 
 1. Anju opens a link on her Android phone. Home loads as a guest in her device language. Only Quick Match is open; the other modes show as locked, with one Sign-in nudge.
 2. She taps Quick Match: "Finding an opponent…". At ~8 s "Minnal Bot joined" with a Bot badge.
-3. Ten questions: tap → "Locked in" → the reveal band at the end of each window. One wrong answer names the correct one.
+3. Ten questions: tap → her result band at once (a strike when right) → as soon as both have answered, the opponent's pick and the explanation show and the next question follows. One wrong answer names the correct one.
 4. Guest results show her score and a registration prompt built on it. She continues with Google and returns to the same surface.
 5. Profile setup on one screen; she picks Malayalam, and the UI switches with it.
 6. She picks Kerala History in the Topic picker for a Topic Duel against Vishnu R. Behind 7,020 to 7,420 before Q10, she answers fast.

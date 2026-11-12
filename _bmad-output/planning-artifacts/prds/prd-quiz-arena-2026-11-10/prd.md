@@ -142,7 +142,7 @@ They already run informal batch battles. They need a tool that is instant to set
 | FR-4.3 | Bot presence is transparently indicated with a bot badge on the opponent slot |
 | FR-4.4 | Bot answer timing is randomised per question — not a fixed delay and not tied to difficulty |
 | FR-4.5 | Match: 10 questions, 15 seconds per question, speed-weighted scoring (faster correct answer = more points) |
-| FR-4.6 | Scoring is computed server-side; client never receives the correct answer before time expires |
+| FR-4.6 | Scoring is computed server-side. In 1v1 modes (Quick Match, Topic Duel) a player receives her own answer's correctness, points and the correct answer as soon as her answer is accepted; her opponent receives only that she answered. The full reveal (both picks, explanation, attribution, totals) comes when the question closes: when every participant still in the match has answered, or when the 15 s window ends, whichever comes first |
 | FR-4.7 | Available to both registered users and guests |
 | FR-4.8 | Quick Match rating updates after each match for registered users; guest ratings are not persisted |
 | FR-4.9 | Questions drawn from the PSC bank across all subjects [ASSUMPTION: mixed-subject draw for Quick Match] |
@@ -237,13 +237,13 @@ They already run informal batch battles. They need a tool that is instant to set
 | Live scoreboard update propagation | < 500 ms after answer received [ASSUMPTION] |
 | App initial load on 3G | < 5 seconds [ASSUMPTION] |
 | Minimum supported device | Android with 2 GB RAM, 3G connection |
-| Quick Match and Topic Duel session duration | ≤ 4 minutes end-to-end (10 questions × 15 seconds + result screen) |
+| Quick Match and Topic Duel session duration | ≤ 4 minutes end-to-end (10 questions × 15 seconds + result screen). A question closes early once every participant has answered, so typical matches are much shorter |
 
 ### Security
 
 | Requirement | Rationale |
 |---|---|
-| Server-side question sequencing and timing | Client must never receive a question's correct answer before the answer window closes |
+| Server-side question sequencing and timing | Client must never receive a question before its window opens, nor any other participant's correctness or pick before the question closes. In Battle Room no client receives the correct answer before the question closes; in 1v1 modes a player receives her own correctness and the correct answer only after her own answer is accepted |
 | Server-side scoring | Score cannot be manipulated client-side |
 | Rate limiting on answer submissions | Prevents scripted answer flooding |
 | Room code entropy | Room codes must be difficult to guess; collision resistance for concurrent sessions |
