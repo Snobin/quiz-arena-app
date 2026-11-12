@@ -1,0 +1,8 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="all services" type="CompoundRunConfigurationType">
+    <toRun name="core-service" type="Application" />
+    <toRun name="game-service" type="Application" />
+    <toRun name="ratings-service" type="Application" />
+    <method v="2" />
+  </configuration>
+</component>
