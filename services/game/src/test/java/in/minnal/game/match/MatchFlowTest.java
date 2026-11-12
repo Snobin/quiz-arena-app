@@ -114,7 +114,11 @@ class MatchFlowTest extends GameIntegrationTest {
             assertThat(ack.get("payload").get("questionIndex").asInt()).isEqualTo(q);
             assertThat(ack.get("refSeq").asLong()).isEqualTo(seq);
             assertThat(ack.has("seq")).isFalse();
-            assertThat(ack.toString()).doesNotContain("correct").doesNotContain("points");
+            // Quick Match is 1v1: her own result rides on the ack (Story 1.11).
+            assertThat(ack.get("payload").get("correct").asBoolean()).isTrue();
+            assertThat(ack.get("payload").get("points").asInt()).isEqualTo(507);
+            assertThat(ack.get("payload").get("answerIndex").asInt()).isEqualTo(right);
+            assertThat(ack.get("payload").get("totalScore").asInt()).isEqualTo(anjuTotal + 507);
             JsonNode scoreboard = anju.nextBroadcast("SCOREBOARD");
             assertThat(scoreboard.get("seq").asLong()).isEqualTo(++seq);
             assertThat(scoreboard.get("payload").get("answered")).extracting(JsonNode::asString).containsExactly(anjuId);
@@ -133,7 +137,11 @@ class MatchFlowTest extends GameIntegrationTest {
             }
             if (q % 2 == 0) {
                 vishnu.send(answer(matchId), body(q, (right + 1) % 4)); // wrong
-                vishnu.next("ANSWER_ACCEPTED");
+                JsonNode vishnuAck = vishnu.next("ANSWER_ACCEPTED").get("payload");
+                assertThat(vishnuAck.get("correct").asBoolean()).isFalse();
+                assertThat(vishnuAck.get("points").asInt()).isZero();
+                assertThat(vishnuAck.get("answerIndex").asInt()).isEqualTo(right);
+                // Both answered: the question closes at once (early close).
                 assertThat(anju.nextBroadcast("SCOREBOARD").get("payload").get("answered"))
                         .extracting(JsonNode::asString).containsExactly(anjuId, vishnuId);
                 vishnu.nextBroadcast("SCOREBOARD");

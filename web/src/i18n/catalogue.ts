@@ -209,6 +209,14 @@ export const catalogue = {
     en: 'Locked in · result when time runs out',
     signoff: ['ml', 'en'],
   },
+  // Story 1.11: 1v1, her own result is in and the question is still open for the opponent.
+  // The name is never inflected: name + separator in Malayalam.
+  'match.waitingFor': {
+    ml: '{{name}} · കാത്തിരിക്കുന്നു…',
+    en: 'Waiting for {{name}}…',
+    signoff: ['ml', 'en'],
+    params: { ml: { name: 'Vishnu R' }, en: { name: 'Vishnu R' } },
+  },
   'match.bandCorrect': {
     ml: 'ചോദ്യം {{n, number}} · ശരി',
     en: 'Question {{n, number}} · Correct',

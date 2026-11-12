@@ -44,6 +44,7 @@ describe('contracts/samples', () => {
         'error-server-draining.json',
         'question-started.json',
         'answer-accepted.json',
+        'answer-accepted-1v1.json',
         'scoreboard.json',
         'question-revealed.json',
         'question-revealed-no-attribution.json',
@@ -110,7 +111,26 @@ describe('contracts/samples', () => {
     const message = parseServerMessage(read('answer-accepted.json'))!;
     expect(message.refSeq).toBe(1);
     expect(message.seq).toBeUndefined();
-    expect(parseAnswerAccepted(message.payload)).toEqual({ questionIndex: 0 });
+    expect(parseAnswerAccepted(message.payload)).toEqual({ questionIndex: 0, result: null });
+  });
+
+  it('answer-accepted-1v1.json: the receipt plus her own result (Story 1.11)', () => {
+    const message = parseServerMessage(read('answer-accepted-1v1.json'))!;
+    expect(message.refSeq).toBe(1);
+    expect(message.seq).toBeUndefined();
+    expect(parseAnswerAccepted(message.payload)).toEqual({
+      questionIndex: 0,
+      result: { correct: true, points: 750, answerIndex: 0, totalScore: 1625 },
+    });
+  });
+
+  it.each([
+    ['a partial result', { questionIndex: 0, correct: true, points: 750 }],
+    ['a non-boolean correct', { questionIndex: 0, correct: 'yes', points: 750, answerIndex: 0, totalScore: 750 }],
+    ['an answerIndex out of range', { questionIndex: 0, correct: true, points: 750, answerIndex: 4, totalScore: 750 }],
+    ['a fractional total', { questionIndex: 0, correct: true, points: 750, answerIndex: 0, totalScore: 7.5 }],
+  ])('ANSWER_ACCEPTED with %s is rejected', (_, value) => {
+    expect(parseAnswerAccepted(value)).toBeNull();
   });
 
   it('scoreboard.json: who answered, nothing more', () => {

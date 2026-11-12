@@ -75,11 +75,11 @@ function LiveMatchView({ live }: { live: LiveMatch }) {
     if (index >= 0) headingRef.current?.focus();
   }, [index, started?.question.questionId]);
 
-  // "Locked in", once per question.
+  // "Locked in", once per question; a 1v1 ack announces her result instead (below).
   const lockedFor = useRef(-1);
   const myAnswer = live.myAnswer;
   useEffect(() => {
-    if (myAnswer?.status === 'locked' && lockedFor.current !== myAnswer.questionIndex) {
+    if (myAnswer?.status === 'locked' && myAnswer.result === null && lockedFor.current !== myAnswer.questionIndex) {
       lockedFor.current = myAnswer.questionIndex;
       announce(t('match.locked'));
     }
@@ -98,20 +98,34 @@ function LiveMatchView({ live }: { live: LiveMatch }) {
   }, [live.answered, index]);
 
   const self = reveal?.results.find((r) => r.participantId === live.selfParticipantId) ?? null;
-  const answerText = reveal && view ? (view.options[reveal.answerIndex] ?? '') : '';
-  const selfTotal = self?.totalScore ?? live.totals[live.selfParticipantId] ?? 0;
+  // Her own result for this question (Story 1.11): the 1v1 ack first, then the reveal. Every
+  // number is the server's; once the reveal is in, its (equal) numbers are shown.
+  const acked = myAnswer?.questionIndex === index && myAnswer.status === 'locked' ? myAnswer.result : null;
+  const own = reveal
+    ? {
+        correct: self?.correct === true,
+        points: self?.points ?? null,
+        answerIndex: reveal.answerIndex,
+        totalScore: self?.totalScore ?? live.totals[live.selfParticipantId] ?? 0,
+      }
+    : acked
+      ? { correct: acked.correct, points: acked.points, answerIndex: acked.answerIndex, totalScore: acked.totalScore }
+      : null;
+  const answerText = own && view ? (view.options[own.answerIndex] ?? '') : '';
+  const selfTotal = own?.totalScore ?? live.totals[live.selfParticipantId] ?? 0;
 
-  // The reveal, once per question; focus stays where it is.
+  // Her result, once per question, whichever comes first (the 1v1 ack or the reveal); the close
+  // after an ack adds nothing spoken. Focus stays where it is.
   const revealedFor = useRef(-1);
   useEffect(() => {
-    if (!reveal || revealedFor.current === reveal.questionIndex) return;
-    revealedFor.current = reveal.questionIndex;
+    if (!own || index < 0 || revealedFor.current === index) return;
+    revealedFor.current = index;
     announce(
-      self?.correct
-        ? t('match.revealCorrect', { answer: answerText, points: self.points, total: selfTotal })
-        : t('match.revealWrong', { answer: answerText, total: selfTotal }),
+      own.correct && own.points !== null
+        ? t('match.revealCorrect', { answer: answerText, points: own.points, total: own.totalScore })
+        : t('match.revealWrong', { answer: answerText, total: own.totalScore }),
     );
-  }, [reveal]);
+  }, [own !== null, index]);
 
   // The match is over: said once, after the last reveal's announcement.
   const overAnnounced = useRef(false);
@@ -131,7 +145,11 @@ function LiveMatchView({ live }: { live: LiveMatch }) {
       }
     }
     optionReveal = { answerIndex: reveal.answerIndex, selfPick: self?.pickedIndex ?? null, picks };
+  } else if (acked && myAnswer) {
+    // Her own result before the close: the answer and her pick only, no opponent's pick.
+    optionReveal = { answerIndex: acked.answerIndex, selfPick: myAnswer.optionIndex, picks: {}, partial: true };
   }
+  const waitingFor = opponents[0]?.displayName ?? '';
 
   const answerable = live.phase === 'open' && live.myAnswer === null && reveal === null;
   const windowSeconds = started ? Math.round((Date.parse(started.deadline) - Date.parse(started.startedAt)) / 1000) : 0;
@@ -147,6 +165,7 @@ function LiveMatchView({ live }: { live: LiveMatch }) {
             deadline={started.deadline}
             clockOffsetMs={clockOffsetMs}
             reduced={reduced}
+            closed={reveal !== null}
           />
         ) : null}
 
@@ -158,19 +177,20 @@ function LiveMatchView({ live }: { live: LiveMatch }) {
           </h1>
         ) : (
           <>
-            {reveal ? (
+            {own ? (
               <div className="mt-3">
+                {/* Keyed by question, not by source: the close after a 1v1 ack never replays the peak. */}
                 <RevealBand
-                  key={`reveal-${reveal.questionIndex}`}
-                  revealKey={`${reveal.questionIndex}`}
-                  correct={self?.correct === true}
+                  key={`band-${index}`}
+                  revealKey={`${index}`}
+                  correct={own.correct}
                   reduced={reduced}
-                  label={self?.correct ? t('match.bandCorrect', { n: reveal.questionIndex + 1 }) : t('match.correctAnswer')}
+                  label={own.correct ? t('match.bandCorrect', { n: index + 1 }) : t('match.correctAnswer')}
                   answer={answerText}
                   answerLang={detectLanguage(answerText)}
-                  points={self ? formatSigned(self.points) : undefined}
-                  total={t('match.totalShort', { total: selfTotal })}
-                  wrongLine={self?.correct ? undefined : t('match.wrong', { answer: answerText })}
+                  points={own.points !== null ? formatSigned(own.points) : undefined}
+                  total={t('match.totalShort', { total: own.totalScore })}
+                  wrongLine={own.correct ? undefined : t('match.wrong', { answer: answerText })}
                 />
               </div>
             ) : null}
@@ -199,7 +219,11 @@ function LiveMatchView({ live }: { live: LiveMatch }) {
 
             {reveal ? null : (
               <p data-testid="footer" className="mt-6 text-center text-label text-muted">
-                {live.myAnswer?.status === 'locked' ? t('match.lockedFooter') : t('match.firstTapHint')}
+                {acked
+                  ? t('match.waitingFor', { name: waitingFor })
+                  : live.myAnswer?.status === 'locked'
+                    ? t('match.lockedFooter')
+                    : t('match.firstTapHint')}
               </p>
             )}
 

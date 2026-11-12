@@ -24,8 +24,8 @@ import {
  *   this step, so Q1 is never missed) and drops the previous match's subscription. Broadcasts
  *   are applied in arrival order; one with `seq ≤ lastSeq` is a duplicate and dropped (gap
  *   resync is Story 1.9).
- * - `submitAnswer` sends the open question's answer; ANSWER_ACCEPTED locks it, a rejection
- *   clears it silently.
+ * - `submitAnswer` sends the open question's answer; ANSWER_ACCEPTED locks it (keeping her own
+ *   result in 1v1 modes), a rejection clears it silently.
  */
 
 /** The part of the stompjs `Client` this module uses; tests inject a fake through the factory. */
@@ -193,7 +193,10 @@ export function createRealtime(env: RealtimeEnv): Realtime {
         const current = live();
         const mine = current?.myAnswer;
         if (current && incoming.message.matchId === current.matchId && mine?.status === 'pending' && mine.questionIndex === incoming.payload.questionIndex) {
-          set({ clockOffsetMs, live: { ...current, myAnswer: { ...mine, status: 'locked' } } });
+          set({
+            clockOffsetMs,
+            live: { ...current, myAnswer: { ...mine, status: 'locked', result: incoming.payload.result } },
+          });
         } else {
           set({ clockOffsetMs });
         }
@@ -361,7 +364,7 @@ export function createRealtime(env: RealtimeEnv): Realtime {
       const deadline = Date.parse(current.question.deadline);
       if (deadline - (env.now() + liveGameStore.getState().clockOffsetMs) <= 0) return false;
       const { questionIndex } = current.question;
-      setLive({ myAnswer: { questionIndex, optionIndex, status: 'pending' } });
+      setLive({ myAnswer: { questionIndex, optionIndex, status: 'pending', result: null } });
       try {
         client.publish({ destination: matchAnswer(current.matchId), body: JSON.stringify({ questionIndex, optionIndex }) });
       } catch {

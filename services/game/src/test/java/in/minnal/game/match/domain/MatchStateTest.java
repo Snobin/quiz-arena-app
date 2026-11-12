@@ -47,6 +47,10 @@ class MatchStateTest {
 
     /** {@code n} participants: the last one a bot, the others guests "p0", "p1"… with sub = name. */
     static MatchSetup setup(int n) {
+        return setup(n, MatchMode.QUICK);
+    }
+
+    static MatchSetup setup(int n, MatchMode mode) {
         List<Participant> participants = new ArrayList<>();
         Map<String, UUID> humans = new LinkedHashMap<>();
         for (int i = 0; i < n; i++) {
@@ -57,7 +61,7 @@ class MatchStateTest {
                 humans.put("p" + i, id);
             }
         }
-        return new MatchSetup(UUID.randomUUID(), MatchMode.QUICK, participants, humans, questions(10), Map.of(), Map.of(),
+        return new MatchSetup(UUID.randomUUID(), mode, participants, humans, questions(10), Map.of(), Map.of(),
                 Instant.EPOCH);
     }
 
@@ -123,17 +127,18 @@ class MatchStateTest {
                 AnswerOutcome outcome = answer(state, i, q, right ? answerOf(state) : wrongOf(state));
                 assertThat(outcome).isInstanceOf(AnswerOutcome.Accepted.class);
                 AnswerOutcome.Accepted accepted = (AnswerOutcome.Accepted) outcome;
-                // The receipt reflects the last broadcast; the scoreboard is the next one.
+                long remainingMs = 15_000 - 1_000L * (answeredSoFar.size() + 1);
+                int points = right ? (int) (500 + Math.round(500 * remainingMs / 15000.0)) : 0;
+                expected[i] += points;
+                // The ack reflects the last broadcast; the scoreboard is the next one. QUICK is 1v1:
+                // the ack carries her own result and her total including these points.
                 assertThat(accepted.ack().refSeq()).isEqualTo(expectedSeq);
                 assertThat(accepted.ack().seq()).isNull();
-                assertThat(accepted.ack().payload()).isEqualTo(new AnswerAcceptedPayload(q));
+                assertThat(accepted.ack().payload()).isEqualTo(
+                        AnswerAcceptedPayload.withResult(q, right, points, answerOf(state), expected[i]));
                 assertThat(accepted.scoreboard().seq()).isEqualTo(++expectedSeq);
                 answeredSoFar.add(id(state, i));
                 assertThat(accepted.scoreboard().payload()).isEqualTo(new ScoreboardPayload(q, answeredSoFar));
-                long remainingMs = 15_000 - 1_000L * answeredSoFar.size();
-                if (right) {
-                    expected[i] += 500 + Math.round(500 * remainingMs / 15000.0);
-                }
             }
             clock.advance(Duration.ofSeconds(15));
             ServerMessage<QuestionRevealedPayload> reveal = state.closeWindow(q, clock.instant()).orElseThrow();
@@ -168,6 +173,85 @@ class MatchStateTest {
         }
         // After the last reveal nothing opens again.
         assertThatThrownBy(() -> state.startQuestion(10, clock.instant())).isInstanceOf(IllegalStateException.class);
+    }
+
+    /** Story 1.11: the 1v1 ack carries her result; the total counts these points once, not twice. */
+    @Test
+    void aOneVersusOneAckCarriesTheOwnResultAndARunningTotalWithoutDoubleCounting() throws Exception {
+        MatchState state = state(2);
+        state.startQuestion(0, clock.instant());
+        // Correct with 7.5 s left: 750.
+        AnswerOutcome.Accepted first = (AnswerOutcome.Accepted) state.answer(id(state, 0), 0, answerOf(state),
+                state.deadline().minusMillis(7_500), clock.instant());
+        assertThat(first.ack().payload()).isEqualTo(AnswerAcceptedPayload.withResult(0, true, 750, answerOf(state), 750));
+        // The score itself is applied only at the close.
+        assertThat(state.participants().get(0).score()).isZero();
+        String scoreboardJson = JSON.writeValueAsString(first.scoreboard());
+        assertThat(scoreboardJson).as("the opponent's frame says who answered, never what")
+                .doesNotContain("correct").doesNotContain("points").doesNotContain("answerIndex")
+                .doesNotContain("pickedIndex").doesNotContain("totalScore");
+        state.closeWindow(0, clock.instant());
+        assertThat(state.participants().get(0).score()).isEqualTo(750);
+
+        clock.advance(Duration.ofSeconds(3));
+        state.startQuestion(1, clock.instant());
+        AnswerOutcome.Accepted right = (AnswerOutcome.Accepted) state.answer(id(state, 0), 1, answerOf(state),
+                state.deadline().minusMillis(15_000), clock.instant());
+        assertThat(right.ack().payload()).isEqualTo(AnswerAcceptedPayload.withResult(1, true, 1000, answerOf(state), 1750));
+        AnswerOutcome.Accepted wrong = (AnswerOutcome.Accepted) state.answer(id(state, 1), 1, wrongOf(state),
+                state.deadline().minusMillis(1_000), clock.instant());
+        assertThat(wrong.ack().payload()).isEqualTo(AnswerAcceptedPayload.withResult(1, false, 0, answerOf(state), 0));
+        // The reveal's numbers equal the acks'.
+        List<ParticipantResult> results = state.closeWindow(1, clock.instant()).orElseThrow().payload().results();
+        assertThat(results).extracting(ParticipantResult::totalScore).containsExactly(1750, 0);
+        assertThat(results).extracting(ParticipantResult::points).containsExactly(1000, 0);
+    }
+
+    @Test
+    void topicDuelIsOneVersusOneToo() {
+        MatchState state = MatchState.of(setup(2, MatchMode.TOPIC_DUEL), WINDOW, sub -> true);
+        state.startQuestion(0, clock.instant());
+        AnswerOutcome.Accepted accepted = (AnswerOutcome.Accepted) answer(state, 0, 0, wrongOf(state));
+        assertThat(accepted.ack().payload().correct()).isFalse();
+        assertThat(accepted.ack().payload().answerIndex()).isEqualTo(answerOf(state));
+    }
+
+    @Test
+    void aBattleRoomAckIsAReceiptOnly() {
+        MatchState state = MatchState.of(setup(5, MatchMode.BATTLE_ROOM), WINDOW, sub -> true);
+        state.startQuestion(0, clock.instant());
+        AnswerOutcome.Accepted accepted = (AnswerOutcome.Accepted) answer(state, 0, 0, answerOf(state));
+        assertThat(accepted.ack().payload()).isEqualTo(AnswerAcceptedPayload.receipt(0));
+        // On the wire the null result fields are omitted (MatchEarlyCloseFlowTest checks the frame).
+        assertThat(accepted.ack().payload().correct()).isNull();
+        assertThat(accepted.ack().payload().answerIndex()).isNull();
+    }
+
+    @ParameterizedTest(name = "N = {0}")
+    @ValueSource(ints = {2, 5})
+    void allAnsweredOnlyOnceTheLastParticipantAnswers(int n) {
+        MatchState state = state(n);
+        assertThat(state.allAnswered()).as("no question open").isFalse();
+        state.startQuestion(0, clock.instant());
+        for (int i = 0; i < n; i++) {
+            assertThat(state.allAnswered()).as("%d of %d answered", i, n).isFalse();
+            answer(state, i, 0, i % 4);
+        }
+        assertThat(state.allAnswered()).isTrue();
+        state.closeWindow(0, clock.instant());
+        assertThat(state.allAnswered()).as("closed").isFalse();
+    }
+
+    @Test
+    void aForfeitedParticipantIsNotWaitedForButADisconnectedOneIs() {
+        MatchState state = state(3);
+        state.disconnect(id(state, 1));
+        state.startQuestion(0, clock.instant());
+        answer(state, 0, 0, 0);
+        answer(state, 2, 0, 0);
+        assertThat(state.allAnswered()).as("p1 is disconnected but still in the match").isFalse();
+        state.participants().get(1).forfeit();
+        assertThat(state.allAnswered()).as("p1 forfeited").isTrue();
     }
 
     @Test

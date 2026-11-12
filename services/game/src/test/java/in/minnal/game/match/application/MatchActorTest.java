@@ -86,7 +86,13 @@ class MatchActorTest {
         assertThat(ack.message().type()).isEqualTo(MessageType.ANSWER_ACCEPTED);
         assertThat(ack.message().refSeq()).isEqualTo(1);
         assertThat(ack.message().seq()).isNull();
-        assertThat(ack.message().payload()).isEqualTo(new AnswerAcceptedPayload(0));
+        // QUICK is 1v1: the ack carries her own result (Story 1.11).
+        AnswerAcceptedPayload ackPayload = (AnswerAcceptedPayload) ack.message().payload();
+        assertThat(ackPayload.questionIndex()).isZero();
+        assertThat(ackPayload.correct()).isTrue();
+        assertThat(ackPayload.answerIndex()).isEqualTo(question.answerIndex());
+        assertThat(ackPayload.points()).isBetween(500, 1000);
+        assertThat(ackPayload.totalScore()).isEqualTo(ackPayload.points());
         assertThat(channel.to("h0")).as("the duplicate got no reply").hasSize(1);
         Sent rejected = channel.to("h1").getFirst();
         assertThat(rejected.sessionId()).isEqualTo("s1");
@@ -199,6 +205,115 @@ class MatchActorTest {
         assertThat(reveal.results()).extracting(ParticipantResult::correct).containsExactly(true, true, false);
         assertThat(channel.to("h2")).singleElement().satisfies(sent ->
                 assertThat(((ErrorPayload) sent.message().payload()).code().name()).isEqualTo("ANSWER_REJECTED"));
+    }
+
+    /**
+     * Story 1.11: once everyone has answered, the question closes at once (well before its
+     * deadline), the hold follows, then the next question; the cancelled deadline timer never
+     * produces a second reveal.
+     */
+    @Test
+    void whenEveryoneHasAnsweredTheQuestionClosesAtOnceThenHoldsAndMovesOn() throws Exception {
+        MatchSetup setup = MatchTestKit.setup(2, 0, 2);
+        Duration window = Duration.ofSeconds(3);
+        Duration hold = Duration.ofMillis(300);
+        MatchActor actor = actor(setup, new MatchSettings(Duration.ofMillis(10), window, Duration.ofMillis(50), hold),
+                silentBots());
+        actor.tell(new MatchEvent.Begin());
+        QuestionStartedPayload q0 = (QuestionStartedPayload) broadcaster
+                .next(MessageType.QUESTION_STARTED, Duration.ofSeconds(2)).payload();
+        int answer = setup.questions().getFirst().answerIndex();
+        actor.tell(new MatchEvent.Answer(setup.humans().get("h0"), 0, answer, Instant.now(), new MatchEvent.ReplyTo("h0", "s0")));
+        actor.tell(new MatchEvent.Answer(setup.humans().get("h1"), 0, answer, Instant.now(), new MatchEvent.ReplyTo("h1", "s1")));
+
+        ServerMessage<?> reveal = broadcaster.next(MessageType.QUESTION_REVEALED, Duration.ofSeconds(1));
+        assertThat(reveal.serverTime()).as("closed early").isBefore(q0.deadline());
+        assertThat(((QuestionRevealedPayload) reveal.payload()).questionIndex()).isZero();
+        ServerMessage<?> next = broadcaster.next(MessageType.QUESTION_STARTED, Duration.ofSeconds(2));
+        assertThat(Duration.between(reveal.serverTime(), next.serverTime())).as("the reveal hold is kept")
+                .isGreaterThanOrEqualTo(hold);
+        // Q1 is left to time out: it closes at its own deadline, and Q0's cancelled timer never re-closes Q0.
+        QuestionStartedPayload q1 = (QuestionStartedPayload) next.payload();
+        ServerMessage<?> second = broadcaster.next(MessageType.QUESTION_REVEALED, Duration.ofSeconds(5));
+        assertThat(((QuestionRevealedPayload) second.payload()).questionIndex()).isEqualTo(1);
+        assertThat(second.serverTime()).isAfterOrEqualTo(q1.deadline());
+        await().atMost(Duration.ofSeconds(2)).until(() -> endedWith.get() == actor);
+        assertThat(broadcaster.ofType(MessageType.QUESTION_REVEALED)).hasSize(2);
+        assertThat(broadcaster.all).extracting(ServerMessage::seq).containsExactly(1L, 2L, 3L, 4L, 5L, 6L);
+    }
+
+    /** A bot that never answers keeps the window open to its deadline. */
+    @Test
+    void aSilentBotLeavesTheWindowOpenToItsDeadline() throws Exception {
+        MatchSetup setup = MatchTestKit.setup(1, 1, 1);
+        MatchActor actor = actor(setup, MatchTestKit.fast(Duration.ofMillis(600)), silentBots());
+        actor.tell(new MatchEvent.Begin());
+        QuestionStartedPayload started = (QuestionStartedPayload) broadcaster
+                .next(MessageType.QUESTION_STARTED, Duration.ofSeconds(2)).payload();
+        actor.tell(new MatchEvent.Answer(setup.humans().get("h0"), 0, 0, Instant.now(), new MatchEvent.ReplyTo("h0", "s0")));
+        ServerMessage<?> reveal = broadcaster.next(MessageType.QUESTION_REVEALED, Duration.ofSeconds(3));
+        assertThat(reveal.serverTime()).isAfterOrEqualTo(started.deadline());
+    }
+
+    /**
+     * Points are fixed by each answer's own receive time: the same answers score the same whether
+     * the question closes early (two humans) or at its deadline (the same two plus a silent bot).
+     */
+    @Test
+    void anEarlyCloseScoresExactlyLikeATimedClose() throws Exception {
+        MatchSetup early = MatchTestKit.setup(2, 0, 1);
+        MatchSetup timed = MatchTestKit.setup(2, 1, 1);
+        List<ParticipantResult> earlyResults = playOneQuestion(early);
+        List<ParticipantResult> timedResults = playOneQuestion(timed);
+        assertThat(withoutIds(earlyResults)).isEqualTo(withoutIds(timedResults.subList(0, 2)));
+        assertThat(earlyResults.get(0).points()).isEqualTo(Scoring.points(true, 600));
+        assertThat(earlyResults.get(1).points()).isZero();
+    }
+
+    private static List<ParticipantResult> withoutIds(List<ParticipantResult> results) {
+        return results.stream().map(r -> new ParticipantResult(null, r.pickedIndex(), r.correct(), r.points(),
+                r.totalScore())).toList();
+    }
+
+    /** h0 right with 600 ms left, h1 wrong with 400 ms left (stamps relative to the deadline). */
+    private List<ParticipantResult> playOneQuestion(MatchSetup setup) throws Exception {
+        broadcaster.queue.clear();
+        MatchActor actor = actor(setup, MatchTestKit.fast(Duration.ofMillis(1_000)), silentBots());
+        actor.tell(new MatchEvent.Begin());
+        QuestionStartedPayload started = (QuestionStartedPayload) broadcaster
+                .next(MessageType.QUESTION_STARTED, Duration.ofSeconds(2)).payload();
+        int answer = setup.questions().getFirst().answerIndex();
+        actor.tell(new MatchEvent.Answer(setup.humans().get("h0"), 0, answer, started.deadline().minusMillis(600),
+                new MatchEvent.ReplyTo("h0", "s0")));
+        actor.tell(new MatchEvent.Answer(setup.humans().get("h1"), 0, (answer + 1) % 4, started.deadline().minusMillis(400),
+                new MatchEvent.ReplyTo("h1", "s1")));
+        return ((QuestionRevealedPayload) broadcaster.next(MessageType.QUESTION_REVEALED, Duration.ofSeconds(3))
+                .payload()).results();
+    }
+
+    /** A guest against a (seeded, never silent) bot: every question closes as soon as both have answered. */
+    @Test
+    void aGuestAgainstABotClosesEachQuestionOnceBothHaveAnswered() throws Exception {
+        MatchSetup setup = MatchTestKit.setup(1, 1, 10);
+        UUID h0 = setup.humans().get("h0");
+        BotBrain bots = new BotBrain(new BotSettings(Duration.ofMillis(5), Duration.ofMillis(60), 0.65, 0.0), new Random(7));
+        Duration window = Duration.ofSeconds(2);
+        MatchActor actor = actor(setup, new MatchSettings(Duration.ofMillis(5), window, Duration.ofMillis(50),
+                Duration.ofMillis(20)), bots);
+        actor.tell(new MatchEvent.Begin());
+        for (int q = 0; q < 10; q++) {
+            QuestionStartedPayload started = (QuestionStartedPayload) broadcaster
+                    .next(MessageType.QUESTION_STARTED, Duration.ofSeconds(3)).payload();
+            assertThat(started.questionIndex()).isEqualTo(q);
+            actor.tell(new MatchEvent.Answer(h0, q, 0, Instant.now(), new MatchEvent.ReplyTo("h0", "s0")));
+            ServerMessage<?> reveal = broadcaster.next(MessageType.QUESTION_REVEALED, Duration.ofSeconds(3));
+            QuestionRevealedPayload payload = (QuestionRevealedPayload) reveal.payload();
+            assertThat(payload.questionIndex()).isEqualTo(q);
+            assertThat(payload.results()).allSatisfy(r -> assertThat(r.pickedIndex()).isNotNull());
+            assertThat(reveal.serverTime()).as("Q%d closed early", q).isBefore(started.deadline());
+        }
+        await().atMost(Duration.ofSeconds(2)).until(() -> endedWith.get() == actor);
+        assertThat(broadcaster.ofType(MessageType.QUESTION_REVEALED)).hasSize(10);
     }
 
     @Test

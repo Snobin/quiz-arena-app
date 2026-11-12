@@ -74,7 +74,11 @@ class RealtimeSamplesTest {
                                 new QuestionStartedPayload(0, 10, SERVER_TIME, SERVER_TIME.plusSeconds(15), questionView())),
                         new TypeReference<ServerMessage<QuestionStartedPayload>>() { }),
                 new Sample("answer-accepted.json",
-                        ServerMessage.reply(MessageType.ANSWER_ACCEPTED, MATCH_ID, 1, SERVER_TIME, new AnswerAcceptedPayload(0)),
+                        ServerMessage.reply(MessageType.ANSWER_ACCEPTED, MATCH_ID, 1, SERVER_TIME, AnswerAcceptedPayload.receipt(0)),
+                        new TypeReference<ServerMessage<AnswerAcceptedPayload>>() { }),
+                new Sample("answer-accepted-1v1.json",
+                        ServerMessage.reply(MessageType.ANSWER_ACCEPTED, MATCH_ID, 1, SERVER_TIME,
+                                AnswerAcceptedPayload.withResult(0, true, 750, 0, 1625)),
                         new TypeReference<ServerMessage<AnswerAcceptedPayload>>() { }),
                 new Sample("scoreboard.json",
                         ServerMessage.broadcast(MessageType.SCOREBOARD, MATCH_ID, 2, SERVER_TIME,
@@ -180,9 +184,26 @@ class RealtimeSamplesTest {
         assertThat(broadcast.get("seq").asLong()).isEqualTo(5);
         assertThat(broadcast.has("refSeq")).isFalse();
         JsonNode reply = ContractJson.MAPPER.valueToTree(ServerMessage.reply(MessageType.ANSWER_ACCEPTED, MATCH_ID, 5,
-                SERVER_TIME, new AnswerAcceptedPayload(0)));
+                SERVER_TIME, AnswerAcceptedPayload.receipt(0)));
         assertThat(reply.get("refSeq").asLong()).isEqualTo(5);
         assertThat(reply.has("seq")).isFalse();
+    }
+
+    /** Story 1.11: 1v1 acks carry the player's own result; Battle Room keeps the receipt. */
+    @Test
+    void onlyOneVersusOneModesRevealTheOwnAnswerAtTheAck() {
+        assertThat(MatchMode.QUICK.revealsOwnAnswerAtAck()).isTrue();
+        assertThat(MatchMode.TOPIC_DUEL.revealsOwnAnswerAtAck()).isTrue();
+        assertThat(MatchMode.BATTLE_ROOM.revealsOwnAnswerAtAck()).isFalse();
+    }
+
+    @Test
+    void aReceiptAckHasOnlyTheQuestionIndex() {
+        JsonNode receipt = ContractJson.MAPPER.valueToTree(AnswerAcceptedPayload.receipt(4));
+        assertThat(receipt.propertyNames()).containsExactly("questionIndex");
+        JsonNode full = ContractJson.MAPPER.valueToTree(AnswerAcceptedPayload.withResult(4, false, 0, 2, 900));
+        assertThat(full.propertyNames())
+                .containsExactly("questionIndex", "correct", "points", "answerIndex", "totalScore");
     }
 
     @Test

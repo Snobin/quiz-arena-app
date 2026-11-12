@@ -9,13 +9,21 @@ const LETTERS = ['A', 'B', 'C', 'D'] as const;
 /** A move beyond this (CSS px) between down and lift is a scroll, not a tap. */
 export const TAP_SLOP_PX = 10;
 
-/** What the reveal says about each option, straight from QUESTION_REVEALED. */
+/**
+ * What the reveal says about each option, straight from the server: QUESTION_REVEALED, or (1v1,
+ * Story 1.11) her own ANSWER_ACCEPTED result before the question closes.
+ */
 export type OptionReveal = {
   answerIndex: number;
   /** The receiver's pick, or null when she did not answer. */
   selfPick: number | null;
-  /** Opponents' picks per option index: participant id and unchanged name. */
+  /** Opponents' picks per option index: participant id and unchanged name (empty when partial). */
   picks: Record<number, Array<{ participantId: string; name: string }>>;
+  /**
+   * True for her own result before the close: only the correct answer and her pick are marked;
+   * the other options keep their plain look until QUESTION_REVEALED.
+   */
+  partial?: boolean;
 };
 
 type OptionListProps = {
@@ -42,7 +50,8 @@ const STATUS = 'ml-auto shrink-0 text-caption font-caption';
  * "…" until the ack, then the lock (1.5px ink border, ink letter tile, "ലോക്ക്"); later taps
  * are ignored. At the reveal every mark comes from the payload: the correct option takes the
  * band fill and volt ✓, your wrong pick is brick, opponents' picks carry their names, and the
- * other non-chosen options turn muted.
+ * other non-chosen options turn muted. A partial reveal (her own 1v1 result before the close)
+ * marks only the correct option and her pick.
  */
 export function OptionList({ options, answerable, myAnswer, reveal, onCommit }: OptionListProps) {
   const { t } = useTranslation();
@@ -139,6 +148,10 @@ export function OptionList({ options, answerable, myAnswer, reveal, onCommit }: 
                 {labelLine}
               </span>
             );
+          } else if (reveal.partial && !mine) {
+            // Waiting for the close: no final styling yet, and no opponent pick.
+            state = 'idle';
+            className = `${BASE} border border-control-edge bg-card text-ink`;
           } else {
             state = mine ? 'wrong-pick' : 'muted';
             className = mine
