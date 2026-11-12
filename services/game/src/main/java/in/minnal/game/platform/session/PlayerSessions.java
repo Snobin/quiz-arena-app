@@ -15,7 +15,8 @@ import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
 /**
  * Open STOMP sessions per player {@code sub} (AD-11). A player may hold several (tabs, devices);
- * only when the last one closes is {@link LastSessionClosed} published. Disconnect events may
+ * only when the last one closes is {@link LastSessionClosed} published. Each new session publishes
+ * {@link SessionOpened}. Disconnect events may
  * repeat for one session; they are idempotent here.
  */
 @Component
@@ -48,11 +49,15 @@ public class PlayerSessions {
     }
 
     public void connected(String sub, String sessionId) {
+        boolean[] added = new boolean[1];
         sessionsBySub.compute(sub, (key, sessions) -> {
             Set<String> next = sessions == null ? new HashSet<>() : new HashSet<>(sessions);
-            next.add(sessionId);
+            added[0] = next.add(sessionId);
             return Set.copyOf(next);
         });
+        if (added[0]) {
+            events.publishEvent(new SessionOpened(sub));
+        }
     }
 
     public void disconnected(String sub, String sessionId) {

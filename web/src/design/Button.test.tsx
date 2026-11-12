@@ -4,6 +4,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { Button } from './Button.tsx';
 
 describe('Button', () => {
+  it('danger-text: brick text with no fill or border, keeping the 48 px hit area', () => {
+    render(<Button variant="danger-text">Leave</Button>);
+    const button = screen.getByRole('button', { name: 'Leave' });
+    expect(button.className).toContain('text-brick');
+    expect(button.className).toContain('min-h-target-min');
+    expect(button.className).not.toMatch(/\bbg-band\b|\bborder-ink\b/);
+  });
+
   it('calls onClick when enabled', async () => {
     const onClick = vi.fn();
     render(<Button onClick={onClick}>Play</Button>);

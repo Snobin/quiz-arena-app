@@ -250,6 +250,24 @@ export const catalogue = {
     signoff: ['ml', 'en'],
     params: { ml: { total: 3140 }, en: { total: 3140 } },
   },
+  // Story 1.9: reconnect, forfeit and leave. Drafted in both languages; every entry awaits native
+  // review. Names are never inflected: name + separator in Malayalam.
+  'match.leave': { ml: 'പുറത്തുപോകുക', en: 'Leave', signoff: ['ml', 'en'] },
+  'match.stay': { ml: 'തുടരാം', en: 'Stay', signoff: ['ml', 'en'] },
+  'match.opponentLeft': {
+    ml: '{{name}} · മാച്ചിൽ നിന്ന് പോയി',
+    en: '{{name}} left the match',
+    signoff: ['ml', 'en'],
+    params: { ml: { name: 'Vishnu R' }, en: { name: 'Vishnu R' } },
+  },
+  'match.leftStatus': { ml: 'പോയി', en: 'left', signoff: ['ml', 'en'] },
+  'match.aborted': {
+    ml: 'മാച്ച് പൂർത്തിയായില്ല, ഇത് കണക്കാക്കില്ല',
+    en: "The match was called off and won't count",
+    signoff: ['ml', 'en'],
+  },
+  'match.reconnected': { ml: 'തിരിച്ചെത്തി, മാച്ച് തുടരുന്നു', en: "You're back in the match", signoff: ['ml', 'en'] },
+  'results.title': { ml: 'ഫലം', en: 'Results', signoff: ['ml', 'en'] },
   'rooms.placeholder': {
     ml: 'റൂമുകൾ ഉടൻ വരുന്നു. ബാച്ചിനെ മുഴുവൻ ഒരുമിച്ച് കളിപ്പിക്കാം.',
     en: 'Rooms are coming soon. Your whole batch will play together here.',

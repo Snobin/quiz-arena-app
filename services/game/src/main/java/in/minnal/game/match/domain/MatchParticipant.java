@@ -53,7 +53,7 @@ public final class MatchParticipant {
         return connection;
     }
 
-    /** Always false until Story 1.9 adds forfeits. */
+    /** Whether she has left the match for good (the reconnect grace ran out, or she left). */
     public boolean forfeited() {
         return forfeited;
     }
@@ -80,7 +80,7 @@ public final class MatchParticipant {
         score += points;
     }
 
-    /** Marks her out of the match for good (Story 1.9 drives this; tests use it now). */
+    /** Marks her out of the match for good ({@link MatchState#forfeit}). */
     void forfeit() {
         forfeited = true;
     }

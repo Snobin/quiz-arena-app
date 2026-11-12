@@ -67,6 +67,8 @@ minnal:
     close-grace: 50ms
     # The pause after each reveal before the next question (none after the last).
     reveal-hold: 2s
+    # How long a player whose last session closed has to come back before she forfeits.
+    grace: 10s
     # How long shutdown waits for live matches to finish.
     drain-timeout: 5m
   bot:

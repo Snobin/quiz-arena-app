@@ -147,9 +147,10 @@ describe('found', () => {
     expect(heading()).toHaveTextContent('Match found · vs Vishnu R');
     expect(screen.queryByTestId('bot-badge')).toBeNull();
     await waitFor(() => expect(window.location.pathname).toBe('/match'), { timeout: 2500 });
-    // Back skips the finished matchmaking screen.
+    // Story 1.9: Back during the live match opens the Leave dialog instead of leaving.
     act(() => window.history.back());
-    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/match');
   });
 
   it('waits for fonts as well as the 1 s hold', async () => {

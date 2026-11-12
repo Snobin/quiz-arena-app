@@ -4,6 +4,7 @@ import { GuestHome } from './screens/home/GuestHome.tsx';
 import { LiveMatchScreen } from './screens/match/LiveMatchScreen.tsx';
 import { MatchmakingScreen } from './screens/matchmaking/MatchmakingScreen.tsx';
 import { RanksScreen } from './screens/RanksScreen.tsx';
+import { ResultsScreen } from './screens/results/ResultsScreen.tsx';
 import { RoomsScreen } from './screens/RoomsScreen.tsx';
 import { SignInPrompt } from './screens/SignInPrompt.tsx';
 import { AppShell } from './shell/AppShell.tsx';
@@ -18,6 +19,7 @@ const ROUTES: Record<string, ComponentType> = {
   '/sign-in': SignInPrompt,
   '/matchmaking': MatchmakingScreen,
   '/match': LiveMatchScreen,
+  '/results': ResultsScreen,
 };
 
 // Dev-only QA fixtures, rendered outside the shell. `import.meta.env.DEV` is a build-time

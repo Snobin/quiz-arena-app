@@ -3,11 +3,14 @@ package in.minnal.game.match.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import in.minnal.contracts.realtime.AbortReason;
 import in.minnal.contracts.realtime.AnswerRequest;
 import in.minnal.contracts.realtime.ErrorPayload;
+import in.minnal.contracts.realtime.MatchAbortedPayload;
 import in.minnal.contracts.realtime.MatchMode;
 import in.minnal.contracts.realtime.MessageType;
 import in.minnal.contracts.realtime.ServerMessage;
+import in.minnal.contracts.realtime.SnapshotPayload;
 import in.minnal.game.match.application.MatchTestKit.RecordingBroadcaster;
 import in.minnal.game.match.application.MatchTestKit.RecordingChannel;
 import in.minnal.game.match.domain.Connection;
@@ -18,6 +21,7 @@ import in.minnal.game.platform.session.LastSessionClosed;
 import in.minnal.game.platform.session.MatchBroadcaster;
 import in.minnal.game.platform.session.ParticipationRegistry;
 import in.minnal.game.platform.session.PlayerSessions;
+import in.minnal.game.platform.session.SessionOpened;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
@@ -46,8 +50,12 @@ class MatchRegistryTest {
     }
 
     MatchRegistry registry(Duration window, MatchBroadcaster broadcasts) {
+        return registry(MatchTestKit.fast(window), broadcasts);
+    }
+
+    MatchRegistry registry(MatchSettings settings, MatchBroadcaster broadcasts) {
         return new MatchRegistry(participation, sessions, channel, broadcasts, Clock.systemUTC(), timers,
-                MatchTestKit.fast(window), bots, drain, meters);
+                settings, bots, drain, meters);
     }
 
     MatchRegistry registry;
@@ -108,6 +116,7 @@ class MatchRegistryTest {
         assertThat(meters.get(MatchMetrics.BROADCAST_LAG).tag("type", "QUESTION_REVEALED").timer().count()).isEqualTo(10);
     }
 
+    /** Within the reconnect grace (10 s by default) a disconnect only marks the participant. */
     @Test
     void aDisconnectMarksTheParticipantButTheMatchRunsToTheEnd() {
         registry = registry(Duration.ofMillis(80));
@@ -204,7 +213,10 @@ class MatchRegistryTest {
         assertThat(participation.activityOf("h1")).isEmpty();
         assertThat(meters.get(MatchMetrics.FAILED).counter().count()).isEqualTo(1);
         assertThat(meters.get(MatchMetrics.ENDED).counter().count()).isZero();
-        assertThat(broadcaster.all).hasSize(2);
+        // Story 1.9: the failure is broadcast as MATCH_ABORTED{ERROR} before the end.
+        assertThat(broadcaster.all).extracting(ServerMessage::type).containsExactly(MessageType.QUESTION_STARTED,
+                MessageType.QUESTION_REVEALED, MessageType.MATCH_ABORTED);
+        assertThat(((MatchAbortedPayload) broadcaster.all.getLast().payload()).reason()).isEqualTo(AbortReason.ERROR);
     }
 
     @Test
@@ -215,5 +227,83 @@ class MatchRegistryTest {
         assertThat(registry.awaitNoLiveMatches(Duration.ofSeconds(5))).isTrue();
         List<ServerMessage<?>> reveals = broadcaster.ofType(MessageType.QUESTION_REVEALED);
         assertThat(reveals).hasSize(2);
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Story 1.9
+
+    @Test
+    void aGraceForfeitReleasesHerAtOnceWhileTheMatchGoesOnForTheOther() {
+        registry = registry(MatchTestKit.fast(Duration.ofSeconds(5), Duration.ofMillis(150)), broadcaster);
+        MatchSetup setup = claimed(MatchTestKit.setup(2, 0, 2));
+        MatchActor match = registry.start(setup).orElseThrow();
+        sessions.disconnected("h0", "s-h0");
+        registry.onLastSessionClosed(new LastSessionClosed("h0"));
+        await().atMost(Duration.ofSeconds(3)).until(() -> participation.activityOf("h0").isEmpty());
+        assertThat(broadcaster.ofType(MessageType.PARTICIPANT_FORFEITED)).hasSize(1);
+        assertThat(participation.matchOf("h1")).as("the other plays on").contains(setup.matchId());
+        assertThat(registry.liveCount()).isEqualTo(1);
+        assertThat(match.isEnded()).isFalse();
+    }
+
+    @Test
+    void aNewSessionCancelsTheGrace() throws InterruptedException {
+        registry = registry(MatchTestKit.fast(Duration.ofSeconds(5), Duration.ofMillis(200)), broadcaster);
+        MatchSetup setup = claimed(MatchTestKit.setup(2, 0, 2));
+        MatchActor match = registry.start(setup).orElseThrow();
+        sessions.disconnected("h0", "s-h0");
+        registry.onLastSessionClosed(new LastSessionClosed("h0"));
+        sessions.connected("h0", "s2-h0");
+        registry.onSessionOpened(new SessionOpened("h0"));
+        Thread.sleep(500);
+        assertThat(broadcaster.ofType(MessageType.PARTICIPANT_FORFEITED)).isEmpty();
+        assertThat(match.state().participants().getFirst().connection()).isEqualTo(Connection.CONNECTED);
+        assertThat(participation.matchOf("h0")).contains(setup.matchId());
+    }
+
+    @Test
+    void leavingBeforeTheFirstRevealAbortsAndCountsAborted() {
+        registry = registry(Duration.ofSeconds(5));
+        MatchSetup setup = claimed(MatchTestKit.setup(1, 1, 10));
+        registry.start(setup).orElseThrow();
+        registry.leave("stranger", setup.matchId().toString()); // ignored
+        registry.leave("h0", "not-a-uuid"); // ignored
+        registry.leave("h0", setup.matchId().toString());
+        await().atMost(Duration.ofSeconds(3)).until(() -> registry.liveCount() == 0);
+        assertThat(broadcaster.all).extracting(ServerMessage::type)
+                .endsWith(MessageType.PARTICIPANT_FORFEITED, MessageType.MATCH_ABORTED);
+        assertThat(((MatchAbortedPayload) broadcaster.all.getLast().payload()).reason()).isEqualTo(AbortReason.ALL_LEFT);
+        assertThat(meters.get(MatchMetrics.ABORTED).counter().count()).isEqualTo(1);
+        assertThat(meters.get(MatchMetrics.ENDED).counter().count()).isZero();
+        assertThat(meters.get(MatchMetrics.FAILED).counter().count()).isZero();
+        assertThat(participation.activityOf("h0")).isEmpty();
+    }
+
+    @Test
+    void resyncRepliesWithASnapshotToThatSessionOrNotInMatch() {
+        registry = registry(Duration.ofSeconds(5));
+        MatchSetup setup = claimed(MatchTestKit.setup(1, 1, 10));
+        registry.start(setup).orElseThrow();
+        registry.resync("h0", "s-h0", setup.matchId().toString());
+        await().atMost(Duration.ofSeconds(2)).until(() -> !channel.to("h0").isEmpty());
+        assertThat(channel.to("h0").getFirst()).satisfies(sent -> {
+            assertThat(sent.sessionId()).isEqualTo("s-h0");
+            assertThat(sent.message().type()).isEqualTo(MessageType.SNAPSHOT);
+            assertThat(((SnapshotPayload) sent.message().payload()).participants()).hasSize(2);
+        });
+        registry.resync("stranger", "s9", setup.matchId().toString());
+        registry.resync("h0", "s-h0", UUID.randomUUID().toString());
+        assertThat(channel.sent.subList(1, 3)).allSatisfy(sent ->
+                assertThat(((ErrorPayload) sent.message().payload()).code().name()).isEqualTo("NOT_IN_MATCH"));
+    }
+
+    @Test
+    void resyncForAnEndedMatchIsNotInMatch() {
+        registry = registry(Duration.ofMillis(30));
+        MatchSetup setup = claimed(MatchTestKit.setup(1, 1, 1));
+        registry.start(setup).orElseThrow();
+        await().atMost(Duration.ofSeconds(3)).until(() -> registry.liveCount() == 0);
+        registry.resync("h0", "s-h0", setup.matchId().toString());
+        assertThat(((ErrorPayload) channel.sent.getLast().message().payload()).code().name()).isEqualTo("NOT_IN_MATCH");
     }
 }

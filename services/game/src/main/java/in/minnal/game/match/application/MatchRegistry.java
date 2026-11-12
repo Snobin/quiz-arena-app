@@ -13,6 +13,7 @@ import in.minnal.game.platform.session.MatchBroadcaster;
 import in.minnal.game.platform.session.ParticipationRegistry;
 import in.minnal.game.platform.session.PlayerChannel;
 import in.minnal.game.platform.session.PlayerSessions;
+import in.minnal.game.platform.session.SessionOpened;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
@@ -30,8 +31,9 @@ import org.springframework.stereotype.Component;
 /**
  * The live matches. {@link #start} creates a {@link MatchActor}, moves its humans to
  * {@code IN_MATCH} and begins it; when it ends (after its last reveal) it is removed and its humans
- * are free to join again. A disconnect only marks the participant: the match always runs to the
- * end (grace, forfeit and abort: Story 1.9).
+ * are free to join again. A disconnect arms the participant's reconnect grace, a new session
+ * cancels it; a forfeit (grace expiry or {@link #leave}) releases her at once, while the match goes on
+ * for the others (Story 1.9). {@link #resync} answers a reconnecting player with a {@code SNAPSHOT}.
  *
  * <p>An ended match stays resolvable for {@link #TOMBSTONE_TTL} (30 s), so its players' late
  * answers get {@code ANSWER_REJECTED} rather than {@code NOT_IN_MATCH}.
@@ -92,7 +94,9 @@ public class MatchRegistry implements MatchAccess, DisposableBean {
                 return Optional.empty();
             }
             MatchState state = MatchState.of(setup, settings.window(), sessions::hasSession);
-            match = new MatchActor(setup, state, settings, clock, timers, channel, broadcaster, bots, metrics, this::ended);
+            UUID matchId = setup.matchId();
+            match = new MatchActor(setup, state, settings, clock, timers, channel, broadcaster, bots, metrics, this::ended,
+                    sessions::hasSession, sub -> participation.release(sub, new Activity.InMatch(matchId)));
             live.put(setup.matchId(), match);
         }
         for (String sub : setup.humans().keySet()) {
@@ -145,6 +149,29 @@ public class MatchRegistry implements MatchAccess, DisposableBean {
                 new MatchEvent.ReplyTo(sub, sessionId)));
     }
 
+    /**
+     * A {@code resync} from {@code sub}'s session: the match answers that session with a
+     * {@code SNAPSHOT}. A match she is not in, or one that has ended, gets {@code ERROR NOT_IN_MATCH}.
+     */
+    public void resync(String sub, String sessionId, String matchIdText) {
+        UUID matchId = parse(matchIdText);
+        MatchActor match = matchId == null ? null : live.get(matchId);
+        if (match == null || match.isEnded() || match.participantIdOf(sub).isEmpty()) {
+            channel.toSession(sub, sessionId, ServerMessage.error(ErrorCode.NOT_IN_MATCH, matchId, clock.instant()));
+            return;
+        }
+        match.tell(new MatchEvent.Resync(sub, sessionId));
+    }
+
+    /** {@code sub} leaves the match on purpose: she forfeits at once. Ignored from a non-participant. */
+    public void leave(String sub, String matchIdText) {
+        UUID matchId = parse(matchIdText);
+        MatchActor match = matchId == null ? null : live.get(matchId);
+        if (match != null && match.participantIdOf(sub).isPresent()) {
+            match.tell(new MatchEvent.Leave(sub));
+        }
+    }
+
     private void rejectLate(String sub, String sessionId, UUID matchId, long lastSeq) {
         channel.toSession(sub, sessionId, ServerMessage.error(ErrorCode.ANSWER_REJECTED, matchId, lastSeq, clock.instant()));
     }
@@ -160,7 +187,13 @@ public class MatchRegistry implements MatchAccess, DisposableBean {
                 .ifPresent(match -> match.tell(new MatchEvent.Disconnect(event.sub())));
     }
 
-    /** On the match's own thread, after its last reveal (or an error): remove it and free its humans. */
+    @EventListener
+    void onSessionOpened(SessionOpened event) {
+        participation.matchOf(event.sub()).flatMap(this::find)
+                .ifPresent(match -> match.tell(new MatchEvent.Reconnected(event.sub())));
+    }
+
+    /** On the match's own thread, after its last reveal (or an abort, or an error): remove it and free its humans. */
     private void ended(MatchActor match) {
         UUID matchId = match.matchId();
         if (live.get(matchId) != match) {
@@ -170,7 +203,11 @@ public class MatchRegistry implements MatchAccess, DisposableBean {
         for (String sub : match.setup().humans().keySet()) {
             participation.release(sub, new Activity.InMatch(matchId));
         }
-        if (match.isCompleted()) {
+        if (match.isFailed()) {
+            metrics.failed();
+        } else if (match.isAborted()) {
+            metrics.aborted();
+        } else if (match.isCompleted()) {
             metrics.ended();
         } else {
             metrics.failed();

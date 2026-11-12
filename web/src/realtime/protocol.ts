@@ -26,6 +26,8 @@ export const MESSAGE_TYPES = [
   'ROOM_MATCH_STARTED',
   'ROOM_SUCCEEDED',
   'ERROR',
+  'PARTICIPANT_FORFEITED',
+  'MATCH_ABORTED',
 ] as const;
 export type MessageType = (typeof MESSAGE_TYPES)[number];
 
@@ -53,6 +55,12 @@ export type ParticipantKind = (typeof PARTICIPANT_KINDS)[number];
 export const QUESTION_SOURCES = ['BANK', 'CUSTOM'] as const;
 export type QuestionSource = (typeof QUESTION_SOURCES)[number];
 
+export const SNAPSHOT_PHASES = ['LEAD_IN', 'QUESTION_OPEN', 'REVEAL', 'ENDED'] as const;
+export type SnapshotPhase = (typeof SNAPSHOT_PHASES)[number];
+
+export const ABORT_REASONS = ['ALL_LEFT', 'ERROR'] as const;
+export type AbortReason = (typeof ABORT_REASONS)[number];
+
 /** The enum lists by their Java names, as `contracts/samples/enums.json` has them. */
 export const ENUMS = {
   MessageType: MESSAGE_TYPES,
@@ -60,6 +68,8 @@ export const ENUMS = {
   MatchMode: MATCH_MODES,
   ParticipantKind: PARTICIPANT_KINDS,
   QuestionSource: QUESTION_SOURCES,
+  SnapshotPhase: SNAPSHOT_PHASES,
+  AbortReason: ABORT_REASONS,
 } as const;
 
 /** The envelope: `{type, matchId?, roomId?, seq?, refSeq?, serverTime, payload?}`. */
@@ -145,6 +155,43 @@ export type QuestionRevealedPayload = {
   results: ParticipantResult[];
 };
 
+/** One participant's standing in a SNAPSHOT. */
+export type ParticipantScore = { participantId: string; score: number; forfeited: boolean };
+
+/**
+ * Her own accepted answer to the open question, in a SNAPSHOT: the pick always, plus her result
+ * in 1v1 modes (all four result fields, or none).
+ */
+export type SnapshotAnswer = { pickedIndex: number; result: AnswerResult | null };
+
+/**
+ * SNAPSHOT (private, with refSeq = the last broadcast seq): the match as it stands, in reply to
+ * `resync` (Story 1.9). `question`, `startedAt` and `deadline` only while a question is open;
+ * `lastReveal` is the last QUESTION_REVEALED payload. Never another participant's pick, nor the
+ * open question's answer or explanation (AD-5), with one exception: her own accepted 1v1 result
+ * in `myAnswer`, whose `answerIndex` she already had from ANSWER_ACCEPTED (Story 1.11).
+ */
+export type SnapshotPayload = {
+  phase: SnapshotPhase;
+  questionIndex: number;
+  total: number;
+  question: QuestionView | null;
+  startedAt: string | null;
+  deadline: string | null;
+  lastReveal: QuestionRevealedPayload | null;
+  answered: string[];
+  scores: ParticipantScore[];
+  participants: Participant[];
+  youForfeited: boolean;
+  myAnswer: SnapshotAnswer | null;
+};
+
+/** PARTICIPANT_FORFEITED (broadcast): a participant left the match (grace ran out, or Leave). */
+export type ParticipantForfeitedPayload = { participantId: string; questionIndex: number };
+
+/** MATCH_ABORTED (broadcast): the match ended without results. */
+export type MatchAbortedPayload = { reason: AbortReason };
+
 /** The client's answer body (`/app/match/{matchId}/answer`). The server stamps the time itself. */
 export type AnswerRequest = { questionIndex: number; optionIndex: number };
 
@@ -155,6 +202,8 @@ export const matchmakingJoin = (mode: MatchMode) => `/app/matchmaking/${mode}/jo
 export const matchmakingCancel = (mode: MatchMode) => `/app/matchmaking/${mode}/cancel`;
 export const matchTopic = (matchId: string) => `/topic/match/${matchId}`;
 export const matchAnswer = (matchId: string) => `/app/match/${matchId}/answer`;
+export const matchResync = (matchId: string) => `/app/match/${matchId}/resync`;
+export const matchLeave = (matchId: string) => `/app/match/${matchId}/leave`;
 
 // ---------------------------------------------------------------------------------------------
 // Runtime parsers: return the typed value, or null when the input does not have the shape.
@@ -179,6 +228,8 @@ export const isErrorCode = oneOf(ERROR_CODES);
 export const isMatchMode = oneOf(MATCH_MODES);
 export const isParticipantKind = oneOf(PARTICIPANT_KINDS);
 export const isQuestionSource = oneOf(QUESTION_SOURCES);
+export const isSnapshotPhase = oneOf(SNAPSHOT_PHASES);
+export const isAbortReason = oneOf(ABORT_REASONS);
 
 /** The envelope, with `payload` left unparsed (see the payload parsers). */
 export function parseServerMessage(value: unknown): ServerMessage | null {
@@ -250,13 +301,8 @@ export function parseQuestionStarted(value: unknown): QuestionStartedPayload | n
 
 export function parseAnswerAccepted(value: unknown): AnswerAcceptedPayload | null {
   if (!isObject(value) || !isIndex(value.questionIndex)) return null;
-  const { questionIndex, correct, points, answerIndex, totalScore } = value;
-  const present = [correct, points, answerIndex, totalScore].filter((field) => field !== undefined).length;
-  if (present === 0) return { questionIndex, result: null };
-  // All four or none: a partial result is malformed.
-  if (present !== 4) return null;
-  if (typeof correct !== 'boolean' || !isInt(points) || !isOption(answerIndex) || !isInt(totalScore)) return null;
-  return { questionIndex, result: { correct, points, answerIndex, totalScore } };
+  const result = parseResult(value);
+  return result === undefined ? null : { questionIndex: value.questionIndex, result };
 }
 
 export function parseScoreboard(value: unknown): ScoreboardPayload | null {
@@ -294,6 +340,80 @@ export function parseQuestionRevealed(value: unknown): QuestionRevealedPayload |
   };
 }
 
+function parseResult(value: Json): AnswerResult | null | undefined {
+  const { correct, points, answerIndex, totalScore } = value;
+  const present = [correct, points, answerIndex, totalScore].filter((field) => field !== undefined).length;
+  if (present === 0) return null;
+  // All four or none: a partial result is malformed.
+  if (present !== 4) return undefined;
+  if (typeof correct !== 'boolean' || !isInt(points) || !isOption(answerIndex) || !isInt(totalScore)) return undefined;
+  return { correct, points, answerIndex, totalScore };
+}
+
+export function parseParticipantScore(value: unknown): ParticipantScore | null {
+  if (!isObject(value)) return null;
+  const { participantId, score, forfeited } = value;
+  if (!isString(participantId) || !isInt(score) || typeof forfeited !== 'boolean') return null;
+  return { participantId, score, forfeited };
+}
+
+export function parseSnapshot(value: unknown): SnapshotPayload | null {
+  if (!isObject(value)) return null;
+  const { phase, questionIndex, total, startedAt, deadline, answered, scores, participants, youForfeited } = value;
+  if (!isSnapshotPhase(phase) || !isIndex(questionIndex) || !isInt(total) || questionIndex >= total) return null;
+  if (typeof youForfeited !== 'boolean') return null;
+  if (!Array.isArray(answered) || !answered.every(isString)) return null;
+  if (!Array.isArray(scores) || !Array.isArray(participants)) return null;
+  const parsedScores = scores.map(parseParticipantScore);
+  const parsedParticipants = participants.map(parseParticipant);
+  if (parsedScores.some((s) => s === null) || parsedParticipants.some((p) => p === null)) return null;
+  // The open question's fields come together, and only while it is open.
+  const open = phase === 'QUESTION_OPEN';
+  let question: QuestionView | null = null;
+  if (open) {
+    question = parseQuestionView(value.question);
+    if (!question || !isInstant(startedAt) || !isInstant(deadline)) return null;
+  } else if (value.question !== undefined || startedAt !== undefined || deadline !== undefined) {
+    return null;
+  }
+  let lastReveal: QuestionRevealedPayload | null = null;
+  if (value.lastReveal !== undefined) {
+    lastReveal = parseQuestionRevealed(value.lastReveal);
+    if (!lastReveal) return null;
+  }
+  let myAnswer: SnapshotAnswer | null = null;
+  if (value.myAnswer !== undefined) {
+    if (!isObject(value.myAnswer) || !isOption(value.myAnswer.pickedIndex)) return null;
+    const result = parseResult(value.myAnswer);
+    if (result === undefined) return null;
+    myAnswer = { pickedIndex: value.myAnswer.pickedIndex, result };
+  }
+  return {
+    phase,
+    questionIndex,
+    total,
+    question,
+    startedAt: open ? (startedAt as string) : null,
+    deadline: open ? (deadline as string) : null,
+    lastReveal,
+    answered: [...answered],
+    scores: parsedScores as ParticipantScore[],
+    participants: parsedParticipants as Participant[],
+    youForfeited,
+    myAnswer,
+  };
+}
+
+export function parseParticipantForfeited(value: unknown): ParticipantForfeitedPayload | null {
+  if (!isObject(value) || !isString(value.participantId) || !isIndex(value.questionIndex)) return null;
+  return { participantId: value.participantId, questionIndex: value.questionIndex };
+}
+
+export function parseMatchAborted(value: unknown): MatchAbortedPayload | null {
+  if (!isObject(value) || !isAbortReason(value.reason)) return null;
+  return { reason: value.reason };
+}
+
 /** A frame body the client acts on. Anything else (unknown type, bad shape) is null. */
 export type Incoming =
   | { type: 'MATCH_FOUND'; message: ServerMessage; payload: MatchFoundPayload }
@@ -304,6 +424,9 @@ export type Incoming =
   | { type: 'SCOREBOARD'; message: ServerMessage; payload: ScoreboardPayload }
   | { type: 'QUESTION_REVEALED'; message: ServerMessage; payload: QuestionRevealedPayload }
   | { type: 'ERROR'; message: ServerMessage; payload: ErrorPayload }
+  | { type: 'SNAPSHOT'; message: ServerMessage; payload: SnapshotPayload }
+  | { type: 'PARTICIPANT_FORFEITED'; message: ServerMessage; payload: ParticipantForfeitedPayload }
+  | { type: 'MATCH_ABORTED'; message: ServerMessage; payload: MatchAbortedPayload }
   | { type: 'OTHER'; message: ServerMessage };
 
 /** Parses a frame body (JSON text) into what the client acts on. */
@@ -346,6 +469,18 @@ export function parseIncoming(body: string): Incoming | null {
     case 'ERROR': {
       const payload = parseErrorPayload(message.payload);
       return payload ? { type: 'ERROR', message, payload } : null;
+    }
+    case 'SNAPSHOT': {
+      const payload = parseSnapshot(message.payload);
+      return payload ? { type: 'SNAPSHOT', message, payload } : null;
+    }
+    case 'PARTICIPANT_FORFEITED': {
+      const payload = parseParticipantForfeited(message.payload);
+      return payload ? { type: 'PARTICIPANT_FORFEITED', message, payload } : null;
+    }
+    case 'MATCH_ABORTED': {
+      const payload = parseMatchAborted(message.payload);
+      return payload ? { type: 'MATCH_ABORTED', message, payload } : null;
     }
     default:
       return { type: 'OTHER', message };

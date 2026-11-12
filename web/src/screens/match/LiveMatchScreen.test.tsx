@@ -219,7 +219,8 @@ describe('an open question', () => {
       expect(within(option(i)).getByText(OPTIONS[i]!)).toHaveAttribute('lang', 'ml');
     }
     expect(screen.getByTestId('footer')).toHaveTextContent('One tap locks your answer');
-    expect(document.querySelector('[class*="brick"], [class*="surface-band"], [data-accent]')).toBeNull();
+    // Brick only on the Leave text button (Story 1.9), as DESIGN.md allows.
+    expect(document.querySelector('[class*="brick"]:not([data-testid="leave-button"]), [class*="surface-band"], [data-accent]')).toBeNull();
     // Only the top bar is sticky.
     expect(screen.getByTestId('top-bar').className).toContain('sticky');
     expect(document.querySelectorAll('.sticky')).toHaveLength(1);

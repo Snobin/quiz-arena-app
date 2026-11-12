@@ -4,18 +4,25 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import in.minnal.contracts.internal.InternalQuestion;
+import in.minnal.contracts.realtime.AbortReason;
 import in.minnal.contracts.realtime.AnswerAcceptedPayload;
 import in.minnal.contracts.realtime.ErrorCode;
 import in.minnal.contracts.realtime.ErrorPayload;
+import in.minnal.contracts.realtime.MatchAbortedPayload;
 import in.minnal.contracts.realtime.MatchMode;
 import in.minnal.contracts.realtime.MessageType;
 import in.minnal.contracts.realtime.Participant;
+import in.minnal.contracts.realtime.MyAnswer;
+import in.minnal.contracts.realtime.ParticipantForfeitedPayload;
 import in.minnal.contracts.realtime.ParticipantKind;
+import in.minnal.contracts.realtime.ParticipantScore;
 import in.minnal.contracts.realtime.ParticipantResult;
 import in.minnal.contracts.realtime.QuestionRevealedPayload;
 import in.minnal.contracts.realtime.QuestionStartedPayload;
 import in.minnal.contracts.realtime.ScoreboardPayload;
 import in.minnal.contracts.realtime.ServerMessage;
+import in.minnal.contracts.realtime.SnapshotPayload;
+import in.minnal.contracts.realtime.SnapshotPhase;
 import in.minnal.game.match.domain.MatchState.AnswerOutcome;
 import in.minnal.game.support.MutableClock;
 import java.time.Duration;
@@ -366,5 +373,181 @@ class MatchStateTest {
         // The match goes on: Q1 opens and the bot still answers.
         state.startQuestion(0, clock.instant());
         assertThat(answer(state, 2, 0, answerOf(state))).isInstanceOf(AnswerOutcome.Accepted.class);
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Story 1.9: forfeit, reconnect, snapshot
+
+    @ParameterizedTest(name = "N = {0}")
+    @ValueSource(ints = {2, 5})
+    void aForfeitKeepsTheEarnedScoreRejectsLaterAnswersAndIsIdempotent(int n) {
+        MatchState state = state(n);
+        state.startQuestion(0, clock.instant());
+        answer(state, 0, 0, answerOf(state));
+        state.closeWindow(0, clock.instant());
+        int earned = state.participants().get(0).score();
+        assertThat(earned).isPositive();
+        state.startQuestion(1, clock.instant());
+
+        ServerMessage<ParticipantForfeitedPayload> forfeited = state.forfeit(id(state, 0), clock.instant()).orElseThrow();
+        assertThat(forfeited.type()).isEqualTo(MessageType.PARTICIPANT_FORFEITED);
+        assertThat(forfeited.seq()).isEqualTo(state.lastSeq());
+        assertThat(forfeited.payload()).isEqualTo(new ParticipantForfeitedPayload(id(state, 0), 1));
+        assertThat(state.forfeit(id(state, 0), clock.instant())).as("idempotent").isEmpty();
+        assertThat(state.forfeit(UUID.randomUUID(), clock.instant())).as("unknown").isEmpty();
+
+        assertRejected(answer(state, 0, 1, answerOf(state)), ErrorCode.ANSWER_REJECTED, state.lastSeq());
+        for (int q = 1; q < 10; q++) {
+            if (q > 1) {
+                state.startQuestion(q, clock.instant());
+            }
+            state.closeWindow(q, clock.instant());
+        }
+        assertThat(state.participants().get(0).score()).as("earned score kept, rest 0").isEqualTo(earned);
+    }
+
+    @ParameterizedTest(name = "N = {0}")
+    @ValueSource(ints = {2, 5})
+    void allAnsweredIgnoresTheForfeitedAndIsFalseWhenNobodyIsLeft(int n) {
+        MatchState state = state(n);
+        state.startQuestion(0, clock.instant());
+        for (int i = 1; i < n; i++) {
+            answer(state, i, 0, 0);
+        }
+        assertThat(state.allAnswered()).isFalse();
+        state.forfeit(id(state, 0), clock.instant());
+        assertThat(state.allAnswered()).as("the only one missing forfeited").isTrue();
+        for (int i = 1; i < n; i++) {
+            state.participants().get(i).forfeit();
+        }
+        assertThat(state.allAnswered()).as("nobody left").isFalse();
+    }
+
+    @ParameterizedTest(name = "N = {0}")
+    @ValueSource(ints = {2, 5})
+    void humansAllForfeitedCountsHumansOnlyAndQ1RevealedMarksCompletion(int n) {
+        MatchState state = state(n);
+        assertThat(state.q1Revealed()).isFalse();
+        for (int i = 0; i < n - 1; i++) {
+            assertThat(state.humansAllForfeited()).isFalse();
+            state.forfeit(id(state, i), clock.instant());
+        }
+        assertThat(state.humansAllForfeited()).as("the bot does not count").isTrue();
+        state.startQuestion(0, clock.instant());
+        state.closeWindow(0, clock.instant());
+        assertThat(state.q1Revealed()).isTrue();
+    }
+
+    @Test
+    void anAbortEndsTheMatchWithItsReason() {
+        MatchState state = state(2);
+        ServerMessage<MatchAbortedPayload> aborted = state.abort(AbortReason.ALL_LEFT, clock.instant());
+        assertThat(aborted.type()).isEqualTo(MessageType.MATCH_ABORTED);
+        assertThat(aborted.seq()).isEqualTo(1);
+        assertThat(aborted.payload().reason()).isEqualTo(AbortReason.ALL_LEFT);
+        assertThat(state.phase()).isEqualTo(MatchPhase.ENDED);
+        assertThat(state.forfeit(id(state, 0), clock.instant())).as("nothing after the end").isEmpty();
+    }
+
+    @Test
+    void finishNowClosesTheOpenQuestionAndScoresTheRestZeroWithoutRevealingThem() {
+        MatchState state = state(2);
+        state.startQuestion(0, clock.instant());
+        answer(state, 1, 0, answerOf(state));
+        state.closeWindow(0, clock.instant());
+        state.startQuestion(1, clock.instant());
+        answer(state, 1, 1, answerOf(state));
+        state.forfeit(id(state, 0), clock.instant());
+        long before = state.lastSeq();
+
+        QuestionRevealedPayload reveal = state.finishNow(clock.instant()).orElseThrow().payload();
+        assertThat(reveal.questionIndex()).isEqualTo(1);
+        assertThat(state.lastSeq()).as("only the open question's reveal").isEqualTo(before + 1);
+        assertThat(state.phase()).isEqualTo(MatchPhase.ENDED);
+        assertThat(state.participants().get(1).answers()).hasSize(10);
+        assertThat(state.participants().get(1).score()).isEqualTo(reveal.results().get(1).totalScore());
+        assertThat(state.finishNow(clock.instant())).as("nothing open any more").isEmpty();
+    }
+
+    @Test
+    void disconnectAndReconnectFlipTheConnectionButNotForAForfeitedOne() {
+        MatchState state = state(2);
+        assertThat(state.disconnect(id(state, 0))).isTrue();
+        assertThat(state.participants().get(0).connection()).isEqualTo(Connection.DISCONNECTED);
+        state.reconnect(id(state, 0));
+        assertThat(state.participants().get(0).connection()).isEqualTo(Connection.CONNECTED);
+        state.forfeit(id(state, 0), clock.instant());
+        assertThat(state.disconnect(id(state, 0))).isFalse();
+    }
+
+    @ParameterizedTest(name = "N = {0}")
+    @ValueSource(ints = {2, 5})
+    void aSnapshotWhileOpenCarriesTheQuestionButNoAnswerNorAnyOtherPick(int n) throws Exception {
+        MatchState state = state(n);
+        SnapshotPayload leadIn = state.snapshot(id(state, 0), clock.instant()).payload();
+        assertThat(leadIn.phase()).isEqualTo(SnapshotPhase.LEAD_IN);
+        assertThat(leadIn.question()).isNull();
+        assertThat(leadIn.lastReveal()).isNull();
+
+        state.startQuestion(0, clock.instant());
+        answer(state, 0, 0, answerOf(state));
+        state.closeWindow(0, clock.instant());
+        state.startQuestion(1, clock.instant());
+        clock.advance(Duration.ofMillis(7_500));
+        int answer = answerOf(state);
+        int wrong = wrongOf(state);
+        answer(state, 0, 1, answer);
+        answer(state, 1, 1, wrong);
+
+        ServerMessage<SnapshotPayload> snapshot = state.snapshot(id(state, 0), clock.instant());
+        assertThat(snapshot.type()).isEqualTo(MessageType.SNAPSHOT);
+        assertThat(snapshot.refSeq()).isEqualTo(state.lastSeq());
+        assertThat(snapshot.seq()).isNull();
+        SnapshotPayload payload = snapshot.payload();
+        assertThat(payload.phase()).isEqualTo(SnapshotPhase.QUESTION_OPEN);
+        assertThat(payload.questionIndex()).isEqualTo(1);
+        assertThat(payload.total()).isEqualTo(10);
+        assertThat(payload.question().questionId()).isEqualTo(state.question(1).questionId());
+        assertThat(payload.startedAt()).isEqualTo(state.startedAt());
+        assertThat(payload.deadline()).isEqualTo(state.deadline());
+        assertThat(payload.lastReveal().questionIndex()).isZero();
+        assertThat(payload.answered()).containsExactly(id(state, 0), id(state, 1));
+        int q0 = state.participants().get(0).score();
+        assertThat(payload.scores()).first().isEqualTo(new ParticipantScore(id(state, 0), q0, false));
+        assertThat(payload.participants()).hasSize(n);
+        assertThat(payload.youForfeited()).isFalse();
+        assertThat(payload.myAnswer()).isEqualTo(MyAnswer.withResult(answer, true, 750, answer, q0 + 750));
+
+        // The other answerer's snapshot carries her own wrong pick only.
+        SnapshotPayload other = state.snapshot(id(state, 1), clock.instant()).payload();
+        assertThat(other.myAnswer().pickedIndex()).isEqualTo(wrong);
+        assertThat(other.myAnswer().correct()).isFalse();
+        // AD-5: nothing on the wire about anyone else's pick, nor the open question's explanation.
+        // p0 picked 0 on Q0 and the answer on Q1; p1's wrong Q1 pick must not appear in p0's snapshot.
+        String json = JSON.writeValueAsString(state.snapshot(id(state, 0), clock.instant()));
+        assertThat(json).doesNotContain("explanation 1").doesNotContain("\"pickedIndex\":" + wrong);
+    }
+
+    @Test
+    void aBattleRoomSnapshotHasTheOwnPickWithoutAResult() {
+        MatchState state = MatchState.of(setup(3, MatchMode.BATTLE_ROOM), WINDOW, sub -> true);
+        state.startQuestion(0, clock.instant());
+        answer(state, 0, 0, 2);
+        assertThat(state.snapshot(id(state, 0), clock.instant()).payload().myAnswer()).isEqualTo(MyAnswer.receipt(2));
+    }
+
+    @Test
+    void aSnapshotAfterAForfeitAndInTheHoldSaysSo() {
+        MatchState state = state(2);
+        state.startQuestion(0, clock.instant());
+        state.closeWindow(0, clock.instant());
+        state.forfeit(id(state, 0), clock.instant());
+        SnapshotPayload payload = state.snapshot(id(state, 0), clock.instant()).payload();
+        assertThat(payload.phase()).isEqualTo(SnapshotPhase.REVEAL);
+        assertThat(payload.youForfeited()).isTrue();
+        assertThat(payload.question()).isNull();
+        assertThat(payload.deadline()).isNull();
+        assertThat(payload.answered()).isEmpty();
+        assertThat(payload.scores().getFirst().forfeited()).isTrue();
     }
 }
