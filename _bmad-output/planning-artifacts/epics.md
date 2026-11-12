@@ -47,7 +47,7 @@ Source precedence: the SPEC (`SPEC.md` + companions) is the primary contract; PR
 - FR10: Every bank question is tagged with content category (Kerala PSC at launch; the schema also accepts other categories such as school quiz and general Kerala), subject, topic, exam level (10th / degree / other) and difficulty. (PRD FR-3.1 · CAP-3)
 - FR11: A bank question has Malayalam and/or English text and is shown in the player's chosen language, falling back to the other language when the preferred one is missing. (PRD FR-3.2 · CAP-3)
 - FR12: Every question has question text, exactly 4 options, one correct answer index (0–3) and an explanation. (PRD FR-3.3 · CAP-3)
-- FR13: No client receives a question before its answer window opens, and no client receives the correct answer, explanation or any hint of correctness before the window closes for everyone. (PRD FR-3.4, FR-4.6 · CAP-3, AD-5)
+- FR13: No client receives a question before its answer window opens. No client receives another participant's pick or correctness, or the explanation, before the question closes. In Battle Room no client receives the correct answer or any hint of correctness before the question closes; in 1v1 modes a player receives her own correctness, points and the correct answer once her own answer is accepted. (PRD FR-3.4, FR-4.6 · CAP-3, AD-5; amended 2026-11-12)
 - FR14: A registered player can report a bank question (from a reveal or a results breakdown row) with a free-text note; the report is recorded against the exact question version and appears in the admin report queue. Custom-topic questions cannot be reported, and guests see no report link. [UX resolution, product-approved at Step 4: a report from the live reveal is two-step — the tap marks the question during the reveal, and the note is added on the results breakdown (Story 3.5)] (PRD FR-3.5 · CAP-3)
 - FR15: Only admin-published question versions are served to players; the initial bank is Kerala PSC previous-year questions, each reviewed by an admin before publish. (PRD FR-3.6 · CAP-3, CAP-11)
 - FR16: Source attribution (e.g. "Kerala PSC LDC 2019") is shown wherever a question's answer is revealed (live reveal, Solo Practice, results breakdown); when no attribution exists, a "source not available" line is shown. (PRD FR-3.7 · CAP-3)
@@ -191,7 +191,7 @@ Source precedence: the SPEC (`SPEC.md` + companions) is the primary contract; PR
 
 **Game engine**
 - Actor model: one single-threaded actor per live match, room and matchmaking queue; all state changes are queued events; no DB/network I/O between Q1 and final reveal (AD-4).
-- Answer secrecy: `QuestionView` has no answer/explanation; `ANSWER_ACCEPTED` is receipt-only; `SCOREBOARD` shows who answered; one `QUESTION_REVEALED` carries answer, explanation, attribution, scores (AD-5).
+- Answer secrecy: `QuestionView` has no answer/explanation; `ANSWER_ACCEPTED` is receipt-only in Battle Room and carries the player's own `correct`, `points`, `answerIndex` in 1v1 modes; `SCOREBOARD` shows who answered; one `QUESTION_REVEALED` per question (when all have answered, or at 15 s) carries answer, explanation, attribution, every pick and scores (AD-5, AD-6; amended 2026-11-12).
 - Server clock: one `startedAt` per question; 15 s window; first answer wins; single `Scoring` function used by all modes and bots (AD-6).
 - Bots are `Participant{kind: BOT}` using the same events; never in rooms; auto-accept rematch (AD-7).
 - Matchmaking actor per `(mode, topicId?)` handling `JOIN|CANCEL|DISCONNECT|TICK`; ratings from in-memory cache fed by `minnal.rating.updated` (replayed on boot, missing → 1200); fetch question set (2 s timeout) before `MATCH_FOUND`; `MATCHMAKING_FAILED` on failure; record `queueWaitMs` (AD-13).
@@ -286,7 +286,7 @@ Source precedence: the SPEC (`SPEC.md` + companions) is the primary contract; PR
 - UX-DR28: Hairline timer: 2px ink line on hairline track animated via `transform: scaleX()` on a composited layer (never `width`), driven by server deadline + clock offset, never paused on the client (including during reconnect); ink-bold seconds label ticking once per second; single `navigator.vibrate(30)` at 5 s where supported.
 - UX-DR29: Score strip: card with You (ink bold) left, opponent right, opponent status (muted) "thinking" → "answered" in the middle (never what they picked); bot carries the Bot badge.
 - UX-DR30: Language toggle (EN tag): outlined ink tag beside the mode label with 48px hit area, ≥ 8px from the question's first line; shows the other-language text of the current question when it exists, for that question only; accessible name "Show in English" / "മലയാളത്തിൽ കാണിക്കുക" with `aria-pressed`.
-- UX-DR31: Peak band (reveal): band surface, xl radius, drops in (band-drop) when the window closes; label in on-band-muted, answer in peak-word, points in peak-points volt, total beside, volt bolt top-right with a single strike (strike-volt-hold, strike-total). Wrong variant: same band with no bolt and no volt, always naming the correct answer.
+- UX-DR31: Peak band (reveal): band surface, xl radius, drops in (band-drop) when the player's own result is known — at her accepted answer in 1v1 modes, at the reveal in Battle Room or when she did not answer (amended 2026-11-12); label in on-band-muted, answer in peak-word, points in peak-points volt, total beside, volt bolt top-right with a single strike (strike-volt-hold, strike-total). Wrong variant: same band with no bolt and no volt, always naming the correct answer.
 - UX-DR32: Explanation + attribution block: explanation in explanation typography/ink-soft, caption row with source ("Kerala PSC LDC 2019" or "ഉറവിടം ലഭ്യമല്ല") left and report link "തെറ്റുണ്ടോ?" right in ink; used in reveal, Solo Practice and breakdown.
 - UX-DR33: Report link + note: 48px hit area; registered players and bank questions only (hidden for custom topics and guests); opens a note field and submits against the exact question version; inline confirmation.
 - UX-DR34: Live-match layout: full screen, no tab bar; only timer line, seconds label and "Q n/10" sticky (≤ 48px); score strip, question, options and footer hint in normal flow; footer shows first-tap hint while open and "Locked in · result when time runs out" when locked.
@@ -883,13 +883,14 @@ So that nobody can cheat and my score reflects how fast and how right I was.
 **Given** a participant sends `/app/match/{matchId}/answer {questionIndex, optionIndex}` inside the window
 **When** the actor processes it
 **Then** response time = the server receive instant − `startedAt`, any client timestamp is ignored, and she gets a private `ANSWER_ACCEPTED {questionIndex}` with `refSeq` and no hint of correctness
+**And** (amended by Story 1.11) in 1v1 modes `ANSWER_ACCEPTED` also carries `{correct, points, answerIndex}`
 **And** only her first answer for that question counts; later answers are dropped without changing anything, and answers after the deadline or for another question index are rejected with a private `ERROR`
 
 **Given** an answer has been accepted
 **When** the actor broadcasts `SCOREBOARD`
 **Then** it shows only which participants have answered the current question; no option, correctness or score
 
-**Given** the 15 s window closes
+**Given** the question closes (every participant still in the match has answered, or the 15 s window ends; amended by Story 1.11)
 **When** the actor broadcasts `QUESTION_REVEALED`
 **Then** it carries `questionIndex`, `questionId`, `version`, `answerIndex`, `explanation`, `attribution` (null when absent), each participant's picked option, correctness and points, and running totals
 **And** after a configurable reveal hold (default 2 s, just long enough for the reveal animation and the correct option to show) the next question starts, so 10 questions finish in about 2.8 minutes from `MATCH_FOUND` to the final reveal, well within the 4-minute limit. The explanation is read in the results breakdown, not during the hold
@@ -938,6 +939,7 @@ So that I can play fast in Malayalam and feel the moment of getting it right.
 **When** the player presses an option and lifts
 **Then** the option shows pressed (ink border) on pointer down and commits only on `click`; sliding off before lifting cancels, a movement over 10 px counts as a scroll, and `touch-action: manipulation` is set
 **And** after lift the option shows "…" until `ANSWER_ACCEPTED`, then the locked state (1.5px ink border, ink tile, "ലോക്ക്"); the footer reads "Locked in · result when time runs out", "Locked in" is announced politely, and any later taps are ignored
+**And** (amended by Story 1.11) in 1v1 modes the player's own result shows at `ANSWER_ACCEPTED`; the full reveal at question close adds the opponent's pick, explanation and attribution
 
 **Given** the countdown
 **When** it runs
@@ -981,7 +983,7 @@ So that I can play fast in Malayalam and feel the moment of getting it right.
 
 **Given** the web codebase
 **When** I inspect the live-match components
-**Then** they read only from the live-game store and never compute correctness or scores; every correctness and point value comes from `QUESTION_REVEALED`
+**Then** they read only from the live-game store and never compute correctness or scores; every correctness and point value comes from `ANSWER_ACCEPTED` (1v1, own answer; Story 1.11) or `QUESTION_REVEALED`
 
 ### Story 1.9: Reconnect, forfeit and leave
 
@@ -999,7 +1001,7 @@ So that a network blip doesn't cost me the match and my opponent's game is never
 
 **Given** a participant whose last session dropped
 **When** she reconnects with a valid token within 10 s
-**Then** she gets a private `SNAPSHOT {refSeq, phase, questionIndex, question?, deadline?, lastReveal?, scores, participants}`, resumes at the current question with the server deadline and current scores, and can still answer the current question if the window is open and she has not answered
+**Then** she gets a private `SNAPSHOT {refSeq, phase, questionIndex, question?, deadline?, lastReveal?, scores, participants}`, resumes at the current question with the server deadline and current scores, and can still answer the current question if the window is open and she has not answered; in 1v1 modes it also carries her own accepted answer's result for the current question (`myAnswer {pickedIndex, correct, points}`), so a reconnect restores the instant feedback (amended by Story 1.11)
 **And** a reconnect with an expired or invalid token is refused
 
 **Given** the client is reconnecting
@@ -1108,6 +1110,42 @@ So that I learn from my mistakes and want to play again straight away.
 **When** it renders
 **Then** it is fixed at the bottom with Rematch (primary) and Home (secondary), wrapping to stacked full-width buttons when the labels don't fit, and Share is not present (Epic 7)
 **And** Home returns to Home with the tab bar visible again and cancels any pending rematch request
+
+### Story 1.11: Instant 1v1 feedback and early close
+
+As Anju, playing a Quick Match or Topic Duel,
+I want to know straight away whether my answer was right, and to move on as soon as we have both answered,
+So that the match feels fast and responsive instead of making me wait out every 15 s.
+
+**Requirements:** FR-4.5, FR-4.6 (amended 2026-11-12), FR13 (amended), AD-5 (amended), AD-6 (amended), UX-DR31 (amended). Source: `sprint-change-proposal-2026-11-12.md`. Build it next, before Story 1.9.
+
+**Acceptance Criteria:**
+
+**Given** an open question in any mode
+**When** the last participant still in the match (not forfeited; bots included) has an accepted answer
+**Then** the actor closes the question at once: it cancels the deadline timer, broadcasts `QUESTION_REVEALED`, holds for the mode's reveal hold and starts the next question; points are unchanged because they use each answer's own receive time (tested with N = 2 and N = 5, and with a silent bot, which leaves the window open to 15 s)
+
+**Given** a 1v1 mode (Quick Match or Topic Duel)
+**When** a player's answer is accepted
+**Then** her private `ANSWER_ACCEPTED` carries `{questionIndex, correct, points, answerIndex}` from the shared `Scoring`; her opponent receives nothing but the `SCOREBOARD` "answered" (a test asserts the opponent's frames carry no pick, correctness or answer before `QUESTION_REVEALED`)
+
+**Given** a Battle Room match
+**When** an answer is accepted
+**Then** `ANSWER_ACCEPTED` is exactly `{questionIndex}` (receipt only), as before
+
+**Given** the live match screen in a 1v1 mode
+**When** `ANSWER_ACCEPTED` with a result arrives
+**Then** the player's own reveal band shows at once (correct: band drop, volt points, total, one strike through the flash scheduler; wrong: band naming the correct answer, own pick in brick), "Correct"/"Wrong" is announced politely, and the footer reads "Waiting for <opponent>…" until the question closes
+**And** at `QUESTION_REVEALED` the opponent's pick, explanation and attribution are added with no second band drop or strike; the timer line freezes as soon as the question closes, even before the 15 s deadline; the reduced path is a 200 ms fade
+**And** if the player did not answer, the Story 1.8 reveal applies unchanged
+
+**Given** reconnect (Story 1.9)
+**When** a `SNAPSHOT` is built in a 1v1 mode
+**Then** it includes her own accepted answer's result for the current question
+
+**Given** the contracts
+**When** I inspect them
+**Then** `AnswerAcceptedPayload` has optional `correct`, `points` and `answerIndex`, with golden samples for the 1v1 and room shapes and matching web parsers
 
 ## Epic 2: Anju gets an account and a rating
 
@@ -2050,7 +2088,7 @@ So that I can train and prove myself on a weak topic without my Quick Match rati
 
 **Given** the set was fetched
 **When** each player gets `MATCH_FOUND`
-**Then** it carries `{matchId, mode: TOPIC_DUEL, participants, questionCount: 10, topic {topicId, name, subjectName}}`, and the match runs exactly as in Stories 1.7–1.9 (10 × 15 s, the shared `Scoring`, server clock, first answer counts, bot answers through the same path, reconnect and forfeit), finishing within 4 minutes
+**Then** it carries `{matchId, mode: TOPIC_DUEL, participants, questionCount: 10, topic {topicId, name, subjectName}}`, and the match runs exactly as in Stories 1.7–1.9 and 1.11 (early close, instant own feedback; 10 × 15 s, the shared `Scoring`, server clock, first answer counts, bot answers through the same path, reconnect and forfeit), finishing within 4 minutes
 **And** `MATCH_ENDED` and `SNAPSHOT` also carry `topic`, so a reloaded results screen and a reconnecting client show it
 
 **Given** the live match screen in a Topic Duel
@@ -2474,6 +2512,7 @@ So that the class plays one fair race and watches it unfold together.
 **Given** the match actor running a room match
 **When** questions run
 **Then** it is the Story 1.7 actor reused as configuration: its list-based participant model takes the N room participants with no refactor (one code path for 1v1 and rooms, no copy): `total = questionCount`, a 15 s window per question, the shared `Scoring`, server receive time only, first answer counts, late answers rejected, `QuestionView` without any answer field, and one `QUESTION_REVEALED` per question carrying every participant's pick, correctness, points and running total
+**And** the question closes early once every room participant still in the match has answered (Story 1.11), but `ANSWER_ACCEPTED` stays receipt-only in rooms: no player learns correctness or the answer before the question closes
 **And** the Battle Room reveal hold is 3 s (configurable per mode), long enough for the scoreboard movement and the overtake peak [ASSUMPTION: 3 s for rooms, 2 s kept for 1v1]
 
 **Given** answers arrive during a window

@@ -68,17 +68,17 @@ Solid REST edges are synchronous; event edges are Valkey Streams (`minnal.*`).
 - **Prevents:** races between timer expiry, answers, joins, and disconnects; DB latency in the answer path (<200 ms).
 - **Rule:** Every live match, room, and matchmaking queue is one actor with its own inbound event queue. All state changes — answers, timer ticks, joins, cancels, disconnects, bot answers, rematch requests — are events on that queue, processed sequentially by the actor's single thread; no other thread reads or mutates actor state. No DB or network I/O happens between a match's first question and its final reveal; outbound effects during play are WebSocket sends only. In-flight state is lost on crash/redeploy (accepted).
 
-### AD-5 — Answer secrecy and no early correctness [ADOPTED]
+### AD-5 — Answer secrecy [ADOPTED; amended 2026-11-12, sprint-change-proposal-2026-11-12]
 
 - **Binds:** FR-3.4, FR-4.6, FR-7.4, NFR-security
-- **Prevents:** the correct answer — or a hint of correctness — reaching any client before the window closes.
-- **Rule:** The client-facing `QuestionView` has **no** answer or explanation field. A question is sent only when its window opens. During the window, `ANSWER_ACCEPTED` confirms receipt only (no correctness), and `SCOREBOARD` shows who has answered, not scores. After the window closes for everyone, one `QUESTION_REVEALED` carries answer index, explanation, attribution, and updated scores. Full sets with answers exist only on `/internal/question-sets` and in actor memory. Solo Practice (core-service, REST) returns correctness + explanation only in the response to that question's submission.
+- **Prevents:** the correct answer — or a hint of correctness — reaching a player who could still use it: in Battle Room before the question closes; in every mode, anyone's pick or correctness reaching another participant before the question closes.
+- **Rule:** The client-facing `QuestionView` has **no** answer or explanation field. A question is sent only when its window opens. `SCOREBOARD` shows who has answered, never what or whether correct. In Battle Room, `ANSWER_ACCEPTED` is receipt-only. In 1v1 modes (Quick Match, Topic Duel), `ANSWER_ACCEPTED` is private to the answering player and also carries her own `correct`, `points` and the question's `answerIndex` — she can no longer change her answer, and her only rival is the opponent. When the question closes, one `QUESTION_REVEALED` carries answer index, explanation, attribution, every pick and updated scores. Full sets with answers exist only on `/internal/question-sets` and in actor memory. Solo Practice (core-service, REST) returns correctness + explanation only in the response to that question's submission.
 
 ### AD-6 — Server clock and scoring [ADOPTED]
 
 - **Binds:** FR-4.5, FR-5.6, FR-6.8, NFR-security
 - **Prevents:** client-forged timings; modes scoring differently.
-- **Rule:** The actor sets one `startedAt` instant per question when it broadcasts `QUESTION_STARTED`; response time = server receive instant − `startedAt`. Client timestamps are ignored. Window = 15 s; later answers are rejected. First answer per participant per question wins; later ones are dropped. After each reveal the actor holds 2 s (3 s in Battle Room), then starts the next question. Score = correct ? `500 + round(500 × remainingMs / 15000)` : `0`, computed by the single `Scoring` function in `contracts/`, used by every mode and by bots.
+- **Rule:** The actor sets one `startedAt` instant per question when it broadcasts `QUESTION_STARTED`; response time = server receive instant − `startedAt`. Client timestamps are ignored. Window = 15 s; later answers are rejected. First answer per participant per question wins; later ones are dropped. A question closes when its window ends or, earlier, as soon as every participant still in the match (not forfeited; bots included) has answered — the actor then reveals at once (amended 2026-11-12). After each reveal the actor holds 2 s (3 s in Battle Room), then starts the next question. Scores always use each answer's own receive time, so closing early never changes points. Score = correct ? `500 + round(500 × remainingMs / 15000)` : `0`, computed by the single `Scoring` function in `contracts/`, used by every mode and by bots.
 
 ### AD-7 — Bots are ordinary participants [ADOPTED]
 
@@ -245,8 +245,8 @@ sequenceDiagram
   loop each question
     G->>P: QUESTION_STARTED (no answer)
     P->>G: answer
-    G->>P: ANSWER_ACCEPTED (receipt only)
-    G->>P: QUESTION_REVEALED + scores (after 15 s)
+    G->>P: ANSWER_ACCEPTED (1v1: own result; rooms: receipt only)
+    G->>P: QUESTION_REVEALED + scores (all answered, or 15 s)
   end
   G->>P: MATCH_ENDED (breakdown, placements)
   G->>V: minnal.match.completed
