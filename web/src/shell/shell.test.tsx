@@ -3,7 +3,10 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App.tsx';
+import { guestSession } from '../auth/guestSession.ts';
 import '../i18n.ts';
+import { restartGuestSession, stubFetch } from '../test-utils/guest.ts';
+import { clearReturnFocus } from './returnFocus.ts';
 import { resetAnnouncements } from './announce.ts';
 import { syncFromLocation } from './router.ts';
 import { clearScrollMemory } from './scrollMemory.ts';
@@ -29,19 +32,13 @@ let online = true;
 beforeEach(() => {
   online = true;
   vi.spyOn(navigator, 'onLine', 'get').mockImplementation(() => online);
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(
-      async () =>
-        new Response(JSON.stringify({ status: 404, title: 'Not Found' }), {
-          status: 404,
-          headers: { 'content-type': 'application/problem+json' },
-        }),
-    ),
-  );
+  stubFetch();
+  restartGuestSession();
 });
 
 afterEach(() => {
+  guestSession.reset();
+  clearReturnFocus();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   window.history.replaceState(null, '', '/');
@@ -76,7 +73,7 @@ describe('tab bar', () => {
 
   it('renders Play for an unknown path', () => {
     renderApp('/nope');
-    expect(screen.getByRole('heading', { level: 1, name: 'മിന്നൽ' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'അതിഥിയായി കളിക്കുന്നു' })).toBeInTheDocument();
     expect(tab('കളി')).toHaveAttribute('aria-current', 'page');
   });
 
@@ -112,11 +109,11 @@ describe('focus on navigation', () => {
     const user = userEvent.setup();
     renderApp('/');
     expect(document.activeElement).toBe(document.body);
-    expect(screen.getByRole('heading', { level: 1, name: 'മിന്നൽ' })).toHaveAttribute('tabindex', '-1');
+    expect(screen.getByRole('heading', { level: 1, name: 'അതിഥിയായി കളിക്കുന്നു' })).toHaveAttribute('tabindex', '-1');
     await user.click(tab('റൂമുകൾ'));
     expect(screen.getByRole('heading', { level: 1, name: 'റൂമുകൾ' })).toHaveFocus();
     await user.click(tab('കളി'));
-    expect(screen.getByRole('heading', { level: 1, name: 'മിന്നൽ' })).toHaveFocus();
+    expect(screen.getByRole('heading', { level: 1, name: 'അതിഥിയായി കളിക്കുന്നു' })).toHaveFocus();
   });
 
   it('focuses without scrolling, so the scroll restore wins', async () => {
@@ -153,7 +150,7 @@ describe('matrix: back button', () => {
     await user.click(tab('റൂമുകൾ'));
     expect(screen.getByRole('heading', { level: 1, name: 'റൂമുകൾ' })).toBeInTheDocument();
     act(() => window.history.back());
-    expect(await screen.findByRole('heading', { level: 1, name: 'മിന്നൽ' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'അതിഥിയായി കളിക്കുന്നു' })).toBeInTheDocument();
     expect(tab('കളി')).toHaveAttribute('aria-current', 'page');
   });
 });
@@ -172,7 +169,7 @@ describe('matrix: go offline', () => {
     renderApp('/');
     const status = screen.getByRole('status');
     const quickMatch = screen.getByRole('button', { name: 'ക്വിക്ക് മാച്ച്' });
-    expect(quickMatch).not.toHaveAttribute('aria-disabled');
+    await waitFor(() => expect(quickMatch).not.toHaveAttribute('aria-disabled'));
     // Let the live regions finish mounting before the first episode.
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -183,7 +180,7 @@ describe('matrix: go offline', () => {
     expect(bannerShown()).toHaveLength(1);
     const disabled = screen.getByRole('button', { name: 'ക്വിക്ക് മാച്ച്' });
     expect(disabled).toHaveAttribute('aria-disabled', 'true');
-    expect(disabled).toHaveAccessibleDescription('കളിക്കാൻ ഇന്റർനെറ്റ് കണക്ഷൻ വേണം');
+    expect(disabled).toHaveAccessibleDescription(expect.stringContaining('കളിക്കാൻ ഇന്റർനെറ്റ് കണക്ഷൻ വേണം'));
 
     // A repeated offline event in the same episode is not announced again.
     const first = status.textContent;

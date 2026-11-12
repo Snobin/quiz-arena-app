@@ -127,8 +127,8 @@ describe('catalogue shape', () => {
     for (const [key, entry] of entries) expect(entry.ml ?? entry.en, key).not.toBeNull();
   });
 
-  it('covers the shell strings: brand, tagline, probe text and the four tab labels', () => {
-    for (const key of ['brand.name', 'shell.tagline', 'shell.probe.unreachable', 'tab.play', 'tab.rooms', 'tab.ranks', 'tab.me']) {
+  it('covers the shell strings: brand, the four tab labels and guest Home', () => {
+    for (const key of ['brand.name', 'tab.play', 'tab.rooms', 'tab.ranks', 'tab.me', 'home.guestHeader', 'signIn.google']) {
       expect(catalogue).toHaveProperty(key);
     }
     expect([catalogue['tab.play'].ml, catalogue['tab.rooms'].ml, catalogue['tab.ranks'].ml, catalogue['tab.me'].ml]).toEqual([
@@ -137,5 +137,21 @@ describe('catalogue shape', () => {
       'റാങ്ക്',
       'ഞാൻ',
     ]);
+    // The scaffold probe left Play in Story 1.5.
+    expect(catalogue).not.toHaveProperty('shell.tagline');
+    expect(catalogue).not.toHaveProperty('shell.probe.unreachable');
+  });
+
+  it('drafts every Story 1.5 string in both languages, flagged for sign-off', () => {
+    const keys = Object.keys(catalogue).filter((key) =>
+      /^(home|mode|nudge|signIn|guest|common\.(back|retry|cancel)|matchmaking\.stub|title\.(home|signIn|matchmaking))\b/.test(key),
+    ) as CatalogueKey[];
+    expect(keys.length).toBeGreaterThanOrEqual(26);
+    for (const key of keys) {
+      const entry: Entry = catalogue[key];
+      expect(entry.ml, key).toBeTruthy();
+      expect(entry.en, key).toBeTruthy();
+      expect(entry.signoff, key).toEqual(['ml', 'en']);
+    }
   });
 });

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stack-level acceptance checks (Stories 1.1 and 1.4). Run after:
+# Stack-level acceptance checks (Stories 1.1, 1.4 and 1.5). Run after:
 #   docker compose -f deploy/compose.yaml --env-file deploy/.env up -d --wait
 # Usage: bash deploy/verify-local.sh
 #   BASE_URL defaults to http://localhost:<CADDY_HTTP_PORT> (from the environment, else deploy/.env, else 8080).
@@ -72,17 +72,51 @@ code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: applicat
 code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL/actuator/health")
 [ "$code" = "404" ]; check "GET /actuator/health is not routed (404)" $? "status=$code"
 
-# 5. Unknown API paths -> RFC 9457 ProblemDetail 404 (core and ratings)
+# 5. Guest identity (Story 1.5): core issues a guest JWT and publishes the JWKS through Caddy.
+guest_file="$TMP_DIR/guest.json"
+code=$(curl -s -o "$guest_file" -w '%{http_code}' -X POST -H 'Content-Type: application/json' \
+  -d '{"lang":"ml"}' "$BASE_URL/api/core/v1/auth/guest")
+GUEST_TOKEN=$(sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p' "$guest_file")
+[ "$code" = "200" ] && [ -n "$GUEST_TOKEN" ] && grep -q '"expiresAt":"' "$guest_file"
+check "POST /api/core/v1/auth/guest {lang:ml} -> 200 {accessToken, expiresAt}" $? "status=$code body=$(head -c 300 "$guest_file")"
+
+jwks_file="$TMP_DIR/jwks.json"
+code=$(curl -s -o "$jwks_file" -w '%{http_code}' "$BASE_URL/api/core/v1/auth/jwks")
+[ "$code" = "200" ] && grep -q '"kid":"' "$jwks_file" && ! grep -q '"d":' "$jwks_file"
+check "GET /api/core/v1/auth/jwks -> 200 with a kid and no private member" $? "status=$code body=$(head -c 300 "$jwks_file")"
+
+# The token header's kid (base64url JSON) must be one the JWKS publishes.
+b64url_decode() { local s; s=$(tr '_-' '/+' <<<"$1"); while [ $(( ${#s} % 4 )) -ne 0 ]; do s="$s="; done; base64 -d <<<"$s" 2>/dev/null; }
+token_kid=$(b64url_decode "${GUEST_TOKEN%%.*}" | sed -n 's/.*"kid":"\([^"]*\)".*/\1/p')
+[ -n "$token_kid" ] && grep -qF "\"kid\":\"$token_kid\"" "$jwks_file"
+check "guest token kid is published in the JWKS" $? "kid='$token_kid'"
+
+out=$(curl -s -D - -o "$TMP_DIR/bad-lang.json" -X POST -H 'Content-Type: application/json' -d '{"lang":"fr"}' \
+  "$BASE_URL/api/core/v1/auth/guest")
+status=$(head -n1 <<<"$out" | awk '{print $2}')
+ctype=$(grep -i '^content-type:' <<<"$out" | tr -d '\r' | awk '{print $2}')
+[ "$status" = "400" ] && [[ "$ctype" == application/problem+json* ]]
+check "POST /api/core/v1/auth/guest {lang:fr} -> 400 application/problem+json" $? "status=$status type=$ctype"
+
+# ratings-service is a resource server: no token -> 401 problem+json; the guest token passes
+# (verified against core's JWKS over the private network) and reaches the 404 below.
+out=$(curl -s -D - -o "$TMP_DIR/ratings-401.json" "$BASE_URL/api/ratings/v1/nope")
+status=$(head -n1 <<<"$out" | awk '{print $2}')
+ctype=$(grep -i '^content-type:' <<<"$out" | tr -d '\r' | awk '{print $2}')
+[ "$status" = "401" ] && [[ "$ctype" == application/problem+json* ]]
+check "GET /api/ratings/v1/nope without a token -> 401 application/problem+json" $? "status=$status type=$ctype"
+
+# 6. Unknown API paths -> RFC 9457 ProblemDetail 404 (core, and ratings with the guest token)
 for svc in core ratings; do
   body_file="$TMP_DIR/problem-$svc.json"
-  out=$(curl -s -D - -o "$body_file" "$BASE_URL/api/$svc/v1/nope")
+  out=$(curl -s -D - -o "$body_file" -H "Authorization: Bearer $GUEST_TOKEN" "$BASE_URL/api/$svc/v1/nope")
   status=$(head -n1 <<<"$out" | awk '{print $2}')
   ctype=$(grep -i '^content-type:' <<<"$out" | tr -d '\r' | awk '{print $2}')
   grep -q '"status":404' "$body_file" && [ "$status" = "404" ] && [[ "$ctype" == application/problem+json* ]]
   check "GET /api/$svc/v1/nope -> 404 application/problem+json" $? "status=$status type=$ctype body=$(cat "$body_file")"
 done
 
-# 6. Request id: Caddy generates one when absent (it appears in Caddy's access log, so it was not
+# 7. Request id: Caddy generates one when absent (it appears in Caddy's access log, so it was not
 #    invented by the service), forwards a valid one unchanged, and replaces a malformed one.
 generated=$(curl -s -D - -o /dev/null "$BASE_URL/api/core/v1/nope" | response_request_id)
 [ -n "$generated" ] \
@@ -101,13 +135,13 @@ replaced=$(curl -s -D - -o /dev/null -H 'X-Request-Id: bad id"here' "$BASE_URL/a
   && wait_for_log "\"requestId\":\"$replaced\"" core-service
 check "malformed X-Request-Id replaced at Caddy; edge and service ids match" $? "returned='$replaced'"
 
-# 7. Service logs are structured JSON
+# 8. Service logs are structured JSON
 for svc in "${SERVICES[@]}"; do
   nonjson=$(logs_of "$svc" | grep -v '^{' | grep -v '^Picked up JAVA_TOOL_OPTIONS' | grep -v '^$' | head -3)
   [ -z "$nonjson" ]; check "$svc log lines are JSON" $? "non-JSON: $nonjson"
 done
 
-# 8. Schema isolation: each login is denied the other schema; no game schema/login.
+# 9. Schema isolation: each login is denied the other schema; no game schema/login.
 # Passwords are read with printenv inside the postgres container; they never pass through this shell.
 psql_as() { # user, password-env-var, sql
   "${COMPOSE[@]}" exec -T postgres sh -c \
@@ -139,12 +173,12 @@ out=$(psql_as postgres POSTGRES_PASSWORD "SELECT count(*) FROM pg_tables WHERE s
 token_warn=$(logs_of core-service | grep -cF 'MINNAL_INTERNAL_TOKEN) is not set')
 [ "$token_warn" -eq 0 ]; check "core-service has MINNAL_INTERNAL_TOKEN set (no token-not-set WARN)" $? "warnings=$token_warn: set a non-placeholder MINNAL_INTERNAL_TOKEN in deploy/.env and recreate core-service"
 
-# 9. Valkey AOF settings
+# 10. Valkey AOF settings
 aof=$("${COMPOSE[@]}" exec -T valkey sh -c 'export REDISCLI_AUTH="$VALKEY_PASSWORD"; valkey-cli CONFIG GET appendonly; valkey-cli CONFIG GET appendfsync' | tr '\n' ' ')
 [[ "$aof" == *"appendonly yes"*"appendfsync everysec"* ]]
 check "Valkey appendonly yes, appendfsync everysec" $? "got: $aof"
 
-# 10. WebSocket upgrade at /ws: allowed origin -> 101 from game, foreign origin -> 403
+# 11. WebSocket upgrade at /ws: allowed origin -> 101 from game, foreign origin -> 403
 ws_status() { # origin
   curl -s -i --http1.1 --max-time 3 \
     -H "Origin: $1" -H 'Connection: Upgrade' -H 'Upgrade: websocket' \

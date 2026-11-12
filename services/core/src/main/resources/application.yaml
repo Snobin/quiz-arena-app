@@ -55,3 +55,11 @@ minnal:
   valkey:
     # Owner prefix for every key this service writes (AD-3). Applied when a story first writes keys.
     key-prefix: "core:"
+  jwt:
+    # Guest JWT signing (AD-9). Base64 of a PKCS#8 PEM RSA key (>= 2048 bits). Unset under the
+    # local/test/it profiles = an ephemeral key (WARN); unset under prod = startup failure.
+    signing-key: ${MINNAL_JWT_SIGNING_KEY:}
+    # kid of the signing key; blank = the key's RFC 7638 thumbprint.
+    key-id: ${MINNAL_JWT_KEY_ID:}
+    # Rotation: comma-separated kid=base64(SPKI PEM) pairs, published in the JWKS, never used to sign.
+    extra-public-keys: ${MINNAL_JWT_EXTRA_PUBLIC_KEYS:}

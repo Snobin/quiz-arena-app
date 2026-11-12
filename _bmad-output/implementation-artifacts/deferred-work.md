@@ -36,3 +36,9 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-seeded-psc-question-bank.md`
   summary: Add a Spring context test that starts core-service with the `seed` profile (behind an overridable exit hook) and proves `minnal.seed.file`, `application-seed.yaml` and the `SeedRunner` bean wire up without a web server.
   evidence: Only the package-private `SeedRunner` constructor is tested; renaming `minnal.seed.file` or deleting `application-seed.yaml` breaks the documented seed command with every test still green.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-5-a-guest-can-open-minnal-and-see-quick-match.md`
+  summary: Rate-limit `POST /api/core/v1/auth/guest` (per IP at Caddy or a Valkey token bucket in core) before guest `sub`s can queue for matches.
+  evidence: The endpoint is public and unauthenticated, so anyone can mint unlimited signed guest identities. Story 1.5's approved intent excluded rate limiting.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-5-a-guest-can-open-minnal-and-see-quick-match.md`
+  summary: Sync the guest token across tabs (a `storage` event on `minnal.guestToken`), so one device keeps one `sub` when Story 1.6 enforces one queue/match per `sub`.
+  evidence: Each tab refreshes on its own timer and overwrites the stored token, so two open tabs end up with different `sub`s after a refresh.

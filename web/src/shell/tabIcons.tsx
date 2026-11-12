@@ -20,11 +20,14 @@ function Icon({ children }: { children: ReactNode }) {
   );
 }
 
+/** The Minnal bolt outline in a 20 x 20 box (Play tab, Quick Match watermark). */
+export const BOLT_PATH = 'M11.5 2 4.5 11h5l-1 7 7-9h-5l1-7Z';
+
 /** Play: the Minnal bolt. */
 export function PlayIcon() {
   return (
     <Icon>
-      <path d="M11.5 2 4.5 11h5l-1 7 7-9h-5l1-7Z" />
+      <path d={BOLT_PATH} />
     </Icon>
   );
 }

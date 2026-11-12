@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { LiveRegions } from './LiveRegions.tsx';
 import { OfflineBanner } from './OfflineBanner.tsx';
 import { usePathname, useRouter } from './router.ts';
+import { consumeReturnFocus } from './returnFocus.ts';
 import { recallScroll, rememberScroll } from './scrollMemory.ts';
 import { TabBar } from './TabBar.tsx';
 
@@ -22,12 +23,14 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   // Before paint, so the returning tab never flashes at the wrong offset. After a navigation
   // (never on first load) focus moves to the new screen's heading, so screen-reader users hear
-  // the new page; preventScroll keeps the restored offset.
+  // the new page; preventScroll keeps the restored offset. A pending return-focus target (the row
+  // or button that opened a detour such as the Sign-in prompt) takes precedence over the heading.
   useLayoutEffect(() => {
     window.scrollTo(0, recallScroll(pathname));
     if (shownPath.current === pathname) return;
     shownPath.current = pathname;
-    document.querySelector<HTMLElement>('main h1')?.focus({ preventScroll: true });
+    const target = consumeReturnFocus(pathname) ?? document.querySelector<HTMLElement>('main h1');
+    target?.focus({ preventScroll: true });
   }, [pathname]);
 
   return (

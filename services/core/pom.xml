@@ -48,6 +48,14 @@
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!--
+          Guest JWT signing and the JWKS (AD-9): the JOSE library only, never a security starter, so no
+          filter chain lands in front of /internal/**, /actuator/health or the existing endpoints.
+        -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-oauth2-jose</artifactId>
+        </dependency>
         <!-- RFC 4180 CSV parsing for the starter seed loader; reused by the admin CSV upload (Story 3.3). -->
         <dependency>
             <groupId>org.apache.commons</groupId>

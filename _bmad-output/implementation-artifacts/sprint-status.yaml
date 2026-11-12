@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-11-2026 09:40
-last_updated: 12-11-2026 09:00
+last_updated: 12-11-2026 14:00
 project: quiz-arena
 project_key: NOKEY
 tracking_system: file-system
@@ -40,7 +40,7 @@ development_status:
   1-2-minnal-is-live-on-the-production-server: backlog
   1-3-design-foundation: review
   1-4-a-seeded-psc-question-bank: review
-  1-5-a-guest-can-open-minnal-and-see-quick-match: backlog
+  1-5-a-guest-can-open-minnal-and-see-quick-match: review
   1-6-matchmaking-with-bot-fallback: backlog
   1-7-live-match-engine: backlog
   1-8-live-match-screen-and-peak-moments: backlog

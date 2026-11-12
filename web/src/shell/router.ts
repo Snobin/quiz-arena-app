@@ -32,6 +32,20 @@ export function withBase(path: string, baseUrl: string = import.meta.env.BASE_UR
 
 type RouterState = { pathname: string };
 
+/** history.state of every entry navigate() pushes, so a screen can tell an in-app Back is safe. */
+const APP_ENTRY = { minnal: true } as const;
+
+/** True when the current history entry was pushed by navigate(): Back stays inside the app. */
+export function cameFromApp(): boolean {
+  const state: unknown = typeof window === 'undefined' ? null : window.history.state;
+  return typeof state === 'object' && state !== null && (state as { minnal?: unknown }).minnal === true;
+}
+
+/** The current query parameter `name`, or null. */
+export function searchParam(name: string): string | null {
+  return typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get(name);
+}
+
 export const useRouter = create<RouterState>(() => ({
   pathname: typeof window === 'undefined' ? '/' : stripBase(window.location.pathname),
 }));
@@ -61,8 +75,8 @@ export function navigate(to: string, { replace = false }: { replace?: boolean } 
   const { path, suffix } = splitPath(to);
   const target = stripBase(withBase(path));
   const href = `${withBase(target)}${suffix}`;
-  if (replace || target === from) window.history.replaceState(null, '', href);
-  else window.history.pushState(null, '', href);
+  if (replace || target === from) window.history.replaceState(window.history.state, '', href);
+  else window.history.pushState(APP_ENTRY, '', href);
   useRouter.setState({ pathname: target });
 }
 
