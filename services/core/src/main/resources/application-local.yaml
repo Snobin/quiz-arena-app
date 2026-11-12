@@ -1,3 +1,12 @@
+# Outside Docker (IDE or spring-boot:run), read the secrets from deploy/.env. The paths cover a
+# working directory of the repo root (IDE run configs) or the module (spring-boot:run); inside the
+# container neither file exists, so the import is skipped.
+spring:
+  config:
+    import:
+      - optional:file:./deploy/.env[.properties]
+      - optional:file:../../deploy/.env[.properties]
+
 minnal:
   cors:
     allowed-origins: http://localhost:5173

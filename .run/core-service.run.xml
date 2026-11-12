@@ -1,0 +1,16 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="core-service" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="in.minnal.core.CoreApplication" />
+    <module name="core-service" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <envs>
+      <env name="SPRING_PROFILES_ACTIVE" value="local" />
+      <env name="POSTGRES_PORT" value="55432" />
+      <env name="VALKEY_PORT" value="56379" />
+      <env name="SERVER_PORT" value="8081" />
+    </envs>
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

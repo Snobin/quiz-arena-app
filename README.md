@@ -97,6 +97,37 @@ until each row is checked, signed and attributed. The image bakes the CSV in, so
 Profiles: `SPRING_PROFILES_ACTIVE` in `deploy/.env` selects `local` or `prod`. All secrets come from
 environment variables; only `deploy/.env.example` is committed.
 
+## Run the services from IntelliJ IDEA
+
+Postgres, Valkey and Caddy stay in Docker; the three Spring Boot services run in the IDE, where you can
+debug them. `deploy/compose.ide.yaml` publishes Postgres on `127.0.0.1:55432` and Valkey on
+`127.0.0.1:56379` (non-default ports, so a Homebrew Postgres or Redis on the Mac never clashes), and
+points Caddy at the services on your Mac, so the web app and `:8080` work unchanged.
+
+1. Open the repository root (`pom.xml`) as the project, not a single service folder.
+2. Start the infrastructure and stop the service containers:
+
+   ```bash
+   docker compose -f deploy/compose.yaml -f deploy/compose.ide.yaml --env-file deploy/.env \
+     stop core-service game-service ratings-service
+   docker compose -f deploy/compose.yaml -f deploy/compose.ide.yaml --env-file deploy/.env \
+     up -d --no-deps --wait postgres valkey caddy
+   ```
+
+3. Run **all services** (or `core-service`, `game-service`, `ratings-service`) from the Run menu.
+   These shared configurations live in `.run/`: profile `local`, the IDE ports above, and the
+   repository root as working directory.
+
+Under the `local` profile each service imports `deploy/.env` (`spring.config.import`), so the
+passwords and `MINNAL_INTERNAL_TOKEN` come from that file; nothing secret is in the run
+configurations. Services listen on 8081 (core), 8082 (game) and 8083 (ratings); through Caddy use
+`http://localhost:8080`. `deploy/verify-local.sh` checks the all-Docker stack, so run it after
+switching back:
+
+```bash
+docker compose -f deploy/compose.yaml --env-file deploy/.env up -d --build --wait
+```
+
 ## Web app
 
 ```sh

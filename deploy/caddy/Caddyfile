@@ -3,6 +3,7 @@
 	admin 127.0.0.1:2019
 }
 
+# Upstreams default to the Compose service names; deploy/compose.ide.yaml points them at the host.
 {$CADDY_SITE_ADDRESS::8080} {
 	# JSON access log to stdout; requestId is the id after the rule below, so it matches service logs.
 	log {
@@ -24,20 +25,20 @@
 	# Public health probe -> core actuator health. /actuator/** itself is never routed.
 	handle /health {
 		rewrite * /actuator/health
-		reverse_proxy core-service:8081
+		reverse_proxy {$CORE_UPSTREAM:core-service:8081}
 	}
 
 	handle /api/core/* {
-		reverse_proxy core-service:8081
+		reverse_proxy {$CORE_UPSTREAM:core-service:8081}
 	}
 
 	handle /api/ratings/* {
-		reverse_proxy ratings-service:8083
+		reverse_proxy {$RATINGS_UPSTREAM:ratings-service:8083}
 	}
 
 	# WebSocket upgrade is handled transparently by reverse_proxy.
 	handle /ws {
-		reverse_proxy game-service:8082
+		reverse_proxy {$GAME_UPSTREAM:game-service:8082}
 	}
 
 	handle {
