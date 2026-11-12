@@ -6,3 +6,15 @@ spring:
       - org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration
       - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
 
+
+# Short match timings so a whole 10-question match takes about 3 s in the STOMP tests.
+minnal:
+  match:
+    lead-in: 500ms
+    window: 200ms
+    close-grace: 50ms
+    reveal-hold: 30ms
+    drain-timeout: 10s
+  bot:
+    min-delay: 20ms
+    max-delay: 120ms

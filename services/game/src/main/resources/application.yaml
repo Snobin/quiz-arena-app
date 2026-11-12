@@ -1,6 +1,9 @@
 spring:
   application:
     name: game-service
+  lifecycle:
+    # MatchDrain holds the shutdown until live matches finish (AD-19).
+    timeout-per-shutdown-phase: 5m
   profiles:
     # No profile chosen (e.g. Run on main() in the IDE) means local. Docker and prod always set
     # SPRING_PROFILES_ACTIVE explicitly, so this only applies to runs on the developer machine.
@@ -55,5 +58,23 @@ minnal:
     widen-after: 4s
     bot-after: 8s
   match:
-    # A match shell (Story 1.6) frees its players after this, or once all of them disconnect.
-    shell-ttl: 5m
+    # After MATCH_FOUND, before Q1 opens, so clients can subscribe to /topic/match/{matchId}.
+    lead-in: 3s
+    # The answer window (Scoring.WINDOW). Shortened only by tests.
+    window: 15s
+    # The window closes this long after the deadline: an answer stamped in time still counts if it
+    # reaches the match within this much in-flight delay.
+    close-grace: 50ms
+    # The pause after each reveal before the next question (none after the last).
+    reveal-hold: 2s
+    # How long shutdown waits for live matches to finish.
+    drain-timeout: 5m
+  bot:
+    # Per question: a uniform delay in [min, max] after the window opens.
+    min-delay: 2s
+    max-delay: 12s
+    correct-probability: 0.65
+    silent-probability: 0.10
+  ws:
+    # Inbound STOMP frames per second per connection (token bucket; CONNECT/DISCONNECT exempt).
+    inbound-rate: 10

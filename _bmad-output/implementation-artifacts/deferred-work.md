@@ -54,3 +54,12 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-6-matchmaking-with-bot-fallback.md`
   summary: Add a FakeCore mode returning fewer questions than requested and a flow test asserting both players get `MATCHMAKING_FAILED` and are released.
   evidence: Both wrong-size checks (`HttpQuestionSetClient.call`, `MatchmakingActor.onSetFetched`) are untested; core enforces the exact count today, so this is a second line of defence to add when Story 1.7 consumes the set.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-7-live-match-engine.md`
+  summary: Tell clients when a match ends abnormally (a handler exception): a terminal broadcast or private notice, instead of the match silently vanishing.
+  evidence: `MatchActor.handle` ends the match and frees players on a RuntimeException but sends nothing; clients sit on an open question. It fits Story 1.9's abort/notice work.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-7-live-match-engine.md`
+  summary: Mark a match participant CONNECTED again when a new session of her `sub` opens during the match.
+  evidence: Only `Disconnect` is handled, so `MatchParticipant.connection` goes stale after a blip; Story 1.9's grace and forfeit will read it.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-7-live-match-engine.md`
+  summary: Add an integration test that the inbound rate-limit bucket is removed after a clean DISCONNECT and after an abrupt socket close.
+  evidence: Only `InboundRateLimiter.remove` is unit-tested; deleting both removal call sites leaks one map entry per session with every test green.

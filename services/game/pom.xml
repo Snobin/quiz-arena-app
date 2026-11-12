@@ -14,6 +14,11 @@
     <artifactId>game-service</artifactId>
     <name>Minnal :: game-service</name>
 
+    <properties>
+        <!-- Cleared when -Dgroups=load is given, so the load test can run alone. -->
+        <surefire.excludedGroups>load</surefire.excludedGroups>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>in.minnal</groupId>
@@ -55,6 +60,13 @@
             <artifactId>awaitility</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Test only: ArchitectureTest keeps DB, Valkey and HTTP out of the match code (AD-4). -->
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>1.4.1</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
@@ -64,6 +76,29 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            <!-- The load test (MatchLoadTest, tag "load") runs only on request: -Dgroups=load. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <excludedGroups>${surefire.excludedGroups}</excludedGroups>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- Any explicit -Dgroups=... (e.g. load) lifts the default exclusion. -->
+        <profile>
+            <id>explicit-test-groups</id>
+            <activation>
+                <property>
+                    <name>groups</name>
+                </property>
+            </activation>
+            <properties>
+                <surefire.excludedGroups />
+            </properties>
+        </profile>
+    </profiles>
 </project>

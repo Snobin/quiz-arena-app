@@ -5,7 +5,8 @@ import java.util.UUID;
 /**
  * {@code ERROR}: a refused request.
  *
- * @param matchId the active match, for {@code ALREADY_IN_MATCH} and {@code CANCEL_REJECTED} when known
+ * @param matchId the match the error is about when known: the active one for {@code ALREADY_IN_MATCH} and
+ *                {@code CANCEL_REJECTED}, the addressed one for {@code NOT_IN_MATCH} and {@code ANSWER_REJECTED}
  */
 public record ErrorPayload(ErrorCode code, UUID matchId) {
 }

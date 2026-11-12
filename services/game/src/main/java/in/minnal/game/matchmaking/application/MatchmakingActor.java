@@ -13,7 +13,7 @@ import in.minnal.contracts.realtime.Participant;
 import in.minnal.contracts.realtime.ParticipantKind;
 import in.minnal.contracts.realtime.ServerMessage;
 import in.minnal.game.match.application.MatchRegistry;
-import in.minnal.game.match.domain.MatchShell;
+import in.minnal.game.match.domain.MatchSetup;
 import in.minnal.game.matchmaking.domain.MatchmakingQueue;
 import in.minnal.game.matchmaking.domain.Pairing;
 import in.minnal.game.matchmaking.domain.Seeker;
@@ -41,7 +41,7 @@ import org.slf4j.LoggerFactory;
  * The matchmaking actor of one mode (AD-4, AD-13): JOIN, CANCEL, DISCONNECT, TICK and SET_FETCHED
  * are queued events handled one at a time on its thread; only that thread touches the
  * {@link MatchmakingQueue}. Its effects are private sends, participation releases, the async
- * question-set fetch (whose result comes back as an event) and creating the match shell.
+ * question-set fetch (whose result comes back as an event) and starting the match.
  */
 final class MatchmakingActor implements AutoCloseable {
 
@@ -216,7 +216,18 @@ final class MatchmakingActor implements AutoCloseable {
             participants.add(new Participant(botId, Matchmaking.BOT_NAME, ParticipantKind.BOT));
             ratingsByParticipant.put(botId, pairing.botRating());
         }
-        matches.create(new MatchShell(matchId, mode, participants, humans, set.questions(), waits, ratingsByParticipant, now));
+        // Begins the match: its lead-in gives the clients time to subscribe after MATCH_FOUND. Once
+        // draining, no match may start (the shutdown waits only for matches already live).
+        if (matches.start(new MatchSetup(matchId, mode, participants, humans, set.questions(), waits,
+                ratingsByParticipant, now)).isEmpty()) {
+            log.atWarn().addKeyValue("matchId", matchId).log("pairing dropped: draining");
+            ServerMessage<?> draining = ServerMessage.error(ErrorCode.SERVER_DRAINING, null, now);
+            for (Seeker human : pairing.humans()) {
+                participation.release(human.sub(), queued());
+                channel.toPlayer(human.sub(), draining);
+            }
+            return;
+        }
         for (Map.Entry<String, UUID> human : humans.entrySet()) {
             channel.toPlayer(human.getKey(), ServerMessage.aboutMatch(MessageType.MATCH_FOUND, matchId, now,
                     new MatchFoundPayload(matchId, mode, participants, QUESTION_COUNT, QuestionSource.BANK, human.getValue())));

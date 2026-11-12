@@ -1,0 +1,19 @@
+{
+  "type" : "QUESTION_STARTED",
+  "matchId" : "6f1c2a3e-8a4b-4c1d-9e2f-0a1b2c3d4e5f",
+  "seq" : 1,
+  "serverTime" : "2026-11-12T10:15:30.123Z",
+  "payload" : {
+    "questionIndex" : 0,
+    "total" : 10,
+    "startedAt" : "2026-11-12T10:15:30.123Z",
+    "deadline" : "2026-11-12T10:15:45.123Z",
+    "question" : {
+      "questionId" : "3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f",
+      "version" : 2,
+      "textMl" : "കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി?",
+      "textEn" : "Which is the longest river in Kerala?",
+      "options" : [ "പെരിയാർ", "ഭാരതപ്പുഴ", "പമ്പ", "ചാലിയാർ" ]
+    }
+  }
+}

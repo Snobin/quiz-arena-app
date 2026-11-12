@@ -89,6 +89,8 @@ services:
     build:
       context: ..
       dockerfile: services/game/Dockerfile
+    # Shutdown waits up to 5 min for live matches to finish (MatchDrain), plus a margin.
+    stop_grace_period: 330s
     environment:
       <<: *service-env
       SERVER_PORT: "8082"

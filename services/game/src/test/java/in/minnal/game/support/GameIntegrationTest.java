@@ -20,7 +20,8 @@ import static org.awaitility.Awaitility.await;
  * Base of the STOMP integration tests: the whole service on a random port, the real JWT decoder
  * against a {@link TestJwks}, a {@link FakeCore} for question sets and a {@link MutableClock}.
  * Subclasses share one application context; each test uses fresh {@code sub}s and must leave
- * nobody queued (close its clients, then {@link #awaitIdle}).
+ * nobody queued or in a match (close its clients, then {@link #awaitIdle}). {@code application-test.yaml}
+ * shortens the match timeline, so a whole match takes about 3 s.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -67,9 +68,9 @@ public abstract class GameIntegrationTest {
         return StompTestClient.connect(port, token);
     }
 
-    /** Waits until none of {@code subs} holds a queue or match claim. */
+    /** Waits until none of {@code subs} holds a queue or match claim (a match ends after its last reveal). */
     protected void awaitIdle(String... subs) {
-        await().atMost(Duration.ofSeconds(5))
+        await().atMost(Duration.ofSeconds(15))
                 .until(() -> java.util.Arrays.stream(subs).allMatch(sub -> participation.activityOf(sub).isEmpty()));
     }
 }

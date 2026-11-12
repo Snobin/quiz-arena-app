@@ -29,8 +29,23 @@ public record ServerMessage<P>(
         return new ServerMessage<>(type, matchId, null, null, null, serverTime, payload);
     }
 
+    /** A broadcast on a match topic: numbered by the match's {@code seq} (1, 2, 3…). */
+    public static <P> ServerMessage<P> broadcast(MessageType type, UUID matchId, long seq, Instant serverTime, P payload) {
+        return new ServerMessage<>(type, matchId, null, seq, null, serverTime, payload);
+    }
+
+    /** A private reply about a match: {@code refSeq} is the last broadcast {@code seq} it reflects. */
+    public static <P> ServerMessage<P> reply(MessageType type, UUID matchId, long refSeq, Instant serverTime, P payload) {
+        return new ServerMessage<>(type, matchId, null, null, refSeq, serverTime, payload);
+    }
+
     /** A private {@code ERROR}; the envelope carries the payload's {@code matchId} too. */
     public static ServerMessage<ErrorPayload> error(ErrorCode code, UUID matchId, Instant serverTime) {
-        return new ServerMessage<>(MessageType.ERROR, matchId, null, null, null, serverTime, new ErrorPayload(code, matchId));
+        return error(code, matchId, null, serverTime);
+    }
+
+    /** A private {@code ERROR} about a match, with the last broadcast {@code seq} it reflects (or null). */
+    public static ServerMessage<ErrorPayload> error(ErrorCode code, UUID matchId, Long refSeq, Instant serverTime) {
+        return new ServerMessage<>(MessageType.ERROR, matchId, null, null, refSeq, serverTime, new ErrorPayload(code, matchId));
     }
 }

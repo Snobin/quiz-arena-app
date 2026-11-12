@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * One activity per {@code sub}, across all of its sessions (AD-11): the narrowest shared state
- * between the matchmaking actors and the match shells. Every change is a single atomic map
+ * between the matchmaking actors and the match actors. Every change is a single atomic map
  * operation, so two joins racing from two tabs can never both claim.
  */
 @Component

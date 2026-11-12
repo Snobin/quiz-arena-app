@@ -1,0 +1,9 @@
+{
+  "type" : "ANSWER_ACCEPTED",
+  "matchId" : "6f1c2a3e-8a4b-4c1d-9e2f-0a1b2c3d4e5f",
+  "refSeq" : 1,
+  "serverTime" : "2026-11-12T10:15:30.123Z",
+  "payload" : {
+    "questionIndex" : 0
+  }
+}

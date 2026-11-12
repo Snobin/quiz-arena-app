@@ -19,7 +19,10 @@ import org.springframework.web.socket.messaging.WebSocketStompClient;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** A real STOMP client for integration tests: connects with a bearer token and collects private messages. */
+/**
+ * A real STOMP client for integration tests: connects with a bearer token and collects private
+ * messages; {@link #subscribe} adds a topic whose frames are collected separately.
+ */
 public final class StompTestClient implements AutoCloseable {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
@@ -27,6 +30,7 @@ public final class StompTestClient implements AutoCloseable {
     private final WebSocketStompClient client;
     private final StompSession session;
     private final BlockingQueue<JsonNode> inbox = new LinkedBlockingQueue<>();
+    private final BlockingQueue<JsonNode> topic = new LinkedBlockingQueue<>();
 
     private StompTestClient(int port, String token) throws Exception {
         client = new WebSocketStompClient(new StandardWebSocketClient());
@@ -45,6 +49,45 @@ public final class StompTestClient implements AutoCloseable {
                 inbox.add(JSON.readTree(new String((byte[]) payload, StandardCharsets.UTF_8)));
             }
         });
+    }
+
+    /** Subscribes to {@code destination}; its frames go to {@link #nextBroadcast}. */
+    public void subscribe(String destination) {
+        session.subscribe(destination, new StompFrameHandler() {
+            @Override
+            public Type getPayloadType(StompHeaders headers) {
+                return byte[].class;
+            }
+
+            @Override
+            public void handleFrame(StompHeaders headers, Object payload) {
+                topic.add(JSON.readTree(new String((byte[]) payload, StandardCharsets.UTF_8)));
+            }
+        });
+    }
+
+    /** The next topic frame, failing after {@code within}. */
+    public JsonNode nextBroadcast(Duration within) {
+        try {
+            JsonNode message = topic.poll(within.toMillis(), TimeUnit.MILLISECONDS);
+            assertThat(message).as("a broadcast within %s", within).isNotNull();
+            return message;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** The next topic frame, which must have {@code type}. */
+    public JsonNode nextBroadcast(String type) {
+        JsonNode message = nextBroadcast(Duration.ofSeconds(5));
+        assertThat(message.get("type").asString()).as("broadcast %s", message).isEqualTo(type);
+        return message;
+    }
+
+    /** Topic frames received and not yet taken. */
+    public int pendingBroadcasts() {
+        return topic.size();
     }
 
     public static StompTestClient connect(int port, String token) {
