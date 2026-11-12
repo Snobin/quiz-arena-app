@@ -66,3 +66,12 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-7-live-match-engine.md`
   summary: Warm up game-service at startup, before it reports healthy (decode a sample question-set response and build one in-memory match state, or make one real question-set call when core is up), so the first pairing after a game restart doesn't come close to the 2 s question-set timeout.
   evidence: On 2026-11-12 a Quick Match failed after the full ~2 s right after a restart. Measured with throwaway copies (IntelliJ JIT flag): a fresh core answers its first `/internal/question-sets` in 0.05–0.07 s, but a game that has not yet completed a successful pairing takes about 1.2–1.5 s from pairing to `MATCH_FOUND`, against 0.1–0.5 s once warm. It didn't reproduce after warm-up. To confirm, look for a `TimeoutException` in game's `question set unavailable, pairing failed:` log line. Risk: the first player after a game deploy on the 2 vCPU VPS may get `MATCHMAKING_FAILED`.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-8-live-match-screen-and-peak-moments.md`
+  summary: Show feedback on the live match screen when an answer can't be sent (socket closed), instead of a silent no-op tap.
+  evidence: `submitAnswer` returns false and `OptionList` ignores it; it belongs with Story 1.9's reconnect banner and state.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-8-live-match-screen-and-peak-moments.md`
+  summary: Show a reveal whose `QUESTION_STARTED` was missed, as part of Story 1.9's gap/resync handling.
+  evidence: The screen filters reveals by the current question index, so a lost `QUESTION_STARTED` hides the next reveal while the phase advances.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-8-live-match-screen-and-peak-moments.md`
+  summary: Add a test that runs `RevealBand` against the real flash scheduler (fake timers and rAF) and asserts the strike starts inside the 2 s reveal hold.
+  evidence: Both reveal tests mock `requestFlash` and drain it at once; a wider flash window or a longer reveal hold would silently cancel every strike.
