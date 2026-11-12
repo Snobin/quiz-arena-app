@@ -81,9 +81,9 @@ class SeedCsvReaderTest {
         assertThatThrownBy(() -> SeedCsvReader.read(new ByteArrayResource(broken))).isInstanceOf(IOException.class);
     }
 
-    /** The committed starter file: 30 unsigned drafts, each rejected only for reviewedBy. */
+    /** The committed starter file: 30 rows signed off by a reviewer, each valid (attribution still blank). */
     @Test
-    void starterFileHasThirtyUnsignedRowsThatFailOnlyOnReviewedBy() throws IOException {
+    void starterFileHasThirtySignedValidRows() throws IOException {
         List<SeedRow> rows = SeedCsvReader.read(new ClassPathResource("seed/kerala-psc-starter.csv"));
         SeedRowMapper mapper = new SeedRowMapper(new QuestionValidator());
 
@@ -92,10 +92,10 @@ class SeedCsvReaderTest {
         Set<String> subjects = new HashSet<>();
         for (SeedRow row : rows) {
             MappedSeedRow mapped = mapper.map(row);
-            assertThat(mapped.errors()).as("row %d", row.rowNumber())
-                    .containsExactly(new FieldError("reviewedBy", SeedRowMapper.REVIEWED_BY_REQUIRED));
+            assertThat(mapped.errors()).as("row %d", row.rowNumber()).isEmpty();
+            assertThat(row.get("reviewedBy")).as("row %d reviewedBy", row.rowNumber()).isNotBlank();
+            assertThat(row.get("reviewedAt")).as("row %d reviewedAt", row.rowNumber()).isNotBlank();
             assertThat(row.get("attribution")).as("row %d attribution", row.rowNumber()).isEmpty();
-            assertThat(row.get("reviewedAt")).as("row %d reviewedAt", row.rowNumber()).isEmpty();
             assertThat(sourceRefs.add(mapped.sourceRef())).as("unique sourceRef %s", mapped.sourceRef()).isTrue();
             subjects.add(mapped.candidate().subject());
         }
