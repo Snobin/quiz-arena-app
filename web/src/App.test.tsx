@@ -2,7 +2,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App.tsx';
+import { guestSession } from './auth/guestSession.ts';
 import './i18n.ts';
+import { restartGuestSession, stubFetch } from './test-utils/guest.ts';
 
 function renderApp(path: string) {
   window.history.pushState({}, '', path);
@@ -16,36 +18,25 @@ function renderApp(path: string) {
 
 describe('App', () => {
   beforeEach(() => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ status: 404, title: 'Not Found' }), {
-            status: 404,
-            headers: { 'content-type': 'application/problem+json' },
-          }),
-      ),
-    );
+    stubFetch();
+    restartGuestSession();
   });
 
   afterEach(() => {
+    guestSession.reset();
     vi.unstubAllGlobals();
     window.history.pushState({}, '', '/');
   });
 
-  it('renders the shell at / with the BrandMark and tagline', async () => {
+  it('renders guest Home at / with the brand, the guest header and the Home title', async () => {
     renderApp('/');
-    expect(screen.getByRole('heading', { level: 1, name: 'മിന്നൽ' })).toBeInTheDocument();
-    expect(screen.getByText('സ്കാഫോൾഡ് പ്രവർത്തിക്കുന്നു')).toBeInTheDocument();
-    expect(await screen.findByText('404 Not Found')).toBeInTheDocument();
-    expect(screen.getByText('404 Not Found').closest('[lang]')).toHaveAttribute('lang', 'en');
-    expect(document.title).toBe('മിന്നൽ');
-  });
-
-  it('shows the catalogue probe text when the API is unreachable', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response('bad gateway', { status: 502 })));
-    renderApp('/');
-    expect(await screen.findByText('API ലഭ്യമല്ല')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'അതിഥിയായി കളിക്കുന്നു' })).toBeInTheDocument();
+    expect(screen.getByText('മിന്നൽ', { selector: '.sr-only' })).toBeInTheDocument();
+    expect(document.title).toBe('ഹോം · മിന്നൽ');
+    // The scaffold probe is gone: no request to /api/core/v1/ping.
+    await screen.findByRole('button', { name: 'ക്വിക്ക് മാച്ച്' });
+    const urls = vi.mocked(fetch).mock.calls.map(([input]) => String(input));
+    expect(urls.some((url) => url.includes('/ping'))).toBe(false);
   });
 
   it.each(['/__design', '/__design/'])('renders the dev design fixture at %s', async (path) => {

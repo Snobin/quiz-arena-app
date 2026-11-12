@@ -74,6 +74,33 @@ Both services read `MINNAL_INTERNAL_TOKEN`. If it is unset (or still the `change
 answers every `/internal/**` call with 401. Caddy never routes `/internal/**` (404). Rotate it by changing
 the value and redeploying both services.
 
+### JWT signing key
+
+core-service signs guest access tokens (RS256, 24 h) at `POST /api/core/v1/auth/guest {"lang":"ml"|"en"}`
+and publishes the public keys at `GET /api/core/v1/auth/jwks`. game-service and ratings-service verify
+every bearer token against that JWKS (`MINNAL_JWKS_URI`, fetched lazily on the first token, so they
+start without core): no token, a bad signature or an expired token gets a `401` Problem Details;
+`/actuator/health` (and `/ws` on game) stay public.
+
+Locally, leave `MINNAL_JWT_SIGNING_KEY` empty: core generates an ephemeral key at startup and logs a
+WARN, so every guest token becomes invalid when core restarts. The web app's `apiFetch` (used by REST
+calls from Story 1.6 on) drops a rejected token and refetches on a 401; the guest session itself
+fetches a new token on reload and when the page wakes (focus, visibility, back online). Under `prod`
+an empty key stops core at startup. To set a real key:
+
+```sh
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 | base64 | tr -d '\n'
+# paste as MINNAL_JWT_SIGNING_KEY=... and pick a kid, e.g. MINNAL_JWT_KEY_ID=2026-11
+```
+
+To rotate: move the old key's public half into `MINNAL_JWT_EXTRA_PUBLIC_KEYS` (comma-separated
+`kid=base64(SPKI PEM)` pairs, published in the JWKS but never used to sign), set the new signing key
+and kid, and redeploy core. Drop the old entry after 24 h, when its last guest token has expired.
+
+```sh
+printf '%s' "$OLD_MINNAL_JWT_SIGNING_KEY" | base64 -d | openssl pkey -pubout | base64 | tr -d '\n'
+```
+
 ### Seed the question bank
 
 The starter questions live in `services/core/src/main/resources/seed/kerala-psc-starter.csv` (columns:

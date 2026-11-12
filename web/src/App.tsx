@@ -1,17 +1,21 @@
 import { lazy, Suspense, type ComponentType } from 'react';
 import { MeScreen } from './screens/MeScreen.tsx';
-import { PlayScreen } from './screens/PlayScreen.tsx';
+import { GuestHome } from './screens/home/GuestHome.tsx';
+import { MatchmakingStub } from './screens/MatchmakingStub.tsx';
 import { RanksScreen } from './screens/RanksScreen.tsx';
 import { RoomsScreen } from './screens/RoomsScreen.tsx';
+import { SignInPrompt } from './screens/SignInPrompt.tsx';
 import { AppShell } from './shell/AppShell.tsx';
 import { usePathname, useRouterSync } from './shell/router.ts';
 
-/** Shell routes: static paths only. Unknown paths render Play. */
+/** Shell routes: static paths only. Unknown paths render Play (guest Home). */
 const ROUTES: Record<string, ComponentType> = {
-  '/': PlayScreen,
+  '/': GuestHome,
   '/rooms': RoomsScreen,
   '/ranks': RanksScreen,
   '/me': MeScreen,
+  '/sign-in': SignInPrompt,
+  '/matchmaking': MatchmakingStub,
 };
 
 // Dev-only QA fixtures, rendered outside the shell. `import.meta.env.DEV` is a build-time
@@ -37,7 +41,7 @@ export function App() {
     );
   }
 
-  const Screen = ROUTES[pathname] ?? PlayScreen;
+  const Screen = ROUTES[pathname] ?? GuestHome;
   return (
     <AppShell>
       <Screen />

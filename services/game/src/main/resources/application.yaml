@@ -39,3 +39,7 @@ minnal:
   valkey:
     # Owner prefix for every key this service writes (AD-3). Applied when a story first writes keys.
     key-prefix: "game:"
+  security:
+    # core-service's JWKS (AD-9), fetched lazily on the first token. Compose sets the private-network
+    # URL (http://core-service:8081/...); the default suits services run from the IDE.
+    jwks-uri: ${MINNAL_JWKS_URI:http://localhost:8081/api/core/v1/auth/jwks}

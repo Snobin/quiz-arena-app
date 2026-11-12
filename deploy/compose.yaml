@@ -66,6 +66,12 @@ services:
       CORE_DB_PASSWORD: ${CORE_DB_PASSWORD:?set CORE_DB_PASSWORD in deploy/.env}
       # Service token for /internal/** (AD-12). Unset = core boots but answers every internal call with 401.
       MINNAL_INTERNAL_TOKEN: ${MINNAL_INTERNAL_TOKEN:-}
+      # Guest JWT signing key (AD-9): base64 of a PKCS#8 PEM RSA key. Empty under local = an ephemeral
+      # key (guest tokens die with the container); empty under prod = core refuses to start.
+      MINNAL_JWT_SIGNING_KEY: ${MINNAL_JWT_SIGNING_KEY:-}
+      MINNAL_JWT_KEY_ID: ${MINNAL_JWT_KEY_ID:-}
+      # Rotation: kid=base64(SPKI PEM),... published in the JWKS, never used to sign.
+      MINNAL_JWT_EXTRA_PUBLIC_KEYS: ${MINNAL_JWT_EXTRA_PUBLIC_KEYS:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -88,9 +94,14 @@ services:
       SERVER_PORT: "8082"
       # Sent as X-Internal-Token on POST core-service:8081/internal/question-sets.
       MINNAL_INTERNAL_TOKEN: ${MINNAL_INTERNAL_TOKEN:-}
+      # core-service's JWKS on the private network (fetched lazily, on the first token).
+      MINNAL_JWKS_URI: http://core-service:8081/api/core/v1/auth/jwks
+    # service_started, not healthy: a core restart must not cascade (the JWKS is fetched lazily).
     depends_on:
       valkey:
         condition: service_healthy
+      core-service:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8082/actuator/health"]
       interval: 10s
@@ -111,11 +122,16 @@ services:
       POSTGRES_DB: minnal
       RATINGS_DB_USER: ratings
       RATINGS_DB_PASSWORD: ${RATINGS_DB_PASSWORD:?set RATINGS_DB_PASSWORD in deploy/.env}
+      # core-service's JWKS on the private network (fetched lazily, on the first token).
+      MINNAL_JWKS_URI: http://core-service:8081/api/core/v1/auth/jwks
+    # core-service: service_started, not healthy, so a core restart does not cascade.
     depends_on:
       postgres:
         condition: service_healthy
       valkey:
         condition: service_healthy
+      core-service:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8083/actuator/health"]
       interval: 10s
