@@ -9,7 +9,7 @@ import { useReduceEffectsStore } from '../../motion/reduceEffects.ts';
 import { resetRealtime } from '../../realtime/connection.ts';
 import { resetAnnouncements, useAnnouncements } from '../../shell/announce.ts';
 import { clearReturnFocus } from '../../shell/returnFocus.ts';
-import { syncFromLocation } from '../../shell/router.ts';
+import { navigate, syncFromLocation } from '../../shell/router.ts';
 import { clearScrollMemory } from '../../shell/scrollMemory.ts';
 import { restartGuestSession, stubFetch } from '../../test-utils/guest.ts';
 import {
@@ -113,7 +113,7 @@ describe('searching', () => {
 });
 
 describe('found', () => {
-  it('a bot: "Minnal Bot joined" with the BOT badge, announced once, then the /match stub', async () => {
+  it('a bot: "Minnal Bot joined" with the BOT badge, announced once, then the live match lead-in', async () => {
     await searching();
     act(() => socket().deliver(matchFound({ name: 'Minnal Bot', kind: 'BOT' })));
     expect(heading()).toHaveTextContent('Minnal Bot joined');
@@ -127,8 +127,10 @@ describe('found', () => {
 
     await waitFor(() => expect(window.location.pathname).toBe('/match'), { timeout: 2500 });
     expect(useAnnouncements.getState().polite.seq).toBe(1);
-    expect(heading()).toHaveTextContent('Match found · vs Minnal Bot');
-    expect(within(heading()).getByTestId('bot-badge')).toBeInTheDocument();
+    expect(heading()).toHaveTextContent('Get ready…');
+    const strip = screen.getByTestId('score-strip');
+    expect(strip).toHaveTextContent('Minnal Bot');
+    expect(within(strip).getByTestId('bot-badge')).toBeInTheDocument();
     expect(document.title).toBe('Match · Minnal');
     expect(screen.queryByRole('navigation')).toBeNull();
   });
@@ -176,7 +178,7 @@ describe('found', () => {
     act(() => socket().deliver(matchFound({ name: 'Minnal Bot', kind: 'BOT' })));
     expect(heading()).toHaveTextContent('മിന്നൽ ബോട്ട് ചേർന്നു');
     await waitFor(() => expect(window.location.pathname).toBe('/match'), { timeout: 2500 });
-    expect(within(heading()).getByText('Minnal Bot')).toHaveAttribute('lang', 'en');
+    expect(within(screen.getByTestId('score-strip')).getByText('Minnal Bot')).toHaveAttribute('lang', 'en');
   });
 });
 
@@ -231,8 +233,8 @@ describe('failures', () => {
     await searching();
     act(() => socket().deliver(matchFound({ name: 'Old Rival', kind: 'GUEST' })));
     await waitFor(() => expect(window.location.pathname).toBe('/match'), { timeout: 2500 });
-    expect(heading()).toHaveTextContent('Old Rival');
-    await user.click(screen.getByRole('link', { name: 'Home' }));
+    expect(screen.getByTestId('score-strip')).toHaveTextContent('Old Rival');
+    act(() => navigate('/'));
     await user.click(screen.getByRole('button', { name: 'Quick Match' }));
     act(() => socket().deliver(serverError('ALREADY_IN_MATCH', crypto.randomUUID())));
     await user.click(within(screen.getByRole('alert')).getByRole('button', { name: 'Back to your match' }));
@@ -247,11 +249,12 @@ describe('failures', () => {
     const found = matchFound({ name: 'Same Rival', kind: 'GUEST' });
     act(() => socket().deliver(found));
     await waitFor(() => expect(window.location.pathname).toBe('/match'), { timeout: 2500 });
-    await user.click(screen.getByRole('link', { name: 'Home' }));
+    act(() => navigate('/'));
     await user.click(screen.getByRole('button', { name: 'Quick Match' }));
     act(() => socket().deliver(serverError('ALREADY_IN_MATCH', found.matchId)));
     await user.click(within(screen.getByRole('alert')).getByRole('button', { name: 'Back to your match' }));
-    expect(heading()).toHaveTextContent('Match found · vs Same Rival');
+    expect(heading()).toHaveTextContent('Get ready…');
+    expect(screen.getByTestId('score-strip')).toHaveTextContent('Same Rival');
   });
 
   it('ALREADY_IN_MATCH without one: already searching elsewhere', async () => {
@@ -303,7 +306,7 @@ describe('cancel', () => {
     act(() => socket().deliver(matchFound({ name: 'Minnal Bot', kind: 'BOT' })));
     await waitFor(() => expect(window.location.pathname).toBe('/match'), { timeout: 2500 });
     const user = userEvent.setup();
-    await user.click(screen.getByRole('link', { name: 'Home' }));
+    act(() => navigate('/'));
     await user.click(screen.getByRole('button', { name: 'Quick Match' }));
     expect(window.location.pathname).toBe('/matchmaking');
     expect(heading()).toHaveTextContent('Finding an opponent…');
@@ -313,7 +316,7 @@ describe('cancel', () => {
   });
 });
 
-describe('/match stub', () => {
+describe('/match with no match', () => {
   it('with no match in the store: a "no match" line and Home', async () => {
     const user = userEvent.setup();
     renderApp('/match');

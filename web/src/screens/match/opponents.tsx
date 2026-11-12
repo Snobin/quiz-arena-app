@@ -3,7 +3,7 @@ import { Lang } from '../../i18n/Lang.tsx';
 import type { MatchFoundPayload, Participant } from '../../realtime/protocol.ts';
 
 /** Everyone in the match but the receiver. */
-export function opponentsOf(match: MatchFoundPayload): Participant[] {
+export function opponentsOf(match: Pick<MatchFoundPayload, 'participants' | 'selfParticipantId'>): Participant[] {
   return match.participants.filter((p) => p.participantId !== match.selfParticipantId);
 }
 
