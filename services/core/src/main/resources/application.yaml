@@ -42,6 +42,12 @@ logging:
       console: logstash
 
 minnal:
+  internal:
+    # Service token for /internal/** (AD-12). Unset = every internal request gets 401.
+    token: ${MINNAL_INTERNAL_TOKEN:}
+  seed:
+    # Read only by the `seed` profile's starter loader.
+    file: classpath:seed/kerala-psc-starter.csv
   valkey:
     # Owner prefix for every key this service writes (AD-3). Applied when a story first writes keys.
     key-prefix: "core:"

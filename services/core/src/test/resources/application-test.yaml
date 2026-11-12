@@ -1,10 +1,11 @@
-# Context-load tests run without Docker: no Postgres, Flyway or Valkey.
+# Context-load tests run without Docker: no Flyway or Valkey, and the DataSource never connects
+# (the Hikari pool is created lazily, on the first query, which these tests never make).
 spring:
+  datasource:
+    password: unused-in-context-load-tests
   autoconfigure:
     exclude:
-      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
       - org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration
       - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
       - org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration
       - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
-

@@ -1,0 +1,11 @@
+# Integration tests (Testcontainers Postgres 18): real DataSource and Flyway; no Valkey.
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
+
+minnal:
+  internal:
+    token: it-internal-token
