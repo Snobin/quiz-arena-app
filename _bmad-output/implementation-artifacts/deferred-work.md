@@ -75,3 +75,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-8-live-match-screen-and-peak-moments.md`
   summary: Add a test that runs `RevealBand` against the real flash scheduler (fake timers and rAF) and asserts the strike starts inside the 2 s reveal hold.
   evidence: Both reveal tests mock `requestFlash` and drain it at once; a wider flash window or a longer reveal hold would silently cancel every strike.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-11-instant-1v1-feedback-and-early-close.md`
+  summary: In Story 1.9, re-check `allAnswered()` → early close whenever a participant forfeits mid-question, reject answers from forfeited participants, and keep `allAnswered()` false when every participant is forfeited.
+  evidence: `MatchActor` checks early close only after an accepted answer, and `MatchState.answer` does not reject forfeited senders; unreachable today because nothing calls `MatchParticipant.forfeit()` outside tests (unverified, would be medium once 1.9 lands).

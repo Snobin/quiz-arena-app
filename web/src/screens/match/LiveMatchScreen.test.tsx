@@ -15,6 +15,7 @@ import { clearScrollMemory } from '../../shell/scrollMemory.ts';
 import { restartGuestSession, stubFetch } from '../../test-utils/guest.ts';
 import {
   answerAccepted,
+  answerAcceptedWithResult,
   matchFound,
   OPTIONS,
   questionRevealed,
@@ -675,5 +676,155 @@ describe('reveal', () => {
     expect(screen.getByTestId('reveal-band')).toBeInTheDocument();
     expect(screen.getByTestId('match-over')).toHaveTextContent('Match over · 7,420');
     expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/');
+  });
+});
+
+describe('1v1: her own result at the ack (Story 1.11)', () => {
+  function ack(m: Match, questionIndex: number, result: { correct: boolean; points: number; answerIndex: number; totalScore: number }) {
+    act(() => socket().deliver(answerAcceptedWithResult(m.matchId, questionIndex, result)));
+  }
+
+  it('own correct: band, volt points, total and one strike at once; announced; "Waiting for <name>…"', async () => {
+    const m = await inMatch();
+    start(m, 0);
+    fireEvent.click(option(0));
+    expect(screen.queryByTestId('reveal-band')).toBeNull();
+    ack(m, 0, { correct: true, points: 750, answerIndex: 0, totalScore: 1500 });
+
+    const band = screen.getByTestId('reveal-band');
+    expect(band).toHaveAttribute('data-correct', 'true');
+    expect(band).toHaveTextContent('Question 1 · Correct');
+    expect(band).toHaveTextContent('പെരിയാർ');
+    expect(screen.getByTestId('band-points')).toHaveTextContent('+750');
+    expect(screen.getByTestId('band-total')).toHaveTextContent('total 1,500');
+    expect(flashes.requested).toBe(2); // drop, then strike
+    expect(runFlashes()).toBe(2);
+    expect(band.style.opacity).toBe('1');
+    expect(animations.find((a) => a.element === screen.getByTestId('bolt'))).toBeDefined();
+
+    // The answer and her pick only: no opponent pick, no final styling, no explanation yet.
+    expect(option(0)).toHaveAttribute('data-state', 'correct');
+    expect(option(0)).toHaveTextContent('You');
+    for (const i of [1, 2, 3]) expect(option(i)).toHaveAttribute('data-state', 'idle');
+    expect(screen.queryByTestId('picks-1')).toBeNull();
+    expect(screen.queryByTestId('reveal-details')).toBeNull();
+    expect(screen.getByTestId('footer')).toHaveTextContent('Waiting for Vishnu R…');
+    await flushAnnouncements();
+    expect(politeText()).toBe('Correct. Answer: പെരിയാർ. +750, total 1,500');
+    const seq = useAnnouncements.getState().polite.seq;
+
+    // The close adds the opponent's pick, the explanation and the attribution: no second peak.
+    reveal(m, 0, { pickedIndex: 0, correct: true, points: 750, totalScore: 1500 }, { pickedIndex: 1 });
+    expect(screen.getByTestId('reveal-band')).toBe(band);
+    expect(flashes.requested).toBe(2);
+    expect(runFlashes()).toBe(0);
+    expect(within(option(1)).getByTestId('picks-1')).toHaveTextContent('Vishnu R');
+    expect(option(1)).toHaveAttribute('data-state', 'muted');
+    expect(screen.getByTestId('reveal-details')).toHaveTextContent('പെരിയാർ (244 കി.മീ)');
+    expect(screen.getByTestId('attribution')).toHaveTextContent('Kerala PSC LDC 2019');
+    expect(screen.getByTestId('band-total')).toHaveTextContent('total 1,500');
+    expect(screen.queryByTestId('footer')).toBeNull();
+    await flushAnnouncements();
+    expect(useAnnouncements.getState().polite.seq).toBe(seq);
+    expect(monitor.calls).toBe(1);
+  });
+
+  it('own wrong: the band names the answer, her pick brick, no bolt or volt; the rest waits for the close', async () => {
+    const m = await inMatch();
+    start(m, 0);
+    fireEvent.click(option(2));
+    ack(m, 0, { correct: false, points: 0, answerIndex: 0, totalScore: 900 });
+    const band = screen.getByTestId('reveal-band');
+    expect(band).toHaveAttribute('data-correct', 'false');
+    expect(band).toHaveTextContent("It's പെരിയാർ. Get the next one!");
+    expect(screen.queryByTestId('bolt')).toBeNull();
+    expect(band.querySelector('[data-accent]')).toBeNull();
+    expect(flashes.requested).toBe(1);
+    expect(option(2)).toHaveAttribute('data-state', 'wrong-pick');
+    expect(option(2).className).toContain('border-brick');
+    expect(option(0)).toHaveAttribute('data-state', 'correct');
+    for (const i of [1, 3]) expect(option(i)).toHaveAttribute('data-state', 'idle');
+    expect(screen.getByTestId('footer')).toHaveTextContent('Waiting for Vishnu R…');
+    await flushAnnouncements();
+    expect(politeText()).toBe('Wrong. Answer: പെരിയാർ. Total 900');
+
+    reveal(m, 0, { pickedIndex: 2, correct: false, points: 0, totalScore: 900 }, { pickedIndex: 0, correct: true, points: 900, totalScore: 900 });
+    expect(screen.getByTestId('reveal-band')).toBe(band);
+    expect(flashes.requested).toBe(1);
+    expect(within(option(0)).getByTestId('picks-0')).toHaveTextContent('Vishnu R');
+    for (const i of [1, 3]) expect(option(i)).toHaveAttribute('data-state', 'muted');
+  });
+
+  it('reduced path: a 200 ms fade at the ack, nothing more at the close', async () => {
+    useReduceEffectsStore.setState({ setting: 'on' });
+    const m = await inMatch();
+    start(m, 0);
+    fireEvent.click(option(0));
+    ack(m, 0, { correct: true, points: 1000, answerIndex: 0, totalScore: 1000 });
+    expect(flashes.requested).toBe(1);
+    runFlashes();
+    expect(animations).toHaveLength(1);
+    expect(animations[0]!.options.duration).toBe(200);
+    reveal(m, 0, { pickedIndex: 0, correct: true, points: 1000, totalScore: 1000 });
+    expect(flashes.requested).toBe(1);
+  });
+
+  it('a receipt-only ack keeps the Story 1.8 flow: locked footer, the band at the close', async () => {
+    const m = await inMatch();
+    start(m, 0);
+    fireEvent.click(option(0));
+    act(() => socket().deliver(answerAccepted(m.matchId, 0)));
+    expect(screen.queryByTestId('reveal-band')).toBeNull();
+    expect(screen.getByTestId('footer')).toHaveTextContent('Locked in · result when time runs out');
+    reveal(m, 0, {});
+    expect(screen.getByTestId('reveal-band')).toHaveAttribute('data-correct', 'true');
+  });
+
+  it('reduced path: an early close mid-second freezes the stepped bar on the whole second, rounded up', async () => {
+    useReduceEffectsStore.setState({ setting: 'on' });
+    const m = await inMatch();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+    start(m, 0, { serverTime: Date.now() });
+    fireEvent.click(option(0));
+    ack(m, 0, { correct: true, points: 800, answerIndex: 0, totalScore: 800 });
+    act(() => vi.advanceTimersByTime(5_500));
+    reveal(m, 0, { pickedIndex: 0, correct: true, points: 800, totalScore: 800 });
+    const bar = screen.getByTestId('timer-bar');
+    const seconds = screen.getByTestId('seconds');
+    expect(bar.style.transition).toBe('none');
+    expect(bar.style.transform).toBe(`scaleX(${10 / 15})`);
+    expect(seconds).toHaveTextContent('10 s');
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(bar.style.transition).toBe('none');
+    expect(bar.style.transform).toBe(`scaleX(${10 / 15})`);
+    expect(seconds).toHaveTextContent('10 s');
+  });
+
+  it('an early close freezes the timer: the bar holds, the label stops, no 5 s cue later', async () => {
+    Object.defineProperty(navigator, 'vibrate', { value: vi.fn(() => true), configurable: true, writable: true });
+    try {
+      const m = await inMatch();
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
+      start(m, 0, { serverTime: Date.now() });
+      fireEvent.click(option(0));
+      ack(m, 0, { correct: true, points: 800, answerIndex: 0, totalScore: 800 });
+      act(() => vi.advanceTimersByTime(6000));
+      const seconds = screen.getByTestId('seconds');
+      expect(seconds).toHaveTextContent('9 s');
+      reveal(m, 0, { pickedIndex: 0, correct: true, points: 800, totalScore: 800 });
+      const bar = screen.getByTestId('timer-bar');
+      expect(bar.style.transition).toBe('none');
+      expect(bar.style.transform).toBe(`scaleX(${9 / 15})`);
+      await flushAnnouncements();
+      const seq = useAnnouncements.getState().polite.seq;
+      act(() => vi.advanceTimersByTime(10_000));
+      expect(seconds).toHaveTextContent('9 s');
+      expect(bar.style.transform).toBe(`scaleX(${9 / 15})`);
+      expect(navigator.vibrate).not.toHaveBeenCalled();
+      await flushAnnouncements();
+      expect(useAnnouncements.getState().polite.seq).toBe(seq);
+    } finally {
+      delete (navigator as { vibrate?: unknown }).vibrate;
+    }
   });
 });

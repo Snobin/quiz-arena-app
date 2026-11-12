@@ -108,8 +108,18 @@ export type QuestionStartedPayload = {
   question: QuestionView;
 };
 
-/** ANSWER_ACCEPTED (private, with refSeq): a receipt only, no correctness. */
-export type AnswerAcceptedPayload = { questionIndex: number };
+/**
+ * The answering player's own result, carried by ANSWER_ACCEPTED in 1v1 modes (Quick Match, Topic
+ * Duel; Story 1.11): whether she was right, her points, the question's answer and her total
+ * including these points. Every number is the server's.
+ */
+export type AnswerResult = { correct: boolean; points: number; answerIndex: number; totalScore: number };
+
+/**
+ * ANSWER_ACCEPTED (private, with refSeq). In Battle Room a receipt only (`result` null); in 1v1
+ * modes it also carries her own `result` (all four fields on the wire, or none).
+ */
+export type AnswerAcceptedPayload = { questionIndex: number; result: AnswerResult | null };
 
 /** SCOREBOARD (broadcast): who has answered the open question, in answer order. */
 export type ScoreboardPayload = { questionIndex: number; answered: string[] };
@@ -240,7 +250,13 @@ export function parseQuestionStarted(value: unknown): QuestionStartedPayload | n
 
 export function parseAnswerAccepted(value: unknown): AnswerAcceptedPayload | null {
   if (!isObject(value) || !isIndex(value.questionIndex)) return null;
-  return { questionIndex: value.questionIndex };
+  const { questionIndex, correct, points, answerIndex, totalScore } = value;
+  const present = [correct, points, answerIndex, totalScore].filter((field) => field !== undefined).length;
+  if (present === 0) return { questionIndex, result: null };
+  // All four or none: a partial result is malformed.
+  if (present !== 4) return null;
+  if (typeof correct !== 'boolean' || !isInt(points) || !isOption(answerIndex) || !isInt(totalScore)) return null;
+  return { questionIndex, result: { correct, points, answerIndex, totalScore } };
 }
 
 export function parseScoreboard(value: unknown): ScoreboardPayload | null {

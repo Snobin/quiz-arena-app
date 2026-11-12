@@ -80,6 +80,11 @@ public final class MatchParticipant {
         score += points;
     }
 
+    /** Marks her out of the match for good (Story 1.9 drives this; tests use it now). */
+    void forfeit() {
+        forfeited = true;
+    }
+
     void connection(Connection connection) {
         this.connection = connection;
     }

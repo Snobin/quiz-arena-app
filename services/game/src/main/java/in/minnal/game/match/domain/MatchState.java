@@ -4,6 +4,7 @@ import in.minnal.contracts.internal.InternalQuestion;
 import in.minnal.contracts.realtime.AnswerAcceptedPayload;
 import in.minnal.contracts.realtime.ErrorCode;
 import in.minnal.contracts.realtime.ErrorPayload;
+import in.minnal.contracts.realtime.MatchMode;
 import in.minnal.contracts.realtime.MessageType;
 import in.minnal.contracts.realtime.Participant;
 import in.minnal.contracts.realtime.ParticipantResult;
@@ -32,6 +33,9 @@ import java.util.function.Predicate;
  * players or fifty are the same code. Broadcasts it returns are numbered by one {@code seq} (1, 2,
  * 3…); private replies carry {@code refSeq}, the last broadcast {@code seq}.
  *
+ * <p>The mode decides only the shape of {@code ANSWER_ACCEPTED} ({@link MatchMode#revealsOwnAnswerAtAck()}):
+ * in 1v1 modes it carries the sender's own result; in Battle Room it is a receipt (AD-5, Story 1.11).
+ *
  * <p>Confined to the actor's thread; not thread-safe.
  */
 public final class MatchState {
@@ -40,6 +44,7 @@ public final class MatchState {
     public static final int OPTION_COUNT = 4;
 
     private final UUID matchId;
+    private final MatchMode mode;
     private final List<MatchParticipant> participants;
     private final Map<UUID, MatchParticipant> byId = new LinkedHashMap<>();
     private final List<InternalQuestion> questions;
@@ -52,11 +57,13 @@ public final class MatchState {
     private Instant deadline;
     private long seq;
 
-    public MatchState(UUID matchId, List<MatchParticipant> participants, List<InternalQuestion> questions, Duration window) {
+    public MatchState(UUID matchId, MatchMode mode, List<MatchParticipant> participants, List<InternalQuestion> questions,
+            Duration window) {
         if (participants.isEmpty() || questions.isEmpty()) {
             throw new IllegalArgumentException("a match needs participants and questions");
         }
         this.matchId = matchId;
+        this.mode = mode;
         this.participants = List.copyOf(participants);
         this.questions = List.copyOf(questions);
         this.window = window;
@@ -82,7 +89,7 @@ public final class MatchState {
                     setup.ratings().getOrDefault(participant.participantId(), 1200), setup.questions().size(),
                     online ? Connection.CONNECTED : Connection.DISCONNECTED));
         }
-        return new MatchState(setup.matchId(), participants, setup.questions(), window);
+        return new MatchState(setup.matchId(), setup.mode(), participants, setup.questions(), window);
     }
 
     // -----------------------------------------------------------------------------------------
@@ -111,7 +118,10 @@ public final class MatchState {
     /** What became of an answer. */
     public sealed interface AnswerOutcome {
 
-        /** Taken: the private receipt for the sender, then the {@code SCOREBOARD} broadcast. */
+        /**
+         * Taken: the private ack for the sender (with her own result in 1v1 modes), then the
+         * {@code SCOREBOARD} broadcast (who answered, never what).
+         */
         record Accepted(ServerMessage<AnswerAcceptedPayload> ack, ServerMessage<ScoreboardPayload> scoreboard,
                 RecordedAnswer answer) implements AnswerOutcome {
         }
@@ -130,6 +140,8 @@ public final class MatchState {
      * client time). Accepted when {@code questionIndex} is the open question, its window is not
      * closed, {@code startedAt ≤ receivedAt ≤ deadline}, {@code optionIndex} is 0–3, and it is the participant's
      * first answer to it; scored then with {@link Scoring#points} on {@code deadline − receivedAt}.
+     * In 1v1 modes the ack also carries her correctness, points, the answer index and her total
+     * including these points (the score itself is applied at the close).
      *
      * @param now the instant the replies are sent (their {@code serverTime})
      */
@@ -156,8 +168,12 @@ public final class MatchState {
         RecordedAnswer answer = new RecordedAnswer(optionIndex, receivedAt, Scoring.points(correct, remainingMs));
         participant.record(current, answer);
         answered.add(participantId);
+        AnswerAcceptedPayload ackPayload = mode.revealsOwnAnswerAtAck()
+                ? AnswerAcceptedPayload.withResult(current, correct, answer.points(),
+                        questions.get(current).answerIndex(), participant.score() + answer.points())
+                : AnswerAcceptedPayload.receipt(current);
         ServerMessage<AnswerAcceptedPayload> ack = ServerMessage.reply(MessageType.ANSWER_ACCEPTED, matchId, seq, now,
-                new AnswerAcceptedPayload(current));
+                ackPayload);
         ServerMessage<ScoreboardPayload> scoreboard = ServerMessage.broadcast(MessageType.SCOREBOARD, matchId, ++seq, now,
                 new ScoreboardPayload(current, answered));
         return new AnswerOutcome.Accepted(ack, scoreboard, answer);
@@ -190,6 +206,23 @@ public final class MatchState {
         return Optional.of(ServerMessage.broadcast(MessageType.QUESTION_REVEALED, matchId, ++seq, now, payload));
     }
 
+    /**
+     * Whether every participant still in the match (not forfeited; bots and disconnected players
+     * included) has an answer for the open question, so it can close at once (AD-6, Story 1.11).
+     * False when no question is open.
+     */
+    public boolean allAnswered() {
+        if (phase != MatchPhase.QUESTION_OPEN) {
+            return false;
+        }
+        for (MatchParticipant participant : participants) {
+            if (!participant.forfeited() && participant.answer(current).isEmpty()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** The participant's last session closed. The match carries on regardless (grace and forfeit: Story 1.9). */
     public void disconnect(UUID participantId) {
         MatchParticipant participant = byId.get(participantId);
@@ -203,6 +236,10 @@ public final class MatchState {
 
     public UUID matchId() {
         return matchId;
+    }
+
+    public MatchMode mode() {
+        return mode;
     }
 
     public List<MatchParticipant> participants() {

@@ -190,6 +190,17 @@ export function answerAccepted(matchId: string, questionIndex: number, refSeq = 
   return { type: 'ANSWER_ACCEPTED', matchId, refSeq, serverTime, payload: { questionIndex } };
 }
 
+/** A 1v1 ANSWER_ACCEPTED (Story 1.11): the receipt plus her own result. */
+export function answerAcceptedWithResult(
+  matchId: string,
+  questionIndex: number,
+  result: { correct: boolean; points: number; answerIndex: number; totalScore: number },
+  refSeq = 1,
+  serverTime = SERVER_TIME,
+) {
+  return { type: 'ANSWER_ACCEPTED', matchId, refSeq, serverTime, payload: { questionIndex, ...result } };
+}
+
 export type ResultOptions = { participantId: string; pickedIndex?: number | null; correct: boolean; points: number; totalScore: number };
 
 export function questionRevealed(

@@ -7,6 +7,7 @@ import {
   MATCHMAKING_FAILED,
   SERVER_TIME,
   answerAccepted,
+  answerAcceptedWithResult,
   matchFound,
   questionRevealed,
   questionStarted,
@@ -309,17 +310,45 @@ describe('the live match', () => {
     expect(realtime.submitAnswer(2)).toBe(false); // lead-in
     last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 3, startedAt: T0 }));
     expect(realtime.submitAnswer(2)).toBe(true);
-    expect(state().live!.myAnswer).toEqual({ questionIndex: 3, optionIndex: 2, status: 'pending' });
+    expect(state().live!.myAnswer).toEqual({ questionIndex: 3, optionIndex: 2, status: 'pending', result: null });
     expect(last().bodiesTo(matchAnswer(matchId))).toEqual([{ questionIndex: 3, optionIndex: 2 }]);
     expect(realtime.submitAnswer(1)).toBe(false);
     // An ack for another question changes nothing.
     last().deliver(answerAccepted(matchId, 2));
     expect(state().live!.myAnswer!.status).toBe('pending');
     last().deliver(answerAccepted(matchId, 3));
-    expect(state().live!.myAnswer).toEqual({ questionIndex: 3, optionIndex: 2, status: 'locked' });
+    expect(state().live!.myAnswer).toEqual({ questionIndex: 3, optionIndex: 2, status: 'locked', result: null });
     expect(realtime.submitAnswer(0)).toBe(false);
     expect(last().sentTo(matchAnswer(matchId))).toBe(1);
     expect(state().phase).toBe('found');
+  });
+
+  it('a 1v1 ANSWER_ACCEPTED keeps her own result on the locked answer; the reveal leaves it', async () => {
+    const { matchId, opponent } = await found();
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 0, startedAt: T0 }));
+    realtime.submitAnswer(0);
+    const result = { correct: true, points: 750, answerIndex: 0, totalScore: 750 };
+    last().deliver(answerAcceptedWithResult(matchId, 0, result));
+    expect(state().live!.myAnswer).toEqual({ questionIndex: 0, optionIndex: 0, status: 'locked', result });
+    // An unsolicited ack (nothing pending) is ignored.
+    last().deliver(answerAcceptedWithResult(matchId, 0, { ...result, points: 1 }));
+    expect(state().live!.myAnswer!.result).toEqual(result);
+    last().deliverTopic(
+      matchId,
+      questionRevealed(matchId, {
+        seq: 2,
+        questionIndex: 0,
+        answerIndex: 0,
+        results: [
+          { participantId: state().live!.selfParticipantId, pickedIndex: 0, correct: true, points: 750, totalScore: 750 },
+          { participantId: opponent, pickedIndex: 1, correct: false, points: 0, totalScore: 0 },
+        ],
+      }),
+    );
+    expect(state().live!.myAnswer!.result).toEqual(result);
+    // The next question starts with no answer and no result.
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 3, questionIndex: 1, startedAt: T0 + 17_000 }));
+    expect(state().live!.myAnswer).toBeNull();
   });
 
   it('ANSWER_REJECTED or NOT_IN_MATCH while pending clears the answer silently, never a matchmaking failure', async () => {
@@ -349,7 +378,7 @@ describe('the live match', () => {
     // Pending, but the error names another match: the pending answer stays.
     realtime.submitAnswer(1);
     last().deliver(serverError('ANSWER_REJECTED', 'an-earlier-match'));
-    expect(state().live!.myAnswer).toEqual({ questionIndex: 0, optionIndex: 1, status: 'pending' });
+    expect(state().live!.myAnswer).toEqual({ questionIndex: 0, optionIndex: 1, status: 'pending', result: null });
     expect(realtime.submitAnswer(2)).toBe(false);
     expect(last().sentTo(matchAnswer(matchId))).toBe(1);
     // Pending, no matchId on the error: claimed.

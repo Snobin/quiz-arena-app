@@ -36,6 +36,10 @@ import org.slf4j.LoggerFactory;
  * <p>Timeline: {@code Begin} → lead-in → {@code QUESTION_STARTED} → window → close grace →
  * {@code QUESTION_REVEALED} → reveal hold → the next question … → after the last reveal the match
  * is {@code ENDED} and {@code onEnded} runs (on the actor thread), then the actor stops.
+ *
+ * <p>Early close (AD-6, Story 1.11): as soon as every participant still in the match has an
+ * accepted answer, the question closes at once (its deadline timer is cancelled) and follows the
+ * same reveal → hold → next path. Points are already fixed by each answer's receive time.
  */
 public final class MatchActor implements AutoCloseable {
 
@@ -54,6 +58,8 @@ public final class MatchActor implements AutoCloseable {
     private final Actor<MatchEvent> actor;
     /** Armed timers, cancelled on {@link #close()} (which any thread may call). */
     private final Queue<Future<?>> pending = new ConcurrentLinkedQueue<>();
+    /** The open question's {@code CloseWindow} timer, cancelled on an early close. Actor thread only. */
+    private Future<?> closeTimer;
     private volatile boolean ended;
     /** The last broadcast {@code seq}, readable from any thread (for replies after the end). */
     private volatile long lastSeq;
@@ -143,7 +149,7 @@ public final class MatchActor implements AutoCloseable {
                     () -> actor.tell(new MatchEvent.BotAnswer(botId, index, move.optionIndex(), clock.instant())))));
         }
         Instant closeAt = state.deadline().plus(settings.closeGrace());
-        at(closeAt, new MatchEvent.CloseWindow(index, closeAt));
+        closeTimer = at(closeAt, new MatchEvent.CloseWindow(index, closeAt));
     }
 
     private void onAnswer(MatchEvent.Answer answer, Instant trigger) {
@@ -158,6 +164,9 @@ public final class MatchActor implements AutoCloseable {
                     metrics.ack(answer.receivedAt(), clock.instant());
                 }
                 broadcast(accepted.scoreboard(), trigger);
+                if (state.allAnswered()) {
+                    closeEarly();
+                }
             }
             case AnswerOutcome.Rejected rejected -> {
                 if (replyTo != null) {
@@ -168,6 +177,18 @@ public final class MatchActor implements AutoCloseable {
                 // Only the first answer counts; a later one changes nothing and gets no reply.
             }
         }
+    }
+
+    /**
+     * Everyone still in the match has answered: cancel the deadline timer and close now, exactly as
+     * a timed close. Should the timer fire anyway, {@link MatchState#closeWindow} ignores it as stale.
+     */
+    private void closeEarly() {
+        if (closeTimer != null) {
+            closeTimer.cancel(false);
+            closeTimer = null;
+        }
+        closeWindow(new MatchEvent.CloseWindow(state.currentIndex(), clock.instant()));
     }
 
     private void closeWindow(MatchEvent.CloseWindow close) {
@@ -199,9 +220,11 @@ public final class MatchActor implements AutoCloseable {
         pending.add(timers.schedule(delay, () -> actor.tell(toTell)));
     }
 
-    private void at(Instant due, MatchEvent event) {
+    private Future<?> at(Instant due, MatchEvent event) {
         Duration delay = Duration.between(clock.instant(), due);
-        pending.add(timers.schedule(delay.isNegative() ? Duration.ZERO : delay, () -> actor.tell(event)));
+        Future<?> timer = timers.schedule(delay.isNegative() ? Duration.ZERO : delay, () -> actor.tell(event));
+        pending.add(timer);
+        return timer;
     }
 
     private void end() {

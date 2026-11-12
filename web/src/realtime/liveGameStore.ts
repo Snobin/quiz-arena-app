@@ -1,6 +1,7 @@
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
 import type {
+  AnswerResult,
   ErrorCode,
   MatchFoundPayload,
   Participant,
@@ -35,8 +36,17 @@ export type LiveProblem =
  */
 export type LiveMatchPhase = 'lead-in' | 'open' | 'revealed' | 'ended';
 
-/** The player's answer to the open question: sent (`pending`) until ANSWER_ACCEPTED (`locked`). */
-export type MyAnswer = { questionIndex: number; optionIndex: number; status: 'pending' | 'locked' };
+/**
+ * The player's answer to the open question: sent (`pending`) until ANSWER_ACCEPTED (`locked`).
+ * `result` is her own result from a 1v1 ack (Story 1.11); null while pending and in Battle Room.
+ * Kept in the store so a reconnect SNAPSHOT (Story 1.9) can restore it.
+ */
+export type MyAnswer = {
+  questionIndex: number;
+  optionIndex: number;
+  status: 'pending' | 'locked';
+  result: AnswerResult | null;
+};
 
 /**
  * The live match (Story 1.8), written only from match messages. Everything a component shows
