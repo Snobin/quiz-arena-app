@@ -63,3 +63,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-7-live-match-engine.md`
   summary: Add an integration test that the inbound rate-limit bucket is removed after a clean DISCONNECT and after an abrupt socket close.
   evidence: Only `InboundRateLimiter.remove` is unit-tested; deleting both removal call sites leaks one map entry per session with every test green.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-7-live-match-engine.md`
+  summary: Warm up game-service at startup, before it reports healthy (decode a sample question-set response and build one in-memory match state, or make one real question-set call when core is up), so the first pairing after a game restart doesn't come close to the 2 s question-set timeout.
+  evidence: On 2026-11-12 a Quick Match failed after the full ~2 s right after a restart. Measured with throwaway copies (IntelliJ JIT flag): a fresh core answers its first `/internal/question-sets` in 0.05–0.07 s, but a game that has not yet completed a successful pairing takes about 1.2–1.5 s from pairing to `MATCH_FOUND`, against 0.1–0.5 s once warm. It didn't reproduce after warm-up. To confirm, look for a `TimeoutException` in game's `question set unavailable, pairing failed:` log line. Risk: the first player after a game deploy on the 2 vCPU VPS may get `MATCHMAKING_FAILED`.
