@@ -2,13 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useDocumentTitle } from '../i18n/useDocumentTitle.ts';
 import { maxPerWindow } from '../motion/flashBudget.ts';
 import { requestFlash, resetFlashScheduler } from '../motion/flashScheduler.ts';
+import { useReducedEffects } from '../motion/reduceEffects.ts';
 import { Button } from './Button.tsx';
 import { PageColumn } from './PageColumn.tsx';
+import { RevealBand } from './peak/RevealBand.tsx';
 import { motion } from './tokens.ts';
 
 // Dev-only QA page at /__flash (never shipped: App imports it behind import.meta.env.DEV).
 // Fires bursts of full-viewport band flashes through the app-wide flash scheduler and reports
 // the most flash starts seen in any 1000 ms window (must be 1). Band only, never volt.
+// It also replays the live-match reveal band (correct: drop + one strike; wrong: drop only;
+// both a plain fade on the reduced path) through the same scheduler, for 60 fps recordings.
 // Strings here are developer-facing and not part of the i18n catalogue.
 // check-i18n: dev-fixture
 
@@ -56,6 +60,10 @@ export default function FlashFixture() {
     setQueued(0);
   };
 
+  const reduced = useReducedEffects();
+  const [demo, setDemo] = useState<{ correct: boolean; run: number } | null>(null);
+  const replay = (correct: boolean) => setDemo((d) => ({ correct, run: (d?.run ?? 0) + 1 }));
+
   const max = maxPerWindow(starts, motion.flashWindow);
   const deltas = starts.slice(1).map((t, i) => t - starts[i]!);
 
@@ -94,6 +102,32 @@ export default function FlashFixture() {
           <dt>Queued</dt>
           <dd>{queued}</dd>
         </dl>
+        <section className="flex flex-col gap-3" data-testid="reveal-demo">
+          <h2 className="text-title font-title">Reveal band (live match)</h2>
+          <p className="text-muted">
+            Reduced path is {reduced ? 'on' : 'off'}: {reduced ? 'a 200 ms fade' : 'drop, then one strike when correct'}.
+          </p>
+          <div className="flex flex-wrap items-start gap-3">
+            <Button onClick={() => replay(true)}>Correct reveal</Button>
+            <Button variant="secondary" onClick={() => replay(false)}>
+              Wrong reveal
+            </Button>
+          </div>
+          {demo ? (
+            <RevealBand
+              key={demo.run}
+              revealKey={String(demo.run)}
+              correct={demo.correct}
+              reduced={reduced}
+              label={demo.correct ? 'ചോദ്യം 4 · ശരി' : 'ശരിയുത്തരം'}
+              answer="പെരിയാർ"
+              answerLang="ml"
+              points={demo.correct ? '+800' : undefined}
+              total={demo.correct ? 'ആകെ 3,140' : 'ആകെ 2,340'}
+              wrongLine={demo.correct ? undefined : 'ശരി: പെരിയാർ. അടുത്തതിൽ നോക്കാം!'}
+            />
+          ) : null}
+        </section>
         <section className="flex flex-col gap-2">
           <h2 className="text-title font-title">rAF start timestamps</h2>
           <ol className="font-code text-code">

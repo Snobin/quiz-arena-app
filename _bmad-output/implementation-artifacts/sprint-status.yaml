@@ -43,7 +43,7 @@ development_status:
   1-5-a-guest-can-open-minnal-and-see-quick-match: review
   1-6-matchmaking-with-bot-fallback: review
   1-7-live-match-engine: review
-  1-8-live-match-screen-and-peak-moments: backlog
+  1-8-live-match-screen-and-peak-moments: review
   1-9-reconnect-forfeit-and-leave: backlog
   1-10-results-and-rematch: backlog
   1-11-instant-1v1-feedback-and-early-close: backlog

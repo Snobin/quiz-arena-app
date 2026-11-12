@@ -129,7 +129,6 @@ describe('Story 1.6 strings', () => {
     'matchmaking.alreadySearching',
     'matchmaking.returnToMatch',
     'match.foundVs',
-    'match.stubNote',
     'match.none',
   ] as const;
 
@@ -140,6 +139,35 @@ describe('Story 1.6 strings', () => {
       expect(entry.en, key).toBeTruthy();
       expect(entry.signoff, key).toEqual(['ml', 'en']);
     }
+  });
+
+  it('drafts every Story 1.8 string in both languages, flagged for sign-off', () => {
+    const keys = Object.keys(catalogue).filter(
+      (key) => /^match\./.test(key) && !/^match\.(foundVs|none|firstTapHint|locked|wrong|overtake|reconnecting|forfeited|leaveConfirm)$/.test(key),
+    ) as CatalogueKey[];
+    expect([...keys, 'title.question']).toEqual(expect.arrayContaining(['match.lockTag', 'match.revealCorrect', 'match.over']));
+    for (const key of [...keys, 'title.question' as const]) {
+      const entry: Entry = catalogue[key];
+      expect(entry.ml, key).toBeTruthy();
+      expect(entry.en, key).toBeTruthy();
+      expect(entry.signoff, key).toEqual(['ml', 'en']);
+    }
+    expect(catalogue).not.toHaveProperty('match.stubNote');
+  });
+
+  it('renders the live-match numbers and title through the number formats', () => {
+    const ml = i18n.getFixedT('ml');
+    const en = i18n.getFixedT('en');
+    expect(ml('title.withBrand', { title: ml('title.question', { n: 4, total: 10 }), brand: ml('brand.name') })).toBe(
+      'ചോദ്യം 4 / 10 · മിന്നൽ',
+    );
+    expect(ml('match.seconds', { count: 9 })).toBe('9 സെക്കൻഡ്');
+    expect(en('match.seconds', { count: 9 })).toBe('9 seconds');
+    expect(en('match.seconds', { count: 1 })).toBe('1 second');
+    expect(en('match.revealCorrect', { answer: 'Periyar', points: 800, total: 3140 })).toBe(
+      'Correct. Answer: Periyar. +800, total 3,140',
+    );
+    expect(ml('match.sourceNotAvailable')).toBe('ഉറവിടം ലഭ്യമല്ല');
   });
 
   it('renders the elapsed count with Latin digits', () => {
