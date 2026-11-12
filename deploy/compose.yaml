@@ -94,6 +94,8 @@ services:
       SERVER_PORT: "8082"
       # Sent as X-Internal-Token on POST core-service:8081/internal/question-sets.
       MINNAL_INTERNAL_TOKEN: ${MINNAL_INTERNAL_TOKEN:-}
+      # core-service on the private network: POST /internal/question-sets when a pairing forms.
+      MINNAL_CORE_URL: http://core-service:8081
       # core-service's JWKS on the private network (fetched lazily, on the first token).
       MINNAL_JWKS_URI: http://core-service:8081/api/core/v1/auth/jwks
     # service_started, not healthy: a core restart must not cascade (the JWKS is fetched lazily).

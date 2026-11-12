@@ -1,7 +1,8 @@
 import { lazy, Suspense, type ComponentType } from 'react';
 import { MeScreen } from './screens/MeScreen.tsx';
 import { GuestHome } from './screens/home/GuestHome.tsx';
-import { MatchmakingStub } from './screens/MatchmakingStub.tsx';
+import { LiveMatchStub } from './screens/match/LiveMatchStub.tsx';
+import { MatchmakingScreen } from './screens/matchmaking/MatchmakingScreen.tsx';
 import { RanksScreen } from './screens/RanksScreen.tsx';
 import { RoomsScreen } from './screens/RoomsScreen.tsx';
 import { SignInPrompt } from './screens/SignInPrompt.tsx';
@@ -15,7 +16,8 @@ const ROUTES: Record<string, ComponentType> = {
   '/ranks': RanksScreen,
   '/me': MeScreen,
   '/sign-in': SignInPrompt,
-  '/matchmaking': MatchmakingStub,
+  '/matchmaking': MatchmakingScreen,
+  '/match': LiveMatchStub,
 };
 
 // Dev-only QA fixtures, rendered outside the shell. `import.meta.env.DEV` is a build-time

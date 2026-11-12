@@ -42,3 +42,15 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-5-a-guest-can-open-minnal-and-see-quick-match.md`
   summary: Sync the guest token across tabs (a `storage` event on `minnal.guestToken`), so one device keeps one `sub` when Story 1.6 enforces one queue/match per `sub`.
   evidence: Each tab refreshes on its own timer and overwrites the stored token, so two open tabs end up with different `sub`s after a refresh.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-6-matchmaking-with-bot-fallback.md`
+  summary: Authorize STOMP subscriptions to `/topic/match/{matchId}` and `/topic/room/{roomId}` (only participants), deny-by-default for other `/topic/**`.
+  evidence: `StompConnectAuthInterceptor` lets any authenticated client subscribe to any `/topic/**`; harmless in 1.6 (no broadcasts) but Story 1.7 broadcasts match state there.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-6-matchmaking-with-bot-fallback.md`
+  summary: Move the CONNECT JWT decode (lazy JWKS HTTP fetch) off the WebSocket I/O thread, or bound it tightly.
+  evidence: The clientInbound channel runs inline (SyncTaskExecutor) for frame ordering, so a cold JWKS cache with core slow blocks a container thread per CONNECT until the JWKS timeout.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-6-matchmaking-with-bot-fallback.md`
+  summary: Track the matchmaking queue per session as well as per `sub`, so closing the joining tab while another tab stays open doesn't leave the idle tab queued and matched.
+  evidence: `MatchmakingActor` drops a seeker only on `LastSessionClosed`; the other tab keeps the `sub` connected and gets `MATCH_FOUND` it never asked for. Fits Story 1.9's session/reconnect work.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-6-matchmaking-with-bot-fallback.md`
+  summary: Add a FakeCore mode returning fewer questions than requested and a flow test asserting both players get `MATCHMAKING_FAILED` and are released.
+  evidence: Both wrong-size checks (`HttpQuestionSetClient.call`, `MatchmakingActor.onSetFetched`) are untested; core enforces the exact count today, so this is a second line of defence to add when Story 1.7 consumes the set.

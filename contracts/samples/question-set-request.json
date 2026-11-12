@@ -1,0 +1,8 @@
+{
+  "source" : "BANK",
+  "filters" : {
+    "category" : "KERALA_PSC"
+  },
+  "count" : 10,
+  "requesterId" : "a1b2c3d4-guest-sub"
+}

@@ -10,6 +10,8 @@ import { resetAnnouncements } from '../../shell/announce.ts';
 import { clearReturnFocus } from '../../shell/returnFocus.ts';
 import { syncFromLocation } from '../../shell/router.ts';
 import { clearScrollMemory } from '../../shell/scrollMemory.ts';
+import { resetRealtime } from '../../realtime/connection.ts';
+import { useFakeRealtime } from '../../test-utils/realtime.ts';
 
 function renderApp(path: string) {
   window.history.pushState(null, '', path);
@@ -38,6 +40,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  resetRealtime();
   guestSession.reset();
   clearReturnFocus();
   vi.unstubAllGlobals();
@@ -114,15 +117,16 @@ describe('guest Home structure', () => {
 });
 
 describe('Quick Match', () => {
-  it('one tap goes to the matchmaking stub (tab bar hidden); Cancel returns Home', async () => {
+  it('one tap goes to matchmaking (tab bar hidden); Cancel before the socket opens returns Home', async () => {
     const user = userEvent.setup();
+    const sockets = useFakeRealtime();
     await homeReady();
     await user.click(quickMatch());
     expect(window.location.pathname).toBe('/matchmaking');
     expect(screen.getByRole('heading', { level: 1, name: 'Finding an opponent…' })).toHaveFocus();
-    expect(screen.getByText("Matchmaking isn't available yet. It's coming soon.")).toBeInTheDocument();
     expect(document.title).toBe('Matchmaking · Minnal');
     expect(screen.queryByRole('navigation')).toBeNull();
+    await waitFor(() => expect(sockets).toHaveLength(1));
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(window.location.pathname).toBe('/');
     expect(screen.getByRole('navigation')).toBeInTheDocument();
