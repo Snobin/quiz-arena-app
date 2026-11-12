@@ -7,8 +7,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * The {@code draining} flag (NFR7, AD-19): set as soon as game-service begins to shut down, so new
- * joins fail with {@code SERVER_DRAINING}. It stops first (the highest phase), before the web
- * server and the broker. Waiting for live matches to finish belongs to Stories 1.2 and 1.7.
+ * joins fail with {@code SERVER_DRAINING}. It stops first (the highest phase); {@code MatchDrain}
+ * then waits for live matches to finish, before the web server and the broker stop.
  */
 @Component
 public class DrainState implements SmartLifecycle {

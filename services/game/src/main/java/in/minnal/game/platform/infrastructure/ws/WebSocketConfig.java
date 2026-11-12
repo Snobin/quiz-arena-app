@@ -3,6 +3,9 @@ package in.minnal.game.platform.infrastructure.ws;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import in.minnal.contracts.realtime.Destinations;
 import in.minnal.game.platform.infrastructure.security.StompConnectAuthInterceptor;
+import in.minnal.game.platform.session.MatchAccess;
+import in.minnal.game.platform.session.PlayerChannel;
+import java.time.Clock;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,7 +30,8 @@ import tools.jackson.databind.json.JsonMapper;
  * STOMP over native WebSocket at {@code /ws} (AD-10; no SockJS). Clients send to {@code /app/**};
  * the simple broker serves {@code /topic/**} and {@code /queue/**} with 10 s/10 s heartbeats;
  * private messages go to {@code /user/queue/game}. CONNECT is authenticated by
- * {@link StompConnectAuthInterceptor}. Frames are JSON from the app's {@link JsonMapper} with nulls
+ * {@link StompConnectAuthInterceptor}, which also checks match-topic subscriptions and applies the
+ * per-connection inbound rate limit. Frames are JSON from the app's {@link JsonMapper} with nulls
  * omitted (instants as ISO-8601).
  *
  * <p>The handshake allows only {@code minnal.cors.allowed-origins}; an empty list under the prod
@@ -43,6 +47,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private JwtDecoder jwtDecoder;
     private JsonMapper jsonMapper;
     private TaskScheduler brokerScheduler;
+    private MatchAccess matchAccess;
+    private PlayerChannel playerChannel;
+    private InboundRateLimiter rateLimiter;
+    private Clock clock;
 
     public WebSocketConfig(@Value("${minnal.cors.allowed-origins:}") List<String> allowedOrigins, Environment environment) {
         this.allowedOrigins = allowedOrigins.stream().map(String::strip).filter(origin -> !origin.isEmpty()).toList();
@@ -61,6 +69,28 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Autowired
     void setJsonMapper(JsonMapper jsonMapper) {
         this.jsonMapper = jsonMapper;
+    }
+
+    /** Lazy: the match registry sends through the messaging template this configuration defines. */
+    @Autowired
+    void setMatchAccess(@Lazy MatchAccess matchAccess) {
+        this.matchAccess = matchAccess;
+    }
+
+    /** Lazy for the same reason: {@code RATE_LIMITED} goes out through the messaging template. */
+    @Autowired
+    void setPlayerChannel(@Lazy PlayerChannel playerChannel) {
+        this.playerChannel = playerChannel;
+    }
+
+    @Autowired
+    void setRateLimiter(InboundRateLimiter rateLimiter) {
+        this.rateLimiter = rateLimiter;
+    }
+
+    @Autowired
+    void setClock(Clock clock) {
+        this.clock = clock;
     }
 
     /** The broker's own scheduler, for heartbeats (lazy: it is defined by the broker configuration). */
@@ -93,7 +123,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         // a session's frames are handled in order (SUBSCRIBE before the join that follows it), and
         // handlers only hand events to actors, so they never block the socket for long.
         registration.executor(new SyncTaskExecutor());
-        registration.interceptors(new StompConnectAuthInterceptor(jwtDecoder));
+        registration.interceptors(new StompConnectAuthInterceptor(jwtDecoder, matchAccess, rateLimiter, playerChannel, clock));
     }
 
     @Override

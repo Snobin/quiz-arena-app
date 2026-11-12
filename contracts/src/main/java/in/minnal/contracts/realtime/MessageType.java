@@ -11,9 +11,13 @@ public enum MessageType {
     MATCHMAKING_FAILED,
     /** Private: the cancel was accepted; the player is idle again. No payload. */
     MATCHMAKING_CANCELLED,
+    /** Broadcast: a question's window opened ({@link QuestionStartedPayload}). */
     QUESTION_STARTED,
+    /** Private, with {@code refSeq}: the answer was received in time ({@link AnswerAcceptedPayload}). */
     ANSWER_ACCEPTED,
+    /** Broadcast: who has answered the open question ({@link ScoreboardPayload}). */
     SCOREBOARD,
+    /** Broadcast: the window closed; answer and results ({@link QuestionRevealedPayload}). */
     QUESTION_REVEALED,
     MATCH_ENDED,
     SNAPSHOT,

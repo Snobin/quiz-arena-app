@@ -69,9 +69,42 @@ class RealtimeSamplesTest {
                 new Sample("error-server-draining.json",
                         ServerMessage.error(ErrorCode.SERVER_DRAINING, null, SERVER_TIME),
                         new TypeReference<ServerMessage<ErrorPayload>>() { }),
-                new Sample("broadcast-envelope.json",
-                        new ServerMessage<>(MessageType.SCOREBOARD, MATCH_ID, null, 7L, null, SERVER_TIME, null),
-                        new TypeReference<ServerMessage<Void>>() { }),
+                new Sample("question-started.json",
+                        ServerMessage.broadcast(MessageType.QUESTION_STARTED, MATCH_ID, 1, SERVER_TIME,
+                                new QuestionStartedPayload(0, 10, SERVER_TIME, SERVER_TIME.plusSeconds(15), questionView())),
+                        new TypeReference<ServerMessage<QuestionStartedPayload>>() { }),
+                new Sample("answer-accepted.json",
+                        ServerMessage.reply(MessageType.ANSWER_ACCEPTED, MATCH_ID, 1, SERVER_TIME, new AnswerAcceptedPayload(0)),
+                        new TypeReference<ServerMessage<AnswerAcceptedPayload>>() { }),
+                new Sample("scoreboard.json",
+                        ServerMessage.broadcast(MessageType.SCOREBOARD, MATCH_ID, 2, SERVER_TIME,
+                                new ScoreboardPayload(0, List.of(ANJU))),
+                        new TypeReference<ServerMessage<ScoreboardPayload>>() { }),
+                new Sample("question-revealed.json",
+                        ServerMessage.broadcast(MessageType.QUESTION_REVEALED, MATCH_ID, 4, SERVER_TIME,
+                                new QuestionRevealedPayload(0, 10, QUESTION_ID, 2, 0, "പെരിയാറിന് 244 കി.മീ. നീളമുണ്ട്.",
+                                        "Kerala PSC 2019, Q 14", List.of(
+                                                new ParticipantResult(ANJU, 0, true, 875, 875),
+                                                new ParticipantResult(BOT, 2, false, 0, 0)))),
+                        new TypeReference<ServerMessage<QuestionRevealedPayload>>() { }),
+                new Sample("question-revealed-no-attribution.json",
+                        ServerMessage.broadcast(MessageType.QUESTION_REVEALED, MATCH_ID, 9, SERVER_TIME,
+                                new QuestionRevealedPayload(1, 10, QUESTION_ID, 2, 3, "x", null, List.of(
+                                        new ParticipantResult(ANJU, null, false, 0, 875),
+                                        new ParticipantResult(BOT, 3, true, 642, 642)))),
+                        new TypeReference<ServerMessage<QuestionRevealedPayload>>() { }),
+                new Sample("error-answer-rejected.json",
+                        ServerMessage.error(ErrorCode.ANSWER_REJECTED, MATCH_ID, 3L, SERVER_TIME),
+                        new TypeReference<ServerMessage<ErrorPayload>>() { }),
+                new Sample("error-not-in-match.json",
+                        ServerMessage.error(ErrorCode.NOT_IN_MATCH, MATCH_ID, SERVER_TIME),
+                        new TypeReference<ServerMessage<ErrorPayload>>() { }),
+                new Sample("error-rate-limited.json",
+                        ServerMessage.error(ErrorCode.RATE_LIMITED, null, SERVER_TIME),
+                        new TypeReference<ServerMessage<ErrorPayload>>() { }),
+                new Sample("client-answer.json",
+                        new AnswerRequest(0, 2),
+                        new TypeReference<AnswerRequest>() { }),
                 new Sample("question-set-request.json",
                         new QuestionSetRequest(QuestionSource.BANK, QuestionSetFilters.category("KERALA_PSC"), null, 10,
                                 "a1b2c3d4-guest-sub"),
@@ -82,6 +115,11 @@ class RealtimeSamplesTest {
                                 List.of("പെരിയാർ", "ഭാരതപ്പുഴ", "പമ്പ", "ചാലിയാർ"), 0,
                                 "പെരിയാറിന് 244 കി.മീ. നീളമുണ്ട്.", null))),
                         new TypeReference<QuestionSetResponse>() { }));
+    }
+
+    static QuestionView questionView() {
+        return new QuestionView(QUESTION_ID, 2, "കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി?", "Which is the longest river in Kerala?",
+                List.of("പെരിയാർ", "ഭാരതപ്പുഴ", "പമ്പ", "ചാലിയാർ"));
     }
 
     @TestFactory
@@ -109,6 +147,42 @@ class RealtimeSamplesTest {
         JsonNode cancelled = ContractJson.MAPPER.valueToTree(ServerMessage.direct(MessageType.MATCHMAKING_CANCELLED, SERVER_TIME, null));
         assertThat(cancelled.propertyNames()).containsExactly("type", "serverTime");
         assertThat(cancelled.get("serverTime").asString()).isEqualTo("2026-11-12T10:15:30.123Z");
+    }
+
+    /** AD-5: the open question carries exactly these five fields; nothing about the answer. */
+    @Test
+    void questionViewJsonHasExactlyItsFiveFields() {
+        JsonNode view = ContractJson.MAPPER.valueToTree(questionView());
+        assertThat(view.propertyNames()).containsExactly("questionId", "version", "textMl", "textEn", "options");
+        assertThat(Arrays.stream(QuestionView.class.getRecordComponents()).map(c -> c.getName()))
+                .containsExactly("questionId", "version", "textMl", "textEn", "options");
+
+        InternalQuestion full = new InternalQuestion(QUESTION_ID, 2, "ml", null, List.of("a", "b", "c", "d"), 3,
+                "because", "source");
+        JsonNode fromInternal = ContractJson.MAPPER.valueToTree(QuestionView.of(full));
+        assertThat(fromInternal.propertyNames()).containsExactly("questionId", "version", "textMl", "options");
+        assertThat(fromInternal.toString()).doesNotContain("because").doesNotContain("source").doesNotContain("answer");
+    }
+
+    @Test
+    void anAnswerRequestIgnoresClientTimestampsAndExtraFields() {
+        AnswerRequest request = ContractJson.MAPPER.readValue(
+                "{\"questionIndex\":3,\"optionIndex\":1,\"clientTime\":\"2026-01-01T00:00:00Z\",\"prevAckRttMs\":80}",
+                AnswerRequest.class);
+        assertThat(request).isEqualTo(new AnswerRequest(3, 1));
+        assertThat(ContractJson.MAPPER.readValue("{}", AnswerRequest.class)).isEqualTo(new AnswerRequest(null, null));
+    }
+
+    @Test
+    void broadcastsCarrySeqAndRepliesRefSeqOnly() {
+        JsonNode broadcast = ContractJson.MAPPER.valueToTree(ServerMessage.broadcast(MessageType.SCOREBOARD, MATCH_ID, 5,
+                SERVER_TIME, new ScoreboardPayload(0, List.of())));
+        assertThat(broadcast.get("seq").asLong()).isEqualTo(5);
+        assertThat(broadcast.has("refSeq")).isFalse();
+        JsonNode reply = ContractJson.MAPPER.valueToTree(ServerMessage.reply(MessageType.ANSWER_ACCEPTED, MATCH_ID, 5,
+                SERVER_TIME, new AnswerAcceptedPayload(0)));
+        assertThat(reply.get("refSeq").asLong()).isEqualTo(5);
+        assertThat(reply.has("seq")).isFalse();
     }
 
     @Test

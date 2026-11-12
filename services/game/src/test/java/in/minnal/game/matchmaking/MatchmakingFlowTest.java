@@ -3,7 +3,7 @@ package in.minnal.game.matchmaking;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import in.minnal.game.match.application.MatchRegistry;
-import in.minnal.game.match.domain.MatchShell;
+import in.minnal.game.match.domain.MatchSetup;
 import in.minnal.game.matchmaking.application.RatingCache;
 import in.minnal.game.support.FakeCore;
 import in.minnal.game.support.GameIntegrationTest;
@@ -171,9 +171,9 @@ class MatchmakingFlowTest extends GameIntegrationTest {
         assertThat(participants).hasSize(2);
         assertThat(participants.get(1).get("kind").asString()).isEqualTo("BOT");
         assertThat(participants.get(1).get("displayName").asString()).isEqualTo("Minnal Bot");
-        // The shell keeps the bot at her rating (a guest: 1200).
-        MatchShell shell = matches.find(UUID.fromString(found.get("matchId").asString())).orElseThrow();
-        assertThat(shell.ratings()).containsEntry(UUID.fromString(participants.get(1).get("participantId").asString()), 1200)
+        // The match keeps the bot at her rating (a guest: 1200).
+        MatchSetup setup = matches.find(UUID.fromString(found.get("matchId").asString())).orElseThrow().setup();
+        assertThat(setup.ratings()).containsEntry(UUID.fromString(participants.get(1).get("participantId").asString()), 1200)
                 .containsEntry(UUID.fromString(participants.get(0).get("participantId").asString()), 1200);
         assertThat(pairings("bot")).isEqualTo(botBefore + 1);
     }
@@ -346,21 +346,22 @@ class MatchmakingFlowTest extends GameIntegrationTest {
     }
 
     @Test
-    void aMatchShellReleasesItsPlayersOnceAllDisconnect() {
+    void aMatchKeepsItsPlayersUntilItEndsEvenWhenAllDisconnect() {
         String a = newSub();
         String b = newSub();
         String tokenA = guestToken(a);
-        String tokenB = guestToken(b);
         StompTestClient first = player(a, tokenA);
-        StompTestClient second = player(b, tokenB);
+        StompTestClient second = guest(b);
         first.join();
         second.join();
-        first.next("MATCH_FOUND");
+        String matchId = first.next("MATCH_FOUND").get("matchId").asString();
         second.next("MATCH_FOUND");
         first.close();
-        second.expectNothing(Duration.ofMillis(300));
-        assertThat(participation.matchOf(a)).isPresent(); // b is still connected
         second.close();
+        // Story 1.7: no more release on disconnect; the match runs to its last reveal (about 3 s here).
+        org.awaitility.Awaitility.await().pollDelay(Duration.ofMillis(300)).atMost(Duration.ofSeconds(1))
+                .until(() -> participation.matchOf(a).isPresent());
+        assertThat(participation.matchOf(a)).hasValueSatisfying(id -> assertThat(id.toString()).isEqualTo(matchId));
         awaitIdle(a, b);
 
         // Both are free to queue again.

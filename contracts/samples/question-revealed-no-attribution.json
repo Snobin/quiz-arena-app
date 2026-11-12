@@ -1,0 +1,26 @@
+{
+  "type" : "QUESTION_REVEALED",
+  "matchId" : "6f1c2a3e-8a4b-4c1d-9e2f-0a1b2c3d4e5f",
+  "seq" : 9,
+  "serverTime" : "2026-11-12T10:15:30.123Z",
+  "payload" : {
+    "questionIndex" : 1,
+    "total" : 10,
+    "questionId" : "3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f",
+    "version" : 2,
+    "answerIndex" : 3,
+    "explanation" : "x",
+    "results" : [ {
+      "participantId" : "0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+      "correct" : false,
+      "points" : 0,
+      "totalScore" : 875
+    }, {
+      "participantId" : "9d8c7b6a-5f4e-4d3c-b2a1-0f9e8d7c6b5a",
+      "pickedIndex" : 3,
+      "correct" : true,
+      "points" : 642,
+      "totalScore" : 642
+    } ]
+  }
+}

@@ -4,11 +4,17 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   ENUMS,
+  parseAnswerAccepted,
   parseErrorPayload,
   parseIncoming,
   parseMatchFound,
   parseMatchmakingFailed,
+  parseQuestionRevealed,
+  parseQuestionStarted,
+  parseQuestionView,
+  parseScoreboard,
   parseServerMessage,
+  type AnswerRequest,
 } from './protocol.ts';
 
 /**
@@ -20,9 +26,11 @@ const SAMPLES = resolve(dirname(fileURLToPath(import.meta.url)), '../../../contr
 const read = (file: string): unknown => JSON.parse(readFileSync(join(SAMPLES, file), 'utf8'));
 
 // The question-set DTOs travel only between services (never to the browser), so the client has
-// no parser for them; every other sample is a STOMP frame body.
+// no parser for them; `client-*` samples are bodies the client sends; every other sample is a
+// STOMP frame body the server sends.
 const SERVER_MESSAGES = readdirSync(SAMPLES).filter(
-  (file) => file.endsWith('.json') && file !== 'enums.json' && !file.startsWith('question-set-'),
+  (file) =>
+    file.endsWith('.json') && file !== 'enums.json' && !file.startsWith('question-set-') && !file.startsWith('client-'),
 );
 
 describe('contracts/samples', () => {
@@ -34,7 +42,14 @@ describe('contracts/samples', () => {
         'matchmaking-cancelled.json',
         'error-already-in-match.json',
         'error-server-draining.json',
-        'broadcast-envelope.json',
+        'question-started.json',
+        'answer-accepted.json',
+        'scoreboard.json',
+        'question-revealed.json',
+        'question-revealed-no-attribution.json',
+        'error-answer-rejected.json',
+        'error-not-in-match.json',
+        'error-rate-limited.json',
       ]),
     );
   });
@@ -44,7 +59,10 @@ describe('contracts/samples', () => {
     const message = parseServerMessage(json);
     expect(message).not.toBeNull();
     expect(message).toEqual(json);
-    expect(parseIncoming(JSON.stringify(json))).not.toBeNull();
+    const incoming = parseIncoming(JSON.stringify(json));
+    expect(incoming).not.toBeNull();
+    // Every type the server sends today has a typed variant.
+    expect(incoming!.type).not.toBe('OTHER');
   });
 
   it('match-found.json: the payload parses, with the receiver among the participants', () => {
@@ -66,9 +84,67 @@ describe('contracts/samples', () => {
     });
   });
 
-  it('matchmaking-cancelled.json has no payload and broadcast-envelope.json carries seq', () => {
+  it('matchmaking-cancelled.json has no payload', () => {
     expect(parseServerMessage(read('matchmaking-cancelled.json'))).not.toHaveProperty('payload');
-    expect(parseServerMessage(read('broadcast-envelope.json'))!.seq).toBe(7);
+  });
+
+  it('question-started.json: a broadcast with seq, and a question with no answer fields', () => {
+    const message = parseServerMessage(read('question-started.json'))!;
+    expect(message.seq).toBe(1);
+    expect(message.refSeq).toBeUndefined();
+    const payload = parseQuestionStarted(message.payload)!;
+    expect(payload).toEqual(message.payload);
+    expect(payload.questionIndex).toBe(0);
+    expect(payload.total).toBe(10);
+    expect(Object.keys((message.payload as Record<string, unknown>).question as object)).toEqual([
+      'questionId',
+      'version',
+      'textMl',
+      'textEn',
+      'options',
+    ]);
+    expect(Date.parse(payload.deadline) - Date.parse(payload.startedAt)).toBe(15_000);
+  });
+
+  it('answer-accepted.json: a private receipt with refSeq and no seq', () => {
+    const message = parseServerMessage(read('answer-accepted.json'))!;
+    expect(message.refSeq).toBe(1);
+    expect(message.seq).toBeUndefined();
+    expect(parseAnswerAccepted(message.payload)).toEqual({ questionIndex: 0 });
+  });
+
+  it('scoreboard.json: who answered, nothing more', () => {
+    const message = parseServerMessage(read('scoreboard.json'))!;
+    expect(message.seq).toBe(2);
+    expect(parseScoreboard(message.payload)).toEqual(message.payload);
+  });
+
+  it('question-revealed*.json: results, with an absent pick and attribution mapped to null', () => {
+    const full = parseQuestionRevealed(parseServerMessage(read('question-revealed.json'))!.payload)!;
+    expect(full.attribution).toBe('Kerala PSC 2019, Q 14');
+    expect(full.results.map((r) => [r.pickedIndex, r.correct, r.points, r.totalScore])).toEqual([
+      [0, true, 875, 875],
+      [2, false, 0, 0],
+    ]);
+    const bare = parseQuestionRevealed(parseServerMessage(read('question-revealed-no-attribution.json'))!.payload)!;
+    expect(bare.attribution).toBeNull();
+    expect(bare.results[0]!.pickedIndex).toBeNull();
+    expect(bare.results[1]!.pickedIndex).toBe(3);
+  });
+
+  it('the match error samples parse, with refSeq on ANSWER_REJECTED', () => {
+    const rejected = parseServerMessage(read('error-answer-rejected.json'))!;
+    expect(rejected.refSeq).toBe(3);
+    expect(parseErrorPayload(rejected.payload)).toEqual({ code: 'ANSWER_REJECTED', matchId: rejected.matchId });
+    expect(parseErrorPayload(parseServerMessage(read('error-not-in-match.json'))!.payload)!.code).toBe('NOT_IN_MATCH');
+    expect(parseErrorPayload(parseServerMessage(read('error-rate-limited.json'))!.payload)).toEqual({
+      code: 'RATE_LIMITED',
+    });
+  });
+
+  it('client-answer.json is exactly the AnswerRequest the client sends', () => {
+    const body: AnswerRequest = { questionIndex: 0, optionIndex: 2 };
+    expect(read('client-answer.json')).toEqual(body);
   });
 
   it('enums.json lists exactly the TypeScript enum values', () => {
@@ -102,6 +178,41 @@ describe('parsers reject what the contract does not allow', () => {
     ['a missing questionCount', { ...payload, questionCount: undefined }],
   ])('MATCH_FOUND payload: %s', (_, value) => {
     expect(parseMatchFound(value)).toBeNull();
+  });
+
+  const started = (read('question-started.json') as Record<string, unknown>).payload as Record<string, unknown>;
+  const view = started.question as Record<string, unknown>;
+  const revealed = (read('question-revealed.json') as Record<string, unknown>).payload as Record<string, unknown>;
+
+  it.each([
+    ['three options', { ...view, options: ['a', 'b', 'c'] }],
+    ['no text in either language', { ...view, textMl: undefined, textEn: undefined }],
+    ['a numeric questionId', { ...view, questionId: 1 }],
+  ])('QuestionView: %s', (_, value) => {
+    expect(parseQuestionView(value)).toBeNull();
+  });
+
+  it.each([
+    ['an index past the total', { ...started, questionIndex: 10 }],
+    ['a negative index', { ...started, questionIndex: -1 }],
+    ['a bad deadline', { ...started, deadline: 'soon' }],
+  ])('QUESTION_STARTED payload: %s', (_, value) => {
+    expect(parseQuestionStarted(value)).toBeNull();
+  });
+
+  it.each([
+    ['an answer index of 4', { ...revealed, answerIndex: 4 }],
+    ['a pick of 7', { ...revealed, results: [{ participantId: 'a', pickedIndex: 7, correct: false, points: 0, totalScore: 0 }] }],
+    ['a result without points', { ...revealed, results: [{ participantId: 'a', correct: false, totalScore: 0 }] }],
+  ])('QUESTION_REVEALED payload: %s', (_, value) => {
+    expect(parseQuestionRevealed(value)).toBeNull();
+  });
+
+  it('a SCOREBOARD with a non-string participant is ignored', () => {
+    expect(parseScoreboard({ questionIndex: 0, answered: [1] })).toBeNull();
+    expect(
+      parseIncoming('{"type":"SCOREBOARD","seq":2,"serverTime":"2026-11-12T10:00:00Z","payload":{"questionIndex":0}}'),
+    ).toBeNull();
   });
 
   it('an ERROR with an unknown code, and non-JSON bodies, are ignored', () => {

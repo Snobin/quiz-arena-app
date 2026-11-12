@@ -9,16 +9,15 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * The minimal match-actor shell (Story 1.6): what a match will need, held in memory with no
- * behaviour yet. Story 1.7 replaces it with the full match actor.
+ * What a match starts from, as matchmaking formed it.
  *
- * @param participants  every participant, in pairing order (bots included)
- * @param humans        each human's {@code sub} → her participant id (never sent to clients)
- * @param questions     the drawn set, answers included (AD-5: never leaves the server)
- * @param queueWaitMs   each human's {@code sub} → her wait in the queue
- * @param ratings       every participant's id → the rating she plays at (a bot plays at its human's)
+ * @param participants every participant, in pairing order (bots included)
+ * @param humans       each human's {@code sub} → her participant id (never sent to clients)
+ * @param questions    the drawn set, answers included (AD-5: never leaves the server as is)
+ * @param queueWaitMs  each human's {@code sub} → her wait in the queue
+ * @param ratings      every participant's id → the rating she plays at (a bot plays at its human's)
  */
-public record MatchShell(
+public record MatchSetup(
         UUID matchId,
         MatchMode mode,
         List<Participant> participants,
@@ -28,7 +27,7 @@ public record MatchShell(
         Map<UUID, Integer> ratings,
         Instant createdAt) {
 
-    public MatchShell {
+    public MatchSetup {
         participants = List.copyOf(participants);
         humans = Map.copyOf(humans);
         questions = List.copyOf(questions);

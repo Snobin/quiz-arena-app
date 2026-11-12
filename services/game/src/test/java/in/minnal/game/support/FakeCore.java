@@ -17,7 +17,8 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * A stand-in for core-service's {@code POST /internal/question-sets} on a random loopback port:
- * answers with {@code count} questions, or with {@link #status} after {@link #delayMs}.
+ * answers with {@code count} questions (question {@code i} has answer index {@code i % 4}), or with
+ * {@link #status} after {@link #delayMs}.
  */
 public final class FakeCore implements AutoCloseable {
 
@@ -32,6 +33,8 @@ public final class FakeCore implements AutoCloseable {
     private final List<Call> calls = new CopyOnWriteArrayList<>();
     public volatile int status = 200;
     public volatile long delayMs;
+    /** Answers with this many questions fewer than asked (a contract breach core never commits). */
+    public volatile int shortBy;
 
     private FakeCore() throws IOException {
         server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
@@ -45,7 +48,7 @@ public final class FakeCore implements AutoCloseable {
                 Thread.currentThread().interrupt();
             }
             int code = status;
-            byte[] out = (code == 200 ? questions(body.get("count").asInt()) : "{\"status\":" + code + "}")
+            byte[] out = (code == 200 ? questions(body.get("count").asInt() - shortBy) : "{\"status\":" + code + "}")
                     .getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", code == 200 ? "application/json" : "application/problem+json");
             try {
@@ -79,6 +82,7 @@ public final class FakeCore implements AutoCloseable {
     public void reset() {
         status = 200;
         delayMs = 0;
+        shortBy = 0;
         calls.clear();
     }
 
