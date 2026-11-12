@@ -15,6 +15,25 @@
     <name>Minnal :: contracts</name>
     <description>Shared contracts only: event records, /internal DTOs, STOMP envelope and types, Scoring, Ranking. No Spring code.</description>
 
+    <dependencies>
+        <!-- Test only: the golden samples and JSON round-trips use the same Jackson 3 the services run. -->
+        <dependency>
+            <groupId>tools.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
     <build>
         <plugins>
             <!-- contracts stays plain Java: no Spring on its classpath, ever. -->

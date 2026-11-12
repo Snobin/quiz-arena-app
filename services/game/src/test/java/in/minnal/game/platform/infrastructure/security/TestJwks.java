@@ -29,7 +29,7 @@ import java.util.function.UnaryOperator;
  * A stand-in for core-service's JWKS: a JDK HTTP server on a random loopback port serving one RSA
  * public key, plus helpers that mint tokens the way core does (and ways it never would).
  */
-final class TestJwks implements AutoCloseable {
+public final class TestJwks implements AutoCloseable {
 
     static final String PATH = "/api/core/v1/auth/jwks";
 
@@ -56,7 +56,7 @@ final class TestJwks implements AutoCloseable {
         server.start();
     }
 
-    static TestJwks start() {
+    public static TestJwks start() {
         try {
             return new TestJwks();
         } catch (IOException | JOSEException e) {
@@ -64,16 +64,16 @@ final class TestJwks implements AutoCloseable {
         }
     }
 
-    String uri() {
+    public String uri() {
         return "http://" + server.getAddress().getHostString() + ":" + server.getAddress().getPort() + PATH;
     }
 
-    int fetches() {
+    public int fetches() {
         return fetches.get();
     }
 
     /** Replaces the served key with a new one under a new kid (core restarted or rotated). */
-    void rotate() {
+    public void rotate() {
         try {
             key = new RSAKeyGenerator(2048).keyID("test-key-" + generation.incrementAndGet()).keyUse(KeyUse.SIGNATURE)
                     .algorithm(JWSAlgorithm.RS256).generate();
@@ -82,11 +82,11 @@ final class TestJwks implements AutoCloseable {
         }
     }
 
-    String keyId() {
+    public String keyId() {
         return key.getKeyID();
     }
 
-    static JWTClaimsSet.Builder guestClaims() {
+    public static JWTClaimsSet.Builder guestClaims() {
         Instant now = Instant.now();
         return new JWTClaimsSet.Builder()
                 .issuer(MinnalClaims.ISSUER)
@@ -98,26 +98,26 @@ final class TestJwks implements AutoCloseable {
                 .claim(MinnalClaims.LANG, "ml");
     }
 
-    String token(UnaryOperator<JWTClaimsSet.Builder> claims) {
+    public String token(UnaryOperator<JWTClaimsSet.Builder> claims) {
         return sign(key, claims.apply(guestClaims()).build());
     }
 
-    String validToken() {
+    public String validToken() {
         return token(c -> c);
     }
 
-    String forgedToken() {
+    public String forgedToken() {
         return sign(stranger, guestClaims().build());
     }
 
     /** A valid token whose payload was swapped after signing (roles escalated to ADMIN). */
-    String tamperedToken() {
+    public String tamperedToken() {
         String[] parts = validToken().split("\\.");
         String forged = sign(key, guestClaims().claim(MinnalClaims.ROLES, List.of("ADMIN")).build()).split("\\.")[1];
         return parts[0] + "." + forged + "." + parts[2];
     }
 
-    String expiredToken() {
+    public String expiredToken() {
         Instant past = Instant.now().minus(Duration.ofHours(2));
         return token(c -> c.issueTime(Date.from(past.minus(Duration.ofHours(24)))).expirationTime(Date.from(past)));
     }

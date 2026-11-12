@@ -43,3 +43,17 @@ minnal:
     # core-service's JWKS (AD-9), fetched lazily on the first token. Compose sets the private-network
     # URL (http://core-service:8081/...); the default suits services run from the IDE.
     jwks-uri: ${MINNAL_JWKS_URI:http://localhost:8081/api/core/v1/auth/jwks}
+  # Sent as X-Internal-Token on POST {core.base-url}/internal/question-sets (AD-12). Outside Docker,
+  # the local profile imports deploy/.env, whose MINNAL_INTERNAL_TOKEN key resolves this.
+  internal:
+    token: ${MINNAL_INTERNAL_TOKEN:}
+  core:
+    base-url: ${MINNAL_CORE_URL:http://localhost:8081}
+    question-set-timeout: 2s
+  matchmaking:
+    tick: 250ms
+    widen-after: 4s
+    bot-after: 8s
+  match:
+    # A match shell (Story 1.6) frees its players after this, or once all of them disconnect.
+    shell-ttl: 5m

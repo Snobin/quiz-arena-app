@@ -116,6 +116,38 @@ describe('pendingSignoff', () => {
   });
 });
 
+describe('Story 1.6 strings', () => {
+  const STORY_1_6 = [
+    'title.match',
+    'common.home',
+    'badge.bot',
+    'matchmaking.elapsed',
+    'matchmaking.failed',
+    'matchmaking.connectionFailed',
+    'matchmaking.draining',
+    'matchmaking.alreadyInMatch',
+    'matchmaking.alreadySearching',
+    'matchmaking.returnToMatch',
+    'match.foundVs',
+    'match.stubNote',
+    'match.none',
+  ] as const;
+
+  it('drafts every new string in both languages, flagged for sign-off', () => {
+    for (const key of STORY_1_6) {
+      const entry: Entry = catalogue[key];
+      expect(entry.ml, key).toBeTruthy();
+      expect(entry.en, key).toBeTruthy();
+      expect(entry.signoff, key).toEqual(['ml', 'en']);
+    }
+  });
+
+  it('renders the elapsed count with Latin digits', () => {
+    expect(i18n.getFixedT('ml')('matchmaking.elapsed', { seconds: 12 })).toBe('12 സെക്കൻഡ്');
+    expect(i18n.getFixedT('en')('matchmaking.elapsed', { seconds: 12 })).toBe('12 s');
+  });
+});
+
 describe('catalogue shape', () => {
   it('pairs every plural _one with an _other', () => {
     for (const [key] of entries.filter(([k]) => k.endsWith('_one'))) {
@@ -137,16 +169,17 @@ describe('catalogue shape', () => {
       'റാങ്ക്',
       'ഞാൻ',
     ]);
-    // The scaffold probe left Play in Story 1.5.
+    // The scaffold probe left Play in Story 1.5; the matchmaking stub line left in Story 1.6.
+    expect(catalogue).not.toHaveProperty('matchmaking.stub');
     expect(catalogue).not.toHaveProperty('shell.tagline');
     expect(catalogue).not.toHaveProperty('shell.probe.unreachable');
   });
 
   it('drafts every Story 1.5 string in both languages, flagged for sign-off', () => {
     const keys = Object.keys(catalogue).filter((key) =>
-      /^(home|mode|nudge|signIn|guest|common\.(back|retry|cancel)|matchmaking\.stub|title\.(home|signIn|matchmaking))\b/.test(key),
+      /^(home|mode|nudge|signIn|guest|common\.(back|retry|cancel)|title\.(home|signIn|matchmaking))\b/.test(key),
     ) as CatalogueKey[];
-    expect(keys.length).toBeGreaterThanOrEqual(26);
+    expect(keys.length).toBeGreaterThanOrEqual(25);
     for (const key of keys) {
       const entry: Entry = catalogue[key];
       expect(entry.ml, key).toBeTruthy();

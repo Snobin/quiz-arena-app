@@ -27,8 +27,9 @@ import tools.jackson.databind.json.JsonMapper;
  * <p>Tokens must be RS256, issued by {@code minnal-core}, with a valid {@code exp}/{@code nbf}
  * (60 s skew) and a {@code sub}. The JWKS ({@code minnal.security.jwks-uri}, env
  * {@code MINNAL_JWKS_URI}) is fetched lazily on the first token, so startup never needs core.
- * Public: {@code /actuator/health}, {@code /error} and {@code /ws} (STOMP CONNECT carries its own
- * token from Story 1.6). Everything else needs a valid bearer token.
+ * Public: {@code /actuator/health}, {@code /error} and {@code /ws} (the STOMP CONNECT frame carries
+ * its own token, checked by {@link StompConnectAuthInterceptor} with this same decoder). Everything
+ * else needs a valid bearer token.
  *
  * <p>ratings-service keeps a duplicate of this package (no shared Spring module, AD-1); only the
  * public path list differs.

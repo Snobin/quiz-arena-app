@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stack-level acceptance checks (Stories 1.1, 1.4 and 1.5). Run after:
+# Stack-level acceptance checks (Stories 1.1, 1.4, 1.5 and 1.6). Run after:
 #   docker compose -f deploy/compose.yaml --env-file deploy/.env up -d --wait
 # Usage: bash deploy/verify-local.sh
 #   BASE_URL defaults to http://localhost:<CADDY_HTTP_PORT> (from the environment, else deploy/.env, else 8080).
@@ -189,6 +189,90 @@ ws=$(ws_status http://localhost:5173)
 [[ "$ws" == *" 101"* ]]; check "WebSocket /ws from http://localhost:5173 -> 101 Switching Protocols" $? "got: $ws"
 ws=$(ws_status http://evil.example)
 [[ "$ws" == *" 403"* ]]; check "WebSocket /ws from http://evil.example -> 403" $? "got: $ws"
+
+# 12. STOMP at /ws (Story 1.6): CONNECT without a token -> ERROR frame (socket closed); with the
+#     guest token -> CONNECTED. A tiny raw-WebSocket client: python3, else node (global WebSocket).
+STOMP_PY=$(cat <<'PY'
+import base64, os, socket, sys
+from urllib.parse import urlparse
+url, origin, auth = urlparse(sys.argv[1]), sys.argv[2], sys.argv[3]
+sock = socket.create_connection((url.hostname, url.port or 80), timeout=5)
+key = base64.b64encode(os.urandom(16)).decode()
+sock.sendall((f"GET /ws HTTP/1.1\r\nHost: {url.netloc}\r\nOrigin: {origin}\r\nUpgrade: websocket\r\n"
+              f"Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
+buf = b""
+while b"\r\n\r\n" not in buf:
+    chunk = sock.recv(4096)
+    if not chunk:
+        print("NO-UPGRADE"); sys.exit(0)
+    buf += chunk
+head, buf = buf.split(b"\r\n\r\n", 1)
+if b" 101 " not in head.split(b"\r\n")[0]:
+    print("NO-UPGRADE " + head.split(b"\r\n")[0].decode()); sys.exit(0)
+frame = "CONNECT\naccept-version:1.2\nhost:localhost\n" + (f"Authorization:{auth}\n" if auth else "") + "\n\0"
+data, mask = frame.encode(), os.urandom(4)
+header = bytes([0x81]) + (bytes([0x80 | len(data)]) if len(data) < 126 else bytes([0xFE]) + len(data).to_bytes(2, "big"))
+sock.sendall(header + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
+def read(n):
+    global buf
+    while len(buf) < n:
+        chunk = sock.recv(4096)
+        if not chunk:
+            raise EOFError
+        buf += chunk
+    out, buf = buf[:n], buf[n:]
+    return out
+try:
+    while True:
+        b0, b1 = read(2)
+        n = b1 & 0x7F
+        n = int.from_bytes(read(2), "big") if n == 126 else int.from_bytes(read(8), "big") if n == 127 else n
+        payload, opcode = read(n), b0 & 0x0F
+        if opcode == 8:
+            print("CLOSED"); break
+        if opcode == 1 and payload.strip(b"\n"):
+            text = payload.decode(errors="replace")
+            message = next((l[8:] for l in text.split("\n") if l.startswith("message:")), "")
+            print(text.split("\n", 1)[0] + (" " + message if message else ""))
+            if not text.startswith("ERROR"):
+                break
+except (EOFError, socket.timeout, OSError):
+    print("CLOSED")
+PY
+)
+STOMP_JS=$(cat <<'JS'
+const [, , url, origin, auth] = process.argv;
+const ws = new WebSocket(url.replace(/^http/, 'ws') + '/ws', { headers: { Origin: origin } });
+const timer = setTimeout(() => { console.log('TIMEOUT'); process.exit(0); }, 5000);
+ws.onopen = () => ws.send('CONNECT\naccept-version:1.2\nhost:localhost\n' + (auth ? `Authorization:${auth}\n` : '') + '\n\0');
+ws.onmessage = (e) => {
+  const text = String(e.data);
+  if (!text.trim()) return;
+  const message = (text.split('\n').find((l) => l.startsWith('message:')) || '').slice(8);
+  console.log(text.split('\n', 1)[0] + (message ? ' ' + message : ''));
+  if (!text.startsWith('ERROR')) { clearTimeout(timer); ws.close(); }
+};
+ws.onclose = () => { console.log('CLOSED'); clearTimeout(timer); };
+ws.onerror = () => {};
+JS
+)
+stomp_connect() { # authorization header value, or '' for none; prints the reply frames, one per line
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -I -c "$STOMP_PY" "$BASE_URL" http://localhost:5173 "$1" 2>&1
+  else
+    node -e "$STOMP_JS" "$BASE_URL" http://localhost:5173 "$1" 2>&1
+  fi
+}
+if command -v python3 >/dev/null 2>&1 || node -e 'process.exit(typeof WebSocket === "function" ? 0 : 1)' 2>/dev/null; then
+  out=$(stomp_connect '')
+  grep -q '^ERROR UNAUTHENTICATED' <<<"$out" && grep -q '^CLOSED' <<<"$out"
+  check "STOMP CONNECT at /ws without a token -> ERROR UNAUTHENTICATED, socket closed" $? "got: $(tr '\n' ' ' <<<"$out")"
+  out=$(stomp_connect "Bearer $GUEST_TOKEN")
+  grep -q '^CONNECTED' <<<"$out"
+  check "STOMP CONNECT at /ws with the guest token -> CONNECTED" $? "got: $(tr '\n' ' ' <<<"$out")"
+else
+  echo "SKIP  STOMP CONNECT checks: neither python3 nor a node with a global WebSocket (Node 22+) is installed"
+fi
 
 echo
 if [ "$FAILURES" -eq 0 ]; then echo "All checks passed."; else echo "$FAILURES check(s) failed."; exit 1; fi

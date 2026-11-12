@@ -1,0 +1,75 @@
+package in.minnal.game.support;
+
+import in.minnal.game.platform.infrastructure.security.TestJwks;
+import in.minnal.game.platform.session.ParticipationRegistry;
+import java.time.Duration;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterAll;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+
+import static org.awaitility.Awaitility.await;
+
+/**
+ * Base of the STOMP integration tests: the whole service on a random port, the real JWT decoder
+ * against a {@link TestJwks}, a {@link FakeCore} for question sets and a {@link MutableClock}.
+ * Subclasses share one application context; each test uses fresh {@code sub}s and must leave
+ * nobody queued (close its clients, then {@link #awaitIdle}).
+ */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@ActiveProfiles("test")
+@Import(TestClockConfiguration.class)
+public abstract class GameIntegrationTest {
+
+    protected static final TestJwks JWKS = TestJwks.start();
+    protected static final FakeCore CORE = FakeCore.start();
+
+    @DynamicPropertySource
+    static void endpoints(DynamicPropertyRegistry registry) {
+        registry.add("minnal.security.jwks-uri", JWKS::uri);
+        registry.add("minnal.core.base-url", CORE::baseUrl);
+        registry.add("minnal.internal.token", () -> FakeCore.TOKEN);
+    }
+
+    @AfterAll
+    static void resetCore() {
+        CORE.reset();
+    }
+
+    @LocalServerPort
+    protected int port;
+
+    @Autowired
+    protected MutableClock clock;
+
+    @Autowired
+    protected ParticipationRegistry participation;
+
+    protected static String newSub() {
+        return UUID.randomUUID().toString();
+    }
+
+    protected static String guestToken(String sub) {
+        return JWKS.token(c -> c.subject(sub).claim("name", "Guest " + sub.substring(0, 4)));
+    }
+
+    protected static String userToken(String sub, String name) {
+        return JWKS.token(c -> c.subject(sub).claim("roles", List.of("USER")).claim("name", name));
+    }
+
+    protected StompTestClient connect(String token) {
+        return StompTestClient.connect(port, token);
+    }
+
+    /** Waits until none of {@code subs} holds a queue or match claim. */
+    protected void awaitIdle(String... subs) {
+        await().atMost(Duration.ofSeconds(5))
+                .until(() -> java.util.Arrays.stream(subs).allMatch(sub -> participation.activityOf(sub).isEmpty()));
+    }
+}

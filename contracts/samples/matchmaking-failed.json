@@ -1,0 +1,7 @@
+{
+  "type" : "MATCHMAKING_FAILED",
+  "serverTime" : "2026-11-12T10:15:30.123Z",
+  "payload" : {
+    "reason" : "QUESTION_SET_UNAVAILABLE"
+  }
+}

@@ -112,11 +112,49 @@ export const catalogue = {
     en: 'Google sign-in is coming soon',
     signoff: ['ml', 'en'],
   },
-  'matchmaking.stub': {
-    ml: 'മാച്ച് തിരയൽ ഇനിയും ലഭ്യമല്ല. ഉടൻ വരുന്നു.',
-    en: "Matchmaking isn't available yet. It's coming soon.",
+  // Matchmaking and the live-match stub (Story 1.6)
+  'title.match': { ml: 'മാച്ച്', en: 'Match', signoff: ['ml', 'en'] },
+  'common.home': { ml: 'ഹോം', en: 'Home', signoff: ['ml', 'en'] },
+  'badge.bot': { ml: 'BOT', en: 'BOT', signoff: ['ml', 'en'] },
+  'matchmaking.elapsed': {
+    ml: '{{seconds, number}} സെക്കൻഡ്',
+    en: '{{seconds, number}} s',
+    signoff: ['ml', 'en'],
+    params: { ml: { seconds: 5 }, en: { seconds: 5 } },
+  },
+  'matchmaking.failed': {
+    ml: 'മാച്ച് തുടങ്ങാനായില്ല. വീണ്ടും ശ്രമിക്കൂ.',
+    en: "Couldn't start the match. Try again.",
     signoff: ['ml', 'en'],
   },
+  'matchmaking.connectionFailed': {
+    ml: 'മിന്നലിലേക്ക് കണക്റ്റ് ചെയ്യാനായില്ല. കണക്ഷൻ നോക്കി വീണ്ടും ശ്രമിക്കൂ.',
+    en: "Couldn't connect to Minnal. Check your connection and try again.",
+    signoff: ['ml', 'en'],
+  },
+  'matchmaking.draining': {
+    ml: 'മിന്നൽ അപ്ഡേറ്റ് ചെയ്യുകയാണ്. അൽപ്പം കഴിഞ്ഞ് വീണ്ടും ശ്രമിക്കൂ.',
+    en: 'Minnal is updating. Try again in a moment.',
+    signoff: ['ml', 'en'],
+  },
+  'matchmaking.alreadyInMatch': {
+    ml: 'നിങ്ങൾ ഇപ്പോൾ ഒരു മാച്ചിലാണ്.',
+    en: "You're already in a match.",
+    signoff: ['ml', 'en'],
+  },
+  'matchmaking.alreadySearching': {
+    ml: 'മറ്റൊരു ടാബിലോ ഫോണിലോ നിങ്ങൾ ഇതിനകം എതിരാളിയെ തിരയുന്നുണ്ട്.',
+    en: "You're already searching on another tab or device.",
+    signoff: ['ml', 'en'],
+  },
+  'matchmaking.returnToMatch': { ml: 'മാച്ചിലേക്ക് മടങ്ങാം', en: 'Back to your match', signoff: ['ml', 'en'] },
+  'match.foundVs': { ml: 'മാച്ച് റെഡി · എതിരാളി', en: 'Match found · vs', signoff: ['ml', 'en'] },
+  'match.stubNote': {
+    ml: 'ലൈവ് മാച്ച് സ്ക്രീൻ അടുത്ത അപ്ഡേറ്റിൽ എത്തും.',
+    en: 'The live match screen arrives in the next update.',
+    signoff: ['ml', 'en'],
+  },
+  'match.none': { ml: 'ഈ സ്ക്രീനിൽ മാച്ച് ഒന്നുമില്ല.', en: "There's no match on this screen.", signoff: ['ml', 'en'] },
   'rooms.placeholder': {
     ml: 'റൂമുകൾ ഉടൻ വരുന്നു. ബാച്ചിനെ മുഴുവൻ ഒരുമിച്ച് കളിപ്പിക്കാം.',
     en: 'Rooms are coming soon. Your whole batch will play together here.',

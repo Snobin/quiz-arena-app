@@ -1,0 +1,11 @@
+{
+  "questions" : [ {
+    "questionId" : "3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f",
+    "version" : 2,
+    "textMl" : "കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി?",
+    "textEn" : "Which is the longest river in Kerala?",
+    "options" : [ "പെരിയാർ", "ഭാരതപ്പുഴ", "പമ്പ", "ചാലിയാർ" ],
+    "answerIndex" : 0,
+    "explanation" : "പെരിയാറിന് 244 കി.മീ. നീളമുണ്ട്."
+  } ]
+}

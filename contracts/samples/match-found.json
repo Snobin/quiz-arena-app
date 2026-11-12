@@ -1,0 +1,21 @@
+{
+  "type" : "MATCH_FOUND",
+  "matchId" : "6f1c2a3e-8a4b-4c1d-9e2f-0a1b2c3d4e5f",
+  "serverTime" : "2026-11-12T10:15:30.123Z",
+  "payload" : {
+    "matchId" : "6f1c2a3e-8a4b-4c1d-9e2f-0a1b2c3d4e5f",
+    "mode" : "QUICK",
+    "participants" : [ {
+      "participantId" : "0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+      "displayName" : "Guest 4821",
+      "kind" : "GUEST"
+    }, {
+      "participantId" : "9d8c7b6a-5f4e-4d3c-b2a1-0f9e8d7c6b5a",
+      "displayName" : "Minnal Bot",
+      "kind" : "BOT"
+    } ],
+    "questionCount" : 10,
+    "questionSource" : "BANK",
+    "selfParticipantId" : "0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d"
+  }
+}
