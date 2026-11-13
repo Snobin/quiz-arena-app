@@ -169,7 +169,7 @@ Start the Compose stack first so the dev proxy has something to talk to.
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every push to any branch (and by hand from the Actions tab).
+`.github/workflows/ci.yml` runs on every push to any branch, not tags (and by hand from the Actions tab).
 Any failing step turns the run red. It has three jobs:
 
 - **backend**: JDK 25 (Temurin), `./mvnw -B verify`. Core's integration tests start Postgres with
@@ -180,10 +180,11 @@ Any failing step turns the run red. It has three jobs:
   `node deploy/check-compose.mjs`. The check resolves `deploy/compose.yaml` with
   `docker compose config` and fails if a service has no memory limit, healthcheck or
   `restart: unless-stopped`, if a JVM service's `JAVA_TOOL_OPTIONS` lacks `-Xmx384m` or lower, or
-  if the memory limits add up to 3.2 GB or more. It prints the total. Required `${VAR:?}` values get
+  if the memory limits add up to 3.2 GB (3,200,000,000 bytes) or more. It prints the total. Required `${VAR:?}` values get
   placeholders, and it never reads `deploy/.env`.
 
-Run the same checks locally from the repo root:
+Run the same checks locally from the repo root. Docker must be running: `./mvnw -B verify` needs it
+for Testcontainers, and the Compose check calls `docker compose`.
 
 ```sh
 ./mvnw -B verify

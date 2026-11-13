@@ -1,8 +1,12 @@
-// Tests for check-compose.mjs. Run with: node --test deploy/*.test.mjs (Node 22+ reads a bare directory argument as a file).
+// Tests for check-compose.mjs. Run with: node --test deploy/*.test.mjs (the shell expands the glob;
+// Node 22+ does not search a bare directory argument for test files).
 // Each fixture breaks one rule; the CLI must fail and name it. Needs `docker compose`.
 
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { copyFileSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 
@@ -11,10 +15,10 @@ import { checkConfig, heapCap, parseBytes, requiredVariables } from './check-com
 const script = fileURLToPath(new URL('./check-compose.mjs', import.meta.url));
 const fixture = (name) => fileURLToPath(new URL(`./fixtures/compose-${name}.yaml`, import.meta.url));
 
-function run(file) {
+function run(file, scriptPath = script) {
   const env = { ...process.env };
   delete env.FIXTURE_PASSWORD; // the script must supply its own placeholder
-  const res = spawnSync(process.execPath, [script, ...(file ? [file] : [])], { encoding: 'utf8', env });
+  const res = spawnSync(process.execPath, [scriptPath, ...(file ? [file] : [])], { encoding: 'utf8', env });
   return { code: res.status, out: res.stdout + res.stderr };
 }
 
@@ -22,13 +26,13 @@ describe('check-compose CLI', () => {
   it('passes the real deploy/compose.yaml and prints the total', () => {
     const { code, out } = run();
     assert.equal(code, 0, out);
-    assert.match(out, /total memory limit: \d+ MB/);
+    assert.match(out, /total memory limit: \d+\.\d\d GB \(\d+ MiB\)/);
   });
 
   it('passes a good fixture, filling required variables with placeholders', () => {
     const { code, out } = run(fixture('good'));
     assert.equal(code, 0, out);
-    assert.match(out, /total memory limit: 2816 MB/);
+    assert.match(out, /total memory limit: 2\.95 GB \(2816 MiB\)/);
   });
 
   it('fails a service with no memory limit', () => {
@@ -40,15 +44,55 @@ describe('check-compose CLI', () => {
   it('fails a JVM heap above 384m and a JVM service with no -Xmx', () => {
     const { code, out } = run(fixture('heap-too-big'));
     assert.equal(code, 1, out);
-    assert.match(out, /game-service: heap cap 512 MB/);
+    assert.match(out, /game-service: heap cap 512 MiB/);
     assert.match(out, /ratings-service: no -Xmx heap cap/);
     assert.match(out, /2 violation/);
   });
 
-  it('fails limits summing to 3.2 GB and prints the total', () => {
+  it('fails limits summing to exactly 3.2 GB and prints the total', () => {
     const { code, out } = run(fixture('over-budget'));
     assert.equal(code, 1, out);
-    assert.match(out, /total memory limit 3200 MB is not below the 3200 MB budget/);
+    assert.match(out, /total memory limit 3\.20 GB \(3052 MiB\) is not below the 3\.20 GB \(3052 MiB\) budget/);
+  });
+
+  it('fails when a JVM service is missing from the file', () => {
+    const { code, out } = run(fixture('missing-jvm'));
+    assert.equal(code, 1, out);
+    assert.match(out, /ratings-service: JVM service is missing/);
+    assert.match(out, /1 violation/);
+  });
+
+  it('treats healthcheck test ["NONE"] as no healthcheck', () => {
+    const { code, out } = run(fixture('healthcheck-none'));
+    assert.equal(code, 1, out);
+    assert.match(out, /postgres: no healthcheck/);
+  });
+
+  it('never reads a .env beside the Compose file', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'check-compose-test-'));
+    try {
+      const file = join(dir, 'compose.yaml');
+      copyFileSync(fixture('good'), file);
+      writeFileSync(join(dir, '.env'), 'not a valid line\n'); // Compose fails if it reads this
+      const { code, out } = run(file);
+      assert.equal(code, 0, out);
+      assert.equal(out.replace(file, '<file>'), run(fixture('good')).out.replace(fixture('good'), '<file>'));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('runs the check when invoked through a symlink', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'check-compose-test-'));
+    try {
+      const link = join(dir, 'check-compose.mjs');
+      symlinkSync(script, link);
+      const { code, out } = run(fixture('no-limit'), link);
+      assert.equal(code, 1, out);
+      assert.match(out, /valkey: no memory limit/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('fails a service with no healthcheck', () => {

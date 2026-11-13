@@ -7,7 +7,7 @@
 // from reading a real deploy/.env. Exit code 1 lists every violation.
 
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,8 +15,8 @@ import { fileURLToPath } from 'node:url';
 const MIB = 1024 * 1024;
 export const JVM_SERVICES = ['core-service', 'game-service', 'ratings-service'];
 export const MAX_HEAP_BYTES = 384 * MIB;
-// "Total memory < 3.2 GB", counted in the same MB (MiB) units Compose limits are written in.
-export const MEMORY_BUDGET_BYTES = 3200 * MIB;
+// "Total memory < 3.2 GB", decimal: 3,200,000,000 bytes (about 3052 MiB).
+export const MEMORY_BUDGET_BYTES = 3_200_000_000;
 export const REQUIRED_RESTART = 'unless-stopped';
 
 const UNIT = { '': 1, b: 1, k: 1024, kb: 1024, m: MIB, mb: MIB, g: 1024 * MIB, gb: 1024 * MIB };
@@ -51,7 +51,8 @@ function memoryLimitOf(service) {
   return parseBytes(service.mem_limit) ?? parseBytes(service.deploy?.resources?.limits?.memory);
 }
 
-const mib = (bytes) => `${Math.round(bytes / MIB)} MB`;
+const mib = (bytes) => `${Math.round(bytes / MIB)} MiB`;
+const gb = (bytes) => `${(bytes / 1e9).toFixed(2)} GB (${mib(bytes)})`;
 
 /** Applies every rule to a resolved Compose config. Returns { violations, totalBytes }. */
 export function checkConfig(config) {
@@ -88,7 +89,7 @@ export function checkConfig(config) {
   }
 
   if (totalBytes >= MEMORY_BUDGET_BYTES) {
-    violations.push(`total memory limit ${mib(totalBytes)} is not below the ${mib(MEMORY_BUDGET_BYTES)} budget`);
+    violations.push(`total memory limit ${gb(totalBytes)} is not below the ${gb(MEMORY_BUDGET_BYTES)} budget`);
   }
   return { violations, totalBytes };
 }
@@ -100,7 +101,8 @@ export function requiredVariables(yamlText) {
 
 /** Resolves a Compose file with placeholder secrets and no real .env. */
 export function resolveCompose(file) {
-  const env = { ...process.env };
+  // COMPOSE_* variables (COMPOSE_FILE, COMPOSE_PROFILES, ...) would change what gets resolved.
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('COMPOSE_')));
   for (const name of requiredVariables(readFileSync(file, 'utf8'))) env[name] = 'ci-placeholder';
   const dir = mkdtempSync(join(tmpdir(), 'check-compose-'));
   const emptyEnvFile = join(dir, 'empty.env');
@@ -130,7 +132,7 @@ function main() {
   }
   const { violations, totalBytes } = checkConfig(config);
   console.log(`check-compose: ${file}`);
-  console.log(`total memory limit: ${mib(totalBytes)} (budget: below ${mib(MEMORY_BUDGET_BYTES)})`);
+  console.log(`total memory limit: ${gb(totalBytes)}; budget: below ${gb(MEMORY_BUDGET_BYTES)}`);
   if (violations.length) {
     console.error(`FAIL: ${violations.length} violation(s)`);
     for (const v of violations) console.error(`  - ${v}`);
@@ -139,4 +141,12 @@ function main() {
   console.log('OK: every service has a memory limit, healthcheck and restart: unless-stopped; JVM heaps capped.');
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();
+function invokedDirectly() {
+  try {
+    return Boolean(process.argv[1]) && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (invokedDirectly()) main();
