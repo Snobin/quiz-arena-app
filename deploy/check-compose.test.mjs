@@ -1,4 +1,4 @@
-// Tests for check-compose.mjs. Run with: node --test deploy/
+// Tests for check-compose.mjs. Run with: node --test deploy/*.test.mjs (Node 22+ reads a bare directory argument as a file).
 // Each fixture breaks one rule; the CLI must fail and name it. Needs `docker compose`.
 
 import assert from 'node:assert/strict';

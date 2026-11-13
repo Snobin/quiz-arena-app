@@ -176,7 +176,7 @@ Any failing step turns the run red. It has three jobs:
   Testcontainers, so they need Docker.
 - **web**: Node 22, `npm ci`, then `typecheck`, `test`, `check:i18n`, `check:tokens` and
   `build:check`.
-- **compose**: `node --test deploy/` (the check script's own tests), then
+- **compose**: `node --test deploy/*.test.mjs` (the check script's own tests), then
   `node deploy/check-compose.mjs`. The check resolves `deploy/compose.yaml` with
   `docker compose config` and fails if a service has no memory limit, healthcheck or
   `restart: unless-stopped`, if a JVM service's `JAVA_TOOL_OPTIONS` lacks `-Xmx384m` or lower, or
@@ -188,6 +188,6 @@ Run the same checks locally from the repo root:
 ```sh
 ./mvnw -B verify
 (cd web && npm ci && npm run typecheck && npm test && npm run check:i18n && npm run check:tokens && npm run build:check)
-node --test deploy/
+node --test deploy/*.test.mjs
 node deploy/check-compose.mjs
 ```
