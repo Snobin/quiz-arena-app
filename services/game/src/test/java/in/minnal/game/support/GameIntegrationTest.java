@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -51,6 +52,16 @@ public abstract class GameIntegrationTest {
 
     @Autowired
     protected ParticipationRegistry participation;
+
+    /** The rate limiter's time source; frozen by a test only, and always released after it. */
+    @Autowired
+    protected ControllableNanos nanos;
+
+    /** The context is shared: never let one test's frozen limiter time leak into the next. */
+    @AfterEach
+    void releaseRateLimiterTime() {
+        nanos.release();
+    }
 
     protected static String newSub() {
         return UUID.randomUUID().toString();
