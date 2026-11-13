@@ -175,6 +175,8 @@ class MatchmakingFlowTest extends GameIntegrationTest {
         MatchSetup setup = matches.find(UUID.fromString(found.get("matchId").asString())).orElseThrow().setup();
         assertThat(setup.ratings()).containsEntry(UUID.fromString(participants.get(1).get("participantId").asString()), 1200)
                 .containsEntry(UUID.fromString(participants.get(0).get("participantId").asString()), 1200);
+        // Her queue wait reaches the setup through the shared start path (MatchStarter).
+        assertThat(setup.queueWaitMs()).containsEntry(a, 8_000L);
         assertThat(pairings("bot")).isEqualTo(botBefore + 1);
     }
 

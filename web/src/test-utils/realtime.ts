@@ -364,3 +364,22 @@ export function matchEnded(
     },
   };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Rematch (Story 1.10 part 2): private messages about the ended match.
+
+export const rematchSend = (matchId: string) => `/app/match/${matchId}/rematch`;
+export const rematchCancelSend = (matchId: string) => `/app/match/${matchId}/rematch/cancel`;
+
+/** REMATCH_REQUESTED: `requestedBy` asked; it lapses at `expiresAt` (ISO, server clock). */
+export function rematchRequested(matchId: string, requestedBy: string, expiresAt: string, serverTime = SERVER_TIME) {
+  return { type: 'REMATCH_REQUESTED', matchId, serverTime, payload: { requestedBy, expiresAt } };
+}
+
+export function rematchDeclined(matchId: string, reason: 'CANCELLED' | 'UNAVAILABLE') {
+  return { type: 'REMATCH_DECLINED', matchId, serverTime: SERVER_TIME, payload: { reason } };
+}
+
+export function rematchExpired(matchId: string) {
+  return { type: 'REMATCH_EXPIRED', matchId, serverTime: SERVER_TIME, payload: {} };
+}

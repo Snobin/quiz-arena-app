@@ -36,6 +36,7 @@ public final class Destinations {
     public static final String MATCHMAKING_CANCEL = "/matchmaking/{mode}/cancel";
     public static final String MATCH_ANSWER = "/match/{matchId}/answer";
     public static final String MATCH_REMATCH = "/match/{matchId}/rematch";
+    public static final String MATCH_REMATCH_CANCEL = "/match/{matchId}/rematch/cancel";
     public static final String MATCH_RESYNC = "/match/{matchId}/resync";
     public static final String MATCH_LEAVE = "/match/{matchId}/leave";
     public static final String ROOM_CREATE = "/room/create";
@@ -54,6 +55,16 @@ public final class Destinations {
 
     public static String roomTopic(UUID roomId) {
         return ROOM_TOPIC.replace("{roomId}", roomId.toString());
+    }
+
+    /** The full client send asking for a rematch of the ended {@code matchId}. */
+    public static String matchRematch(UUID matchId) {
+        return APP_PREFIX + MATCH_REMATCH.replace("{matchId}", matchId.toString());
+    }
+
+    /** The full client send withdrawing a pending rematch request for {@code matchId}. */
+    public static String matchRematchCancel(UUID matchId) {
+        return APP_PREFIX + MATCH_REMATCH_CANCEL.replace("{matchId}", matchId.toString());
     }
 
     /** The full client send for joining {@code mode}, e.g. {@code /app/matchmaking/QUICK/join}. */

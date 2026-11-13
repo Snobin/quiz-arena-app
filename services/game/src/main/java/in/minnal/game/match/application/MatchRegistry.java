@@ -2,7 +2,9 @@ package in.minnal.game.match.application;
 
 import in.minnal.contracts.realtime.AnswerRequest;
 import in.minnal.contracts.realtime.ErrorCode;
+import in.minnal.contracts.realtime.MatchMode;
 import in.minnal.contracts.realtime.ServerMessage;
+import in.minnal.game.match.domain.MatchParticipant;
 import in.minnal.game.match.domain.MatchSetup;
 import in.minnal.game.match.domain.MatchState;
 import in.minnal.game.platform.drain.DrainState;
@@ -18,6 +20,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -25,6 +28,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
@@ -37,6 +42,9 @@ import org.springframework.stereotype.Component;
  *
  * <p>An ended match stays resolvable for {@link #TOMBSTONE_TTL} (30 s), so its players' late
  * answers get {@code ANSWER_REJECTED} rather than {@code NOT_IN_MATCH}.
+ *
+ * <p>When a completed QUICK match ends, {@link MatchCompletedForRematch} is published so its rematch
+ * window opens (Story 1.10); the actor itself still closes at the end.
  *
  * <p>Once draining has begun, {@link #start} refuses new matches. The check and the registration
  * happen under the same monitor {@link #awaitNoLiveMatches} reads under, so a match either counts
@@ -67,11 +75,24 @@ public class MatchRegistry implements MatchAccess, DisposableBean {
     private final BotBrain bots;
     private final MatchMetrics metrics;
     private final MatchCompletedPublisher publisher;
+    private final ApplicationEventPublisher events;
 
     public MatchRegistry(ParticipationRegistry participation, PlayerSessions sessions, PlayerChannel channel,
             MatchBroadcaster broadcaster, Clock clock, MatchTimers timers, MatchSettings settings, BotBrain bots,
             DrainState drain, MeterRegistry meters, MatchCompletedPublisher publisher) {
+        this(participation, sessions, channel, broadcaster, clock, timers, settings, bots, drain, meters, publisher,
+                event -> { });
+    }
+
+    /**
+     * @param events where {@link MatchCompletedForRematch} goes when a completed QUICK match ends
+     */
+    @Autowired
+    public MatchRegistry(ParticipationRegistry participation, PlayerSessions sessions, PlayerChannel channel,
+            MatchBroadcaster broadcaster, Clock clock, MatchTimers timers, MatchSettings settings, BotBrain bots,
+            DrainState drain, MeterRegistry meters, MatchCompletedPublisher publisher, ApplicationEventPublisher events) {
         this.publisher = publisher;
+        this.events = events;
         this.drain = drain;
         this.participation = participation;
         this.sessions = sessions;
@@ -221,6 +242,24 @@ public class MatchRegistry implements MatchAccess, DisposableBean {
             idle.notifyAll();
         }
         log.atInfo().addKeyValue("matchId", matchId).log("match removed; players released");
+        if (!match.isFailed() && !match.isAborted() && match.isCompleted() && match.setup().mode() == MatchMode.QUICK) {
+            openRematchWindow(match);
+        }
+    }
+
+    /** A completed QUICK match: its rematch window opens (Story 1.10). A failure here never blocks the end. */
+    private void openRematchWindow(MatchActor match) {
+        try {
+            Set<UUID> forfeited = new HashSet<>();
+            for (MatchParticipant participant : match.state().participants()) {
+                if (participant.forfeited()) {
+                    forfeited.add(participant.participantId());
+                }
+            }
+            events.publishEvent(new MatchCompletedForRematch(match.setup(), forfeited, clock.instant()));
+        } catch (RuntimeException e) {
+            log.atWarn().addKeyValue("matchId", match.matchId()).setCause(e).log("could not open the rematch window");
+        }
     }
 
     /** Waits until no match is live, or {@code timeout} passes; returns whether none is. */

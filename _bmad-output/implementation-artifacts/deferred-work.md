@@ -90,3 +90,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-ci-workflow.md`
   summary: Make the timing-sensitive `MatchFlowTest` cases deterministic: `aFloodIsCutToTheRateAndOtherSessionsAreUnaffected` (once processed 0 of the expected 8–12 messages locally) and `outsidersCannotAnswerOrSubscribe:233` (a participant subscribing to another `/topic/match/*` got no ERROR frame within 5 s on CI run 43384699841, then passed on re-run). For the second, the refusal's ERROR may race the socket close, so accept ERROR or close 
   evidence: The test failed once locally during the CI build and passed when re-run alone and in both CI runs. It looks timing-sensitive, and now that every push runs CI it could turn the build red at random.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-10-rematch.md`
+  summary: Amend AD-10 in the architecture spine for the rematch wire: `/app/match/{id}/rematch/cancel`, the private `REMATCH_REQUESTED`/`REMATCH_DECLINED {CANCELLED|UNAVAILABLE}`/`REMATCH_EXPIRED`, and `REMATCH_ACCEPTED` left unused (the new match arrives as `MATCH_FOUND`). Do the same for the Story 1.9 types (`PARTICIPANT_FORFEITED`, `MATCH_ABORTED`) if they are not already listed.
+  evidence: The spec says the wire amends AD-10, but the diff touches no architecture doc (blind review of the rematch build).

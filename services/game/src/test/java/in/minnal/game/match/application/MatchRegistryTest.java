@@ -279,6 +279,41 @@ class MatchRegistryTest {
         assertThat(participation.activityOf("h0")).isEmpty();
     }
 
+    // -----------------------------------------------------------------------------------------
+    // Story 1.10 (part 2): the rematch window opens for a completed QUICK match only
+
+    final List<Object> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    MatchRegistry publishing(MatchSettings settings) {
+        return new MatchRegistry(participation, sessions, channel, broadcaster, Clock.systemUTC(), timers, settings, bots,
+                drain, meters, event -> { }, events::add);
+    }
+
+    @Test
+    void aCompletedQuickMatchOpensItsRematchWindowWithItsForfeitersAfterReleasingItsHumans() {
+        registry = publishing(MatchTestKit.fast(Duration.ofMillis(40)));
+        MatchSetup setup = claimed(MatchTestKit.setup(2, 0, 3));
+        registry.start(setup).orElseThrow();
+        registry.leave("h1", setup.matchId().toString());
+        await().atMost(Duration.ofSeconds(10)).until(() -> !events.isEmpty());
+        assertThat(events).singleElement().isInstanceOfSatisfying(MatchCompletedForRematch.class, ended -> {
+            assertThat(ended.setup()).isEqualTo(setup);
+            assertThat(ended.forfeitedParticipantIds()).containsExactly(setup.humans().get("h1"));
+            assertThat(ended.endedAt()).isNotNull();
+        });
+        assertThat(participation.activityOf("h0")).as("released before the window opens").isEmpty();
+    }
+
+    @Test
+    void anAbortedMatchOpensNoRematchWindow() {
+        registry = publishing(MatchTestKit.fast(Duration.ofSeconds(5)));
+        MatchSetup setup = claimed(MatchTestKit.setup(1, 1, 10));
+        registry.start(setup).orElseThrow();
+        registry.leave("h0", setup.matchId().toString());
+        await().atMost(Duration.ofSeconds(3)).until(() -> registry.liveCount() == 0);
+        assertThat(events).isEmpty();
+    }
+
     @Test
     void resyncRepliesWithASnapshotToThatSessionOrNotInMatch() {
         registry = registry(Duration.ofSeconds(5));

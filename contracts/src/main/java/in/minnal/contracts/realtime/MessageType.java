@@ -23,9 +23,16 @@ public enum MessageType {
     MATCH_ENDED,
     /** Private, with {@code refSeq}: the match as it stands, in reply to {@code resync} ({@link SnapshotPayload}). */
     SNAPSHOT,
+    /**
+     * Private, about the ended match: a human asked for a rematch; sent to both humans
+     * ({@link RematchRequestedPayload}). Story 1.10.
+     */
     REMATCH_REQUESTED,
+    /** Unused: an accepted rematch arrives as an ordinary {@link #MATCH_FOUND} for the new match. */
     REMATCH_ACCEPTED,
+    /** Private, about the ended match: the receiver's rematch state reverts ({@link RematchDeclinedPayload}). */
     REMATCH_DECLINED,
+    /** Private, about the ended match: a pending request lapsed; sent to both humans ({@link RematchExpiredPayload}). */
     REMATCH_EXPIRED,
     ROOM_JOINED,
     ROOM_LOBBY_UPDATED,

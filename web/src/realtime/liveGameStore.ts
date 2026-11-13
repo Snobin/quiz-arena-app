@@ -105,6 +105,26 @@ export type LiveMatch = {
  */
 export type LiveRejoin = { matchId: string; state: 'pending' | 'gone' };
 
+/** A one-line note after a rematch attempt reverted (Story 1.10). */
+export type RematchNote = 'expired' | 'cancelled' | 'unavailable' | 'failed' | 'draining';
+
+/**
+ * The rematch of the ended match `matchId` (Story 1.10), written only from the server's messages
+ * and her own sends:
+ * - `idle`: nothing pending (with a `note` after a revert);
+ * - `starting`: she sent Rematch (or Accept) and waits for the server;
+ * - `waiting`: her request is pending until `expiresAt` (REMATCH_REQUESTED by her);
+ * - `incoming`: the opponent asked first (REMATCH_REQUESTED by them): her button accepts.
+ * The next MATCH_FOUND clears it.
+ */
+export type RematchState = {
+  matchId: string;
+  state: 'idle' | 'waiting' | 'incoming' | 'starting';
+  /** The pending request's deadline (ISO-8601, server clock), while `waiting` or `incoming`. */
+  expiresAt?: string;
+  note?: RematchNote;
+};
+
 export type LiveGameState = {
   phase: LivePhase;
   /** The last MATCH_FOUND, kept until the next one. */
@@ -116,6 +136,8 @@ export type LiveGameState = {
   live: LiveMatch | null;
   /** A rejoin in progress or just failed; null otherwise. */
   rejoin: LiveRejoin | null;
+  /** The rematch of the last ended match; null when none was asked for. */
+  rematch: RematchState | null;
 };
 
 export const INITIAL_LIVE_GAME: LiveGameState = {
@@ -125,6 +147,7 @@ export const INITIAL_LIVE_GAME: LiveGameState = {
   clockOffsetMs: 0,
   live: null,
   rejoin: null,
+  rematch: null,
 };
 
 /** A fresh live match for a MATCH_FOUND. */
@@ -169,4 +192,13 @@ export function useLiveGame<T>(selector: (state: LiveGameState) => T): T {
   return useStore(liveGameStore, selector);
 }
 
-export { cancelMatchmaking, cancelRejoin, joinQuickMatch, leaveMatch, rejoinMatch, submitAnswer } from './connection.ts';
+export {
+  cancelMatchmaking,
+  cancelRejoin,
+  cancelRematch,
+  joinQuickMatch,
+  leaveMatch,
+  rejoinMatch,
+  requestRematch,
+  submitAnswer,
+} from './connection.ts';

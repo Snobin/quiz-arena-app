@@ -1,19 +1,12 @@
 package in.minnal.game.matchmaking.application;
 
-import in.minnal.contracts.internal.QuestionSetFilters;
 import in.minnal.contracts.internal.QuestionSetRequest;
 import in.minnal.contracts.internal.QuestionSetResponse;
-import in.minnal.contracts.internal.QuestionSource;
 import in.minnal.contracts.realtime.ErrorCode;
-import in.minnal.contracts.realtime.MatchFoundPayload;
 import in.minnal.contracts.realtime.MatchMode;
-import in.minnal.contracts.realtime.MatchmakingFailedPayload;
 import in.minnal.contracts.realtime.MessageType;
-import in.minnal.contracts.realtime.Participant;
-import in.minnal.contracts.realtime.ParticipantKind;
 import in.minnal.contracts.realtime.ServerMessage;
 import in.minnal.game.match.application.MatchRegistry;
-import in.minnal.game.match.domain.MatchSetup;
 import in.minnal.game.matchmaking.domain.MatchmakingQueue;
 import in.minnal.game.matchmaking.domain.Pairing;
 import in.minnal.game.matchmaking.domain.Seeker;
@@ -29,11 +22,8 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CompletionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,9 +37,6 @@ final class MatchmakingActor implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(MatchmakingActor.class);
 
-    static final int QUESTION_COUNT = 10;
-    static final String CATEGORY = "KERALA_PSC";
-
     private final MatchMode mode;
     private final MatchmakingQueue queue;
     private final Clock clock;
@@ -58,7 +45,7 @@ final class MatchmakingActor implements AutoCloseable {
     private final PlayerSessions sessions;
     private final PlayerChannel channel;
     private final QuestionSetClient questionSets;
-    private final MatchRegistry matches;
+    private final MatchStarter starter;
     private final Timer queueWait;
     private final Counter humanPairings;
     private final Counter botPairings;
@@ -75,7 +62,7 @@ final class MatchmakingActor implements AutoCloseable {
         this.sessions = sessions;
         this.channel = channel;
         this.questionSets = questionSets;
-        this.matches = matches;
+        this.starter = new MatchStarter(matches, participation, channel);
         this.queueWait = Timer.builder("minnal.matchmaking.queue.wait")
                 .description("Time a human waited in the matchmaking queue before pairing")
                 .tag("mode", mode.name())
@@ -155,8 +142,7 @@ final class MatchmakingActor implements AutoCloseable {
     private void pairDue() {
         for (Pairing pairing : queue.pair(clock.instant())) {
             recordPairing(pairing);
-            QuestionSetRequest request = new QuestionSetRequest(QuestionSource.BANK, QuestionSetFilters.category(CATEGORY),
-                    null, QUESTION_COUNT, pairing.first().sub());
+            QuestionSetRequest request = MatchStarter.questionSetRequest(pairing.first().sub());
             questionSets.fetch(request).whenComplete((set, failure) ->
                     actor.tell(new MatchmakingEvent.SetFetched(pairing.id(), set, failure)));
         }
@@ -188,58 +174,15 @@ final class MatchmakingActor implements AutoCloseable {
         }
         Instant now = clock.instant();
         QuestionSetResponse set = fetched.set();
-        if (fetched.failure() != null || set == null || set.questions().size() != QUESTION_COUNT) {
-            log.atWarn().addKeyValue("matchId", pairing.id())
-                    .log("question set unavailable, pairing failed: {}", describe(fetched.failure()));
-            ServerMessage<MatchmakingFailedPayload> failed = ServerMessage.direct(MessageType.MATCHMAKING_FAILED, now,
-                    new MatchmakingFailedPayload(MatchmakingFailedPayload.QUESTION_SET_UNAVAILABLE));
-            for (Seeker human : pairing.humans()) {
-                participation.release(human.sub(), queued());
-                channel.toPlayer(human.sub(), failed);
-            }
+        if (!MatchStarter.usable(set, fetched.failure())) {
+            starter.failed(pairing.id(), mode, pairing.humans().stream().map(Seeker::sub).toList(), fetched.failure(), now);
             return;
         }
-        UUID matchId = pairing.id();
-        List<Participant> participants = new ArrayList<>();
-        Map<String, UUID> humans = new LinkedHashMap<>();
-        Map<String, Long> waits = new LinkedHashMap<>();
-        Map<UUID, Integer> ratingsByParticipant = new LinkedHashMap<>();
-        for (Seeker human : pairing.humans()) {
-            UUID participantId = UUID.randomUUID();
-            participants.add(new Participant(participantId, human.displayName(), human.kind()));
-            humans.put(human.sub(), participantId);
-            waits.put(human.sub(), pairing.queueWaitMs(human));
-            ratingsByParticipant.put(participantId, human.rating());
-        }
-        if (pairing.withBot()) {
-            UUID botId = UUID.randomUUID();
-            participants.add(new Participant(botId, Matchmaking.BOT_NAME, ParticipantKind.BOT));
-            ratingsByParticipant.put(botId, pairing.botRating());
-        }
-        // Begins the match: its lead-in gives the clients time to subscribe after MATCH_FOUND. Once
-        // draining, no match may start (the shutdown waits only for matches already live).
-        if (matches.start(new MatchSetup(matchId, mode, participants, humans, set.questions(), waits,
-                ratingsByParticipant, now, QuestionSource.BANK)).isEmpty()) {
-            log.atWarn().addKeyValue("matchId", matchId).log("pairing dropped: draining");
-            ServerMessage<?> draining = ServerMessage.error(ErrorCode.SERVER_DRAINING, null, now);
-            for (Seeker human : pairing.humans()) {
-                participation.release(human.sub(), queued());
-                channel.toPlayer(human.sub(), draining);
-            }
-            return;
-        }
-        for (Map.Entry<String, UUID> human : humans.entrySet()) {
-            channel.toPlayer(human.getKey(), ServerMessage.aboutMatch(MessageType.MATCH_FOUND, matchId, now,
-                    new MatchFoundPayload(matchId, mode, participants, QUESTION_COUNT, QuestionSource.BANK, human.getValue())));
-        }
-    }
-
-    private static String describe(Throwable failure) {
-        if (failure == null) {
-            return "short or empty set";
-        }
-        Throwable cause = failure instanceof CompletionException && failure.getCause() != null ? failure.getCause() : failure;
-        return cause.getClass().getSimpleName() + ": " + cause.getMessage();
+        List<MatchStarter.Human> humans = pairing.humans().stream()
+                .map(h -> new MatchStarter.Human(h.sub(), h.displayName(), h.kind(), h.rating(), pairing.queueWaitMs(h)))
+                .toList();
+        starter.start(pairing.id(), mode, humans, pairing.withBot() ? Matchmaking.BOT_NAME : null, pairing.botRating(),
+                set.questions(), now);
     }
 
     @Override

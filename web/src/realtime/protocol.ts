@@ -61,6 +61,9 @@ export type SnapshotPhase = (typeof SNAPSHOT_PHASES)[number];
 export const ABORT_REASONS = ['ALL_LEFT', 'ERROR'] as const;
 export type AbortReason = (typeof ABORT_REASONS)[number];
 
+export const REMATCH_DECLINE_REASONS = ['CANCELLED', 'UNAVAILABLE'] as const;
+export type RematchDeclineReason = (typeof REMATCH_DECLINE_REASONS)[number];
+
 /** The enum lists by their Java names, as `contracts/samples/enums.json` has them. */
 export const ENUMS = {
   MessageType: MESSAGE_TYPES,
@@ -70,6 +73,7 @@ export const ENUMS = {
   QuestionSource: QUESTION_SOURCES,
   SnapshotPhase: SNAPSHOT_PHASES,
   AbortReason: ABORT_REASONS,
+  RematchDeclineReason: REMATCH_DECLINE_REASONS,
 } as const;
 
 /** The envelope: `{type, matchId?, roomId?, seq?, refSeq?, serverTime, payload?}`. */
@@ -236,6 +240,15 @@ export type MatchEndedPayload = {
   breakdown: ParticipantBreakdown[];
 };
 
+/**
+ * REMATCH_REQUESTED (private, about the ended match; Story 1.10): a human asked for a rematch.
+ * Both humans get it: `requestedBy` is the requester's participant id in the ended match.
+ */
+export type RematchRequestedPayload = { requestedBy: string; expiresAt: string };
+
+/** REMATCH_DECLINED (private, about the ended match): her rematch state reverts. */
+export type RematchDeclinedPayload = { reason: RematchDeclineReason };
+
 /** The client's answer body (`/app/match/{matchId}/answer`). The server stamps the time itself. */
 export type AnswerRequest = { questionIndex: number; optionIndex: number };
 
@@ -248,6 +261,8 @@ export const matchTopic = (matchId: string) => `/topic/match/${matchId}`;
 export const matchAnswer = (matchId: string) => `/app/match/${matchId}/answer`;
 export const matchResync = (matchId: string) => `/app/match/${matchId}/resync`;
 export const matchLeave = (matchId: string) => `/app/match/${matchId}/leave`;
+export const matchRematch = (matchId: string) => `/app/match/${matchId}/rematch`;
+export const matchRematchCancel = (matchId: string) => `/app/match/${matchId}/rematch/cancel`;
 
 // ---------------------------------------------------------------------------------------------
 // Runtime parsers: return the typed value, or null when the input does not have the shape.
@@ -274,6 +289,7 @@ export const isParticipantKind = oneOf(PARTICIPANT_KINDS);
 export const isQuestionSource = oneOf(QUESTION_SOURCES);
 export const isSnapshotPhase = oneOf(SNAPSHOT_PHASES);
 export const isAbortReason = oneOf(ABORT_REASONS);
+export const isRematchDeclineReason = oneOf(REMATCH_DECLINE_REASONS);
 
 /** The envelope, with `payload` left unparsed (see the payload parsers). */
 export function parseServerMessage(value: unknown): ServerMessage | null {
@@ -517,6 +533,21 @@ export function parseMatchEnded(value: unknown): MatchEndedPayload | null {
   };
 }
 
+export function parseRematchRequested(value: unknown): RematchRequestedPayload | null {
+  if (!isObject(value) || !isString(value.requestedBy) || !isInstant(value.expiresAt)) return null;
+  return { requestedBy: value.requestedBy, expiresAt: value.expiresAt };
+}
+
+export function parseRematchDeclined(value: unknown): RematchDeclinedPayload | null {
+  if (!isObject(value) || !isRematchDeclineReason(value.reason)) return null;
+  return { reason: value.reason };
+}
+
+/** REMATCH_EXPIRED has an empty payload (`{}`); anything but an object is malformed. */
+export function parseRematchExpired(value: unknown): Record<string, never> | null {
+  return isObject(value) ? {} : null;
+}
+
 /** A frame body the client acts on. Anything else (unknown type, bad shape) is null. */
 export type Incoming =
   | { type: 'MATCH_FOUND'; message: ServerMessage; payload: MatchFoundPayload }
@@ -531,6 +562,9 @@ export type Incoming =
   | { type: 'PARTICIPANT_FORFEITED'; message: ServerMessage; payload: ParticipantForfeitedPayload }
   | { type: 'MATCH_ABORTED'; message: ServerMessage; payload: MatchAbortedPayload }
   | { type: 'MATCH_ENDED'; message: ServerMessage; payload: MatchEndedPayload }
+  | { type: 'REMATCH_REQUESTED'; message: ServerMessage & { matchId: string }; payload: RematchRequestedPayload }
+  | { type: 'REMATCH_DECLINED'; message: ServerMessage & { matchId: string }; payload: RematchDeclinedPayload }
+  | { type: 'REMATCH_EXPIRED'; message: ServerMessage & { matchId: string } }
   | { type: 'OTHER'; message: ServerMessage };
 
 /** Parses a frame body (JSON text) into what the client acts on. */
@@ -589,6 +623,22 @@ export function parseIncoming(body: string): Incoming | null {
     case 'MATCH_ENDED': {
       const payload = parseMatchEnded(message.payload);
       return payload ? { type: 'MATCH_ENDED', message, payload } : null;
+    }
+    case 'REMATCH_REQUESTED': {
+      const payload = parseRematchRequested(message.payload);
+      const { matchId } = message;
+      return payload && matchId !== undefined ? { type: 'REMATCH_REQUESTED', message: { ...message, matchId }, payload } : null;
+    }
+    case 'REMATCH_DECLINED': {
+      const payload = parseRematchDeclined(message.payload);
+      const { matchId } = message;
+      return payload && matchId !== undefined ? { type: 'REMATCH_DECLINED', message: { ...message, matchId }, payload } : null;
+    }
+    case 'REMATCH_EXPIRED': {
+      const { matchId } = message;
+      return parseRematchExpired(message.payload) && matchId !== undefined
+        ? { type: 'REMATCH_EXPIRED', message: { ...message, matchId } }
+        : null;
     }
     default:
       return { type: 'OTHER', message };
