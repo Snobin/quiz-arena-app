@@ -8,6 +8,8 @@ import { animatePeak } from './animate.ts';
  * flash may cover, and it never paints white.
  */
 export const BOLT_WIDTH = 64;
+/** The bolt polygon in its 120 × 150 viewBox: shared by every volt bolt. */
+export const BOLT_POINTS = '70,4 26,82 56,82 40,146 96,58 64,58 84,4';
 export const BOLT_HEIGHT = 80;
 
 /** The share of a viewport the bolt's box covers (an upper bound on the polygon's area). */
@@ -30,7 +32,7 @@ export function BoltStrike({ ref, waitForStrike }: { ref?: Ref<SVGSVGElement>; w
       className="pointer-events-none absolute right-2 top-2 text-volt"
       style={{ opacity: waitForStrike ? 0 : 1, willChange: waitForStrike ? 'transform, opacity' : undefined }}
     >
-      <polygon points="70,4 26,82 56,82 40,146 96,58 64,58 84,4" fill="currentColor" />
+      <polygon points={BOLT_POINTS} fill="currentColor" />
     </svg>
   );
 }

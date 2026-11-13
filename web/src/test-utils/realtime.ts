@@ -293,3 +293,70 @@ export function participantForfeited(matchId: string, seq: number, participantId
 export function matchAborted(matchId: string, seq: number, reason: 'ALL_LEFT' | 'ERROR' = 'ALL_LEFT') {
   return { type: 'MATCH_ABORTED', matchId, seq, serverTime: SERVER_TIME, payload: { reason } };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Results (Story 1.10).
+
+export type EndedParticipant = {
+  participantId: string;
+  displayName: string;
+  kind: string;
+  score: number;
+  correctCount: number;
+  forfeited?: boolean;
+  placement: number;
+};
+
+export type EndedAnswer = { pickedIndex?: number | null; correct: boolean; responseMs?: number | null; points: number };
+
+/**
+ * A private MATCH_ENDED. Questions default to `count` copies of the live question (answer index
+ * 0, attribution on even questions only); `breakdown` maps each participant id to her answers.
+ */
+export function matchEnded(
+  matchId: string,
+  o: {
+    participants: EndedParticipant[];
+    breakdown: Record<string, EndedAnswer[]>;
+    count?: number;
+    questions?: { textMl?: string; textEn?: string; options?: string[]; answerIndex?: number; explanation?: string; attribution?: string | null }[];
+    serverTime?: string;
+  },
+) {
+  const count = o.count ?? Object.values(o.breakdown)[0]?.length ?? 10;
+  const questions = Array.from({ length: count }, (_, i) => {
+    const q = o.questions?.[i] ?? {};
+    const attribution = q.attribution === undefined ? (i % 2 === 0 ? `Kerala PSC LDC 20${10 + i}` : null) : q.attribution;
+    return {
+      questionId: `q-${i}`,
+      version: 1,
+      textMl: q.textMl ?? `ചോദ്യം ${i + 1}: കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി ഏത്?`,
+      ...(q.textEn === undefined ? { textEn: `Question ${i + 1}: Which is the longest river in Kerala?` } : { textEn: q.textEn }),
+      options: q.options ?? [...OPTIONS],
+      answerIndex: q.answerIndex ?? 0,
+      explanation: q.explanation ?? `വിശദീകരണം ${i + 1}`,
+      ...(attribution === null ? {} : { attribution }),
+    };
+  });
+  return {
+    type: 'MATCH_ENDED',
+    matchId,
+    serverTime: o.serverTime ?? SERVER_TIME,
+    payload: {
+      matchId,
+      mode: 'QUICK',
+      questionSource: 'BANK',
+      participants: o.participants.map((p) => ({ ...p, forfeited: p.forfeited ?? false })),
+      questions,
+      breakdown: o.participants.map((p) => ({
+        participantId: p.participantId,
+        answers: (o.breakdown[p.participantId] ?? []).map((a) => ({
+          ...(a.pickedIndex === null || a.pickedIndex === undefined ? {} : { pickedIndex: a.pickedIndex }),
+          correct: a.correct,
+          ...(a.responseMs === null || a.responseMs === undefined ? {} : { responseMs: a.responseMs }),
+          points: a.points,
+        })),
+      })),
+    },
+  };
+}

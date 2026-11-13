@@ -7,6 +7,7 @@ import i18n from '../../i18n.ts';
 import { useReduceEffectsStore } from '../../motion/reduceEffects.ts';
 import { joinQuickMatch, resetRealtime } from '../../realtime/connection.ts';
 import { liveGameStore } from '../../realtime/liveGameStore.ts';
+import { MATCH_ENDED_WAIT_MS, RESULTS_HOLD_MS } from './LiveMatchScreen.tsx';
 import { matchAnswer, matchTopic } from '../../realtime/protocol.ts';
 import { resetAnnouncements, useAnnouncements } from '../../shell/announce.ts';
 import { clearReturnFocus } from '../../shell/returnFocus.ts';
@@ -16,6 +17,7 @@ import { restartGuestSession, stubFetch } from '../../test-utils/guest.ts';
 import {
   answerAccepted,
   answerAcceptedWithResult,
+  matchEnded,
   matchFound,
   OPTIONS,
   questionRevealed,
@@ -646,16 +648,63 @@ describe('reveal', () => {
     expect(screen.queryByTestId('opponent-status')).toBeNull();
   });
 
-  it('the end is announced once, with the total', async () => {
+  /** MATCH_ENDED for `m`: she won 3,140 to 1,980 over ten questions. */
+  function deliverEnded(m: Match) {
+    const answers = Array.from({ length: 10 }, () => ({ pickedIndex: 0, correct: true, responseMs: 4000, points: 314 }));
+    act(() =>
+      socket().deliver(
+        matchEnded(m.matchId, {
+          participants: [
+            { participantId: m.self, displayName: 'Guest 4821', kind: 'GUEST', score: 3140, correctCount: 10, placement: 1 },
+            { participantId: m.opponent, displayName: 'Vishnu R', kind: 'GUEST', score: 1980, correctCount: 6, placement: 2 },
+          ],
+          breakdown: { [m.self]: answers, [m.opponent]: answers },
+        }),
+      ),
+    );
+  }
+
+  it('the end hands off to /results after the reveal hold, once MATCH_ENDED is in', async () => {
     const m = await inMatch();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
     start(m, 9);
     reveal(m, 9, { totalScore: 7420 });
-    await flushAnnouncements();
-    expect(politeText()).toContain('Match over · 7,420');
-    const seq = useAnnouncements.getState().polite.seq;
-    act(() => navigate('/match'));
-    await flushAnnouncements();
-    expect(useAnnouncements.getState().polite.seq).toBe(seq);
+    expect(screen.getByTestId('reveal-band')).toBeInTheDocument();
+    expect(screen.queryByTestId('match-over')).toBeNull();
+    deliverEnded(m);
+    await act(() => vi.advanceTimersByTimeAsync(RESULTS_HOLD_MS - 100));
+    expect(window.location.pathname).toBe('/match');
+    await act(() => vi.advanceTimersByTimeAsync(200));
+    expect(window.location.pathname).toBe('/results');
+    expect(liveGameStore.getState().live?.ended?.matchId).toBe(m.matchId);
+  });
+
+  it('MATCH_ENDED before the final reveal is held: the results open after the hold that follows the reveal', async () => {
+    const m = await inMatch();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    start(m, 9);
+    deliverEnded(m);
+    await act(() => vi.advanceTimersByTimeAsync(RESULTS_HOLD_MS * 2));
+    expect(window.location.pathname).toBe('/match');
+    reveal(m, 9, { totalScore: 3140 });
+    await act(() => vi.advanceTimersByTimeAsync(RESULTS_HOLD_MS - 100));
+    expect(window.location.pathname).toBe('/match');
+    await act(() => vi.advanceTimersByTimeAsync(200));
+    expect(window.location.pathname).toBe('/results');
+  });
+
+  it('with no MATCH_ENDED the results open anyway after the hold and the wait, on the minimal view', async () => {
+    const m = await inMatch();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    start(m, 9);
+    reveal(m, 9, { totalScore: 7420 });
+    await act(() => vi.advanceTimersByTimeAsync(RESULTS_HOLD_MS + 50));
+    await act(() => vi.advanceTimersByTimeAsync(MATCH_ENDED_WAIT_MS - 100));
+    expect(window.location.pathname).toBe('/match');
+    await act(() => vi.advanceTimersByTimeAsync(200));
+    expect(window.location.pathname).toBe('/results');
+    expect(screen.getByTestId('result-self')).toHaveTextContent('7,420');
+    expect(screen.queryByTestId('results-pending')).toBeNull();
   });
 
   it('joining again clears the ended match: /match no longer shows it', async () => {
@@ -670,13 +719,13 @@ describe('reveal', () => {
     expect(screen.queryByTestId('timer-bar')).toBeNull();
   });
 
-  it('end: after the 10th reveal the last reveal stays, with "Match over" and Home', async () => {
+  it('end: after the 10th reveal the last reveal stays until the hand-off, with no "Match over" line', async () => {
     const m = await inMatch();
     start(m, 9);
     reveal(m, 9, { totalScore: 7420 });
     expect(screen.getByTestId('reveal-band')).toBeInTheDocument();
-    expect(screen.getByTestId('match-over')).toHaveTextContent('Match over · 7,420');
-    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/');
+    expect(screen.queryByTestId('match-over')).toBeNull();
+    expect(window.location.pathname).toBe('/match');
   });
 });
 

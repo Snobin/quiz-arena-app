@@ -36,6 +36,10 @@ function isGuardEntry(state: unknown): boolean {
 
 /** How long the Forfeited notice shows before the results open. */
 export const FORFEIT_NOTICE_MS = 2_000;
+/** After the last reveal, the results open once this reveal hold has passed (and MATCH_ENDED is in). */
+export const RESULTS_HOLD_MS = 2_000;
+/** With no MATCH_ENDED this long after the hold, the results open anyway (the minimal view). */
+export const MATCH_ENDED_WAIT_MS = 3_000;
 
 /**
  * `/match` (Story 1.8): the live match screen. Full screen (no tab bar), in the
@@ -51,6 +55,8 @@ export const FORFEIT_NOTICE_MS = 2_000;
  * button ends the score strip row; it, and Android back, open the Leave dialog. Her own forfeit
  * shows the Forfeited notice, then the results; Leave goes to the results; an abort goes Home
  * (which shows the notice). An opponent who left gets a one-line notice and keeps her score.
+ *
+ * Story 1.10: a completed match opens `/results` after the reveal hold, once MATCH_ENDED is in.
  */
 export function LiveMatchScreen() {
   const { t } = useTranslation();
@@ -135,7 +141,6 @@ function LiveMatchView({ live }: { live: LiveMatch }) {
       ? { correct: acked.correct, points: acked.points, answerIndex: acked.answerIndex, totalScore: acked.totalScore }
       : null;
   const answerText = own && view ? (view.options[own.answerIndex] ?? '') : '';
-  const selfTotal = own?.totalScore ?? live.totals[live.selfParticipantId] ?? 0;
 
   // Her result, once per question, whichever comes first (the 1v1 ack or the reveal); the close
   // after an ack adds nothing spoken. Focus stays where it is.
@@ -149,14 +154,6 @@ function LiveMatchView({ live }: { live: LiveMatch }) {
         : t('match.revealWrong', { answer: answerText, total: own.totalScore }),
     );
   }, [own !== null, index]);
-
-  // The match is over: said once, after the last reveal's announcement.
-  const overAnnounced = useRef(false);
-  useEffect(() => {
-    if (live.phase !== 'ended' || overAnnounced.current) return;
-    overAnnounced.current = true;
-    announce(t('match.over', { total: selfTotal }));
-  }, [live.phase]);
 
   let optionReveal: OptionReveal | null = null;
   if (reveal) {
@@ -229,6 +226,28 @@ function LiveMatchView({ live }: { live: LiveMatch }) {
     }
     return undefined;
   }, [outcome?.kind]);
+
+  // Story 1.10: a completed match hands off to the results once both the last reveal and
+  // MATCH_ENDED are in (in either order), after the reveal hold. With no MATCH_ENDED by
+  // `MATCH_ENDED_WAIT_MS` after the hold (a match settled from NOT_IN_MATCH, say), the results
+  // open anyway on the minimal view, which upgrades in place if MATCH_ENDED still comes.
+  const completedHere = outcome?.kind === 'completed' && outcome !== initialOutcome.current;
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    if (!completedHere) return undefined;
+    const timer = setTimeout(() => setHeld(true), RESULTS_HOLD_MS);
+    return () => clearTimeout(timer);
+  }, [completedHere]);
+  const hasEnded = live.ended !== null;
+  useEffect(() => {
+    if (!held) return undefined;
+    if (hasEnded) {
+      navigate('/results', { replace: true });
+      return undefined;
+    }
+    const timer = setTimeout(() => navigate('/results', { replace: true }), MATCH_ENDED_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [held, hasEnded]);
 
   const stay = () => {
     setDialogOpen(false);
@@ -387,16 +406,6 @@ function LiveMatchView({ live }: { live: LiveMatch }) {
               </p>
             )}
 
-            {live.phase === 'ended' && outcome?.kind !== 'aborted' ? (
-              <div className="mt-6 flex flex-col items-start gap-2">
-                <p data-testid="match-over" className="font-title text-title">
-                  {t('match.over', { total: selfTotal })}
-                </p>
-                <Link to="/" className={HOME_LINK}>
-                  {t('common.home')}
-                </Link>
-              </div>
-            ) : null}
           </>
         )}
         </div>

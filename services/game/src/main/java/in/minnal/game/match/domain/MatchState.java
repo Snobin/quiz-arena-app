@@ -66,6 +66,8 @@ public final class MatchState {
     private int current = -1;
     private Instant startedAt;
     private Instant deadline;
+    /** When Q1 opened; null before. */
+    private Instant q1StartedAt;
     private long seq;
     /** The last {@code QUESTION_REVEALED} payload; null before Q1 is revealed. */
     private QuestionRevealedPayload lastReveal;
@@ -122,6 +124,9 @@ public final class MatchState {
         phase = MatchPhase.QUESTION_OPEN;
         startedAt = now;
         deadline = now.plus(window);
+        if (index == 0) {
+            q1StartedAt = now;
+        }
         answered.clear();
         QuestionStartedPayload payload = new QuestionStartedPayload(index, total(), startedAt, deadline,
                 QuestionView.of(questions.get(index)));
@@ -181,7 +186,8 @@ public final class MatchState {
         }
         boolean correct = optionIndex == questions.get(current).answerIndex();
         long remainingMs = Duration.between(receivedAt, deadline).toMillis();
-        RecordedAnswer answer = new RecordedAnswer(optionIndex, receivedAt, Scoring.points(correct, remainingMs));
+        RecordedAnswer answer = new RecordedAnswer(optionIndex, receivedAt, Scoring.points(correct, remainingMs),
+                Duration.between(startedAt, receivedAt).toMillis());
         participant.record(current, answer);
         answered.add(participantId);
         AnswerAcceptedPayload ackPayload = mode.revealsOwnAnswerAtAck()
@@ -377,6 +383,30 @@ public final class MatchState {
         return ServerMessage.reply(MessageType.SNAPSHOT, matchId, seq, now, payload);
     }
 
+    /**
+     * Every participant's totals and answers over the questions that were asked (those that
+     * opened; a question that never opened is not included, so its answer stays secret). Meant
+     * for the end of the match, when every asked question has been closed and scored.
+     */
+    public MatchResults results() {
+        List<InternalQuestion> asked = questions.subList(0, askedCount());
+        List<MatchResults.Entry> entries = new ArrayList<>();
+        for (MatchParticipant participant : participants) {
+            List<Optional<RecordedAnswer>> answers = new ArrayList<>();
+            int correctCount = 0;
+            for (int i = 0; i < asked.size(); i++) {
+                Optional<RecordedAnswer> answer = participant.answer(i);
+                if (answer.isPresent() && answer.get().pickedIndex() == asked.get(i).answerIndex()) {
+                    correctCount++;
+                }
+                answers.add(answer);
+            }
+            entries.add(new MatchResults.Entry(participant.participant(), participant.sub(), participant.score(),
+                    correctCount, participant.forfeited(), answers));
+        }
+        return new MatchResults(q1StartedAt, asked, entries);
+    }
+
     // -----------------------------------------------------------------------------------------
     // Reads
 
@@ -411,6 +441,16 @@ public final class MatchState {
 
     public InternalQuestion question(int index) {
         return questions.get(index);
+    }
+
+    /** How many questions have opened (0 before Q1). */
+    public int askedCount() {
+        return current + 1;
+    }
+
+    /** When Q1 opened, or null before it did. */
+    public Instant q1StartedAt() {
+        return q1StartedAt;
     }
 
     /** Whether another question follows the current one. */

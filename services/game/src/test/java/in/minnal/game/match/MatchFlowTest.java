@@ -177,6 +177,9 @@ class MatchFlowTest extends GameIntegrationTest {
             }
         }
         assertThat(seq).isEqualTo(10 + 10 + 10 + 5);
+        // Story 1.10: the only private message after the last reveal is her MATCH_ENDED.
+        assertThat(anju.next("MATCH_ENDED").get("payload").get("questions")).hasSize(10);
+        assertThat(vishnu.next("MATCH_ENDED").get("payload").get("questions")).hasSize(10);
         anju.expectNothing(Duration.ofMillis(300));
         assertThat(anju.pendingBroadcasts()).as("nothing after the 10th reveal").isZero();
 

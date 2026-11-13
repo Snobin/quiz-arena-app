@@ -1,0 +1,86 @@
+{
+  "type" : "MATCH_ENDED",
+  "matchId" : "6f1c2a3e-8a4b-4c1d-9e2f-0a1b2c3d4e5f",
+  "serverTime" : "2026-11-12T10:15:30.123Z",
+  "payload" : {
+    "matchId" : "6f1c2a3e-8a4b-4c1d-9e2f-0a1b2c3d4e5f",
+    "mode" : "QUICK",
+    "questionSource" : "BANK",
+    "participants" : [ {
+      "participantId" : "0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+      "displayName" : "Guest 4821",
+      "kind" : "GUEST",
+      "score" : 1500,
+      "correctCount" : 2,
+      "forfeited" : false,
+      "placement" : 1
+    }, {
+      "participantId" : "9d8c7b6a-5f4e-4d3c-b2a1-0f9e8d7c6b5a",
+      "displayName" : "Minnal Bot",
+      "kind" : "BOT",
+      "score" : 642,
+      "correctCount" : 1,
+      "forfeited" : false,
+      "placement" : 2
+    } ],
+    "questions" : [ {
+      "questionId" : "3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f",
+      "version" : 2,
+      "textMl" : "കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി?",
+      "textEn" : "Which is the longest river in Kerala?",
+      "options" : [ "പെരിയാർ", "ഭാരതപ്പുഴ", "പമ്പ", "ചാലിയാർ" ],
+      "answerIndex" : 0,
+      "explanation" : "പെരിയാറിന് 244 കി.മീ. നീളമുണ്ട്.",
+      "attribution" : "Kerala PSC 2019, Q 14"
+    }, {
+      "questionId" : "4d5e6f7a-8b9c-4d0e-9f1a-2b3c4d5e6f7a",
+      "version" : 1,
+      "textEn" : "Who wrote Indulekha?",
+      "options" : [ "O. Chandu Menon", "Kumaran Asan", "Vallathol", "C. V. Raman Pillai" ],
+      "answerIndex" : 0,
+      "explanation" : "x"
+    }, {
+      "questionId" : "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b",
+      "version" : 1,
+      "textMl" : "ചോദ്യം",
+      "options" : [ "a", "b", "c", "d" ],
+      "answerIndex" : 3,
+      "explanation" : "y"
+    } ],
+    "breakdown" : [ {
+      "participantId" : "0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+      "answers" : [ {
+        "pickedIndex" : 0,
+        "correct" : true,
+        "responseMs" : 3750,
+        "points" : 875
+      }, {
+        "pickedIndex" : 0,
+        "correct" : true,
+        "responseMs" : 5250,
+        "points" : 625
+      }, {
+        "correct" : false,
+        "points" : 0
+      } ]
+    }, {
+      "participantId" : "9d8c7b6a-5f4e-4d3c-b2a1-0f9e8d7c6b5a",
+      "answers" : [ {
+        "pickedIndex" : 2,
+        "correct" : false,
+        "responseMs" : 6000,
+        "points" : 0
+      }, {
+        "pickedIndex" : 1,
+        "correct" : false,
+        "responseMs" : 2100,
+        "points" : 0
+      }, {
+        "pickedIndex" : 3,
+        "correct" : true,
+        "responseMs" : 5370,
+        "points" : 642
+      } ]
+    } ]
+  }
+}

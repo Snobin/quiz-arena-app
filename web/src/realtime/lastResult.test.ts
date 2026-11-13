@@ -1,0 +1,55 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { matchEnded } from '../test-utils/realtime.ts';
+import { clear, LAST_RESULT_KEY, load, save } from './lastResult.ts';
+import { parseMatchEnded } from './protocol.ts';
+
+const payload = () =>
+  parseMatchEnded(
+    matchEnded('m-1', {
+      participants: [
+        { participantId: 'me', displayName: 'Guest 4821', kind: 'GUEST', score: 900, correctCount: 1, placement: 1 },
+        { participantId: 'bot', displayName: 'Minnal Bot', kind: 'BOT', score: 0, correctCount: 0, placement: 2 },
+      ],
+      breakdown: { me: [{ pickedIndex: 0, correct: true, responseMs: 2000, points: 900 }], bot: [{ correct: false, points: 0 }] },
+    }).payload,
+  )!;
+
+beforeEach(() => window.sessionStorage.clear());
+afterEach(() => vi.restoreAllMocks());
+
+describe('lastResult', () => {
+  it('saves, loads and clears {matchId, selfId, payload} under minnal.lastResult', () => {
+    expect(load()).toBeNull();
+    save({ matchId: 'm-1', selfId: 'me', payload: payload() });
+    expect(JSON.parse(window.sessionStorage.getItem(LAST_RESULT_KEY)!)).toMatchObject({ matchId: 'm-1', selfId: 'me' });
+    expect(load()).toEqual({ matchId: 'm-1', selfId: 'me', payload: payload() });
+    clear();
+    expect(load()).toBeNull();
+  });
+
+  it.each([
+    ['not JSON', '{oops'],
+    ['a payload that does not parse', JSON.stringify({ matchId: 'm-1', selfId: 'me', payload: { matchId: 'm-1' } })],
+    ['a selfId not among the participants', JSON.stringify({ matchId: 'm-1', selfId: 'stranger', payload: payload() })],
+    ['a matchId that differs from the payload', JSON.stringify({ matchId: 'm-2', selfId: 'me', payload: payload() })],
+  ])('a corrupt entry (%s) reads as none and is dropped', (_, text) => {
+    window.sessionStorage.setItem(LAST_RESULT_KEY, text);
+    expect(load()).toBeNull();
+    expect(window.sessionStorage.getItem(LAST_RESULT_KEY)).toBeNull();
+  });
+
+  it('storage that throws is survived', () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    expect(() => save({ matchId: 'm-1', selfId: 'me', payload: payload() })).not.toThrow();
+    expect(load()).toBeNull();
+    expect(() => clear()).not.toThrow();
+  });
+});

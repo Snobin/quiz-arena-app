@@ -1,0 +1,27 @@
+{
+  "eventId" : "7a8b9c0d-1e2f-4a3b-9c4d-5e6f7a8b9c0d",
+  "matchId" : "6f1c2a3e-8a4b-4c1d-9e2f-0a1b2c3d4e5f",
+  "mode" : "QUICK",
+  "questionSource" : "BANK",
+  "rated" : true,
+  "startedAt" : "2026-11-12T10:14:10.123Z",
+  "endedAt" : "2026-11-12T10:15:30.123Z",
+  "queueWaitMs" : 8000,
+  "participants" : [ {
+    "participantId" : "0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+    "kind" : "GUEST",
+    "displayName" : "Guest 4821",
+    "score" : 1500,
+    "correctCount" : 2,
+    "forfeited" : false,
+    "placement" : 1
+  }, {
+    "participantId" : "9d8c7b6a-5f4e-4d3c-b2a1-0f9e8d7c6b5a",
+    "kind" : "BOT",
+    "displayName" : "Minnal Bot",
+    "score" : 642,
+    "correctCount" : 1,
+    "forfeited" : false,
+    "placement" : 2
+  } ]
+}

@@ -2,6 +2,8 @@ package in.minnal.contracts.realtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import in.minnal.contracts.events.CompletedParticipant;
+import in.minnal.contracts.events.MatchCompletedEvent;
 import in.minnal.contracts.internal.InternalQuestion;
 import in.minnal.contracts.internal.QuestionSetFilters;
 import in.minnal.contracts.internal.QuestionSetRequest;
@@ -43,6 +45,9 @@ class RealtimeSamplesTest {
     static final UUID ANJU = UUID.fromString("0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d");
     static final UUID BOT = UUID.fromString("9d8c7b6a-5f4e-4d3c-b2a1-0f9e8d7c6b5a");
     static final UUID QUESTION_ID = UUID.fromString("3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f");
+    static final UUID QUESTION_2_ID = UUID.fromString("4d5e6f7a-8b9c-4d0e-9f1a-2b3c4d5e6f7a");
+    static final UUID QUESTION_3_ID = UUID.fromString("5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b");
+    static final UUID EVENT_ID = UUID.fromString("7a8b9c0d-1e2f-4a3b-9c4d-5e6f7a8b9c0d");
 
     record Sample(String file, Object value, TypeReference<?> type) {
     }
@@ -118,6 +123,39 @@ class RealtimeSamplesTest {
                         ServerMessage.broadcast(MessageType.MATCH_ABORTED, MATCH_ID, 2, SERVER_TIME,
                                 new MatchAbortedPayload(AbortReason.ALL_LEFT)),
                         new TypeReference<ServerMessage<MatchAbortedPayload>>() { }),
+                new Sample("match-ended.json",
+                        ServerMessage.aboutMatch(MessageType.MATCH_ENDED, MATCH_ID, SERVER_TIME, new MatchEndedPayload(
+                                MATCH_ID, MatchMode.QUICK, QuestionSource.BANK, List.of(
+                                        new ResultParticipant(ANJU, "Guest 4821", ParticipantKind.GUEST, 1500, 2, false, 1),
+                                        new ResultParticipant(BOT, "Minnal Bot", ParticipantKind.BOT, 642, 1, false, 2)),
+                                List.of(
+                                        new ResultQuestion(QUESTION_ID, 2, "കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി?",
+                                                "Which is the longest river in Kerala?",
+                                                List.of("പെരിയാർ", "ഭാരതപ്പുഴ", "പമ്പ", "ചാലിയാർ"), 0,
+                                                "പെരിയാറിന് 244 കി.മീ. നീളമുണ്ട്.", "Kerala PSC 2019, Q 14"),
+                                        new ResultQuestion(QUESTION_2_ID, 1, null, "Who wrote Indulekha?",
+                                                List.of("O. Chandu Menon", "Kumaran Asan", "Vallathol", "C. V. Raman Pillai"), 0,
+                                                "x", null),
+                                        new ResultQuestion(QUESTION_3_ID, 1, "ചോദ്യം", null,
+                                                List.of("a", "b", "c", "d"), 3, "y", null)),
+                                List.of(
+                                        new ParticipantBreakdown(ANJU, List.of(
+                                                new BreakdownAnswer(0, true, 3750L, 875),
+                                                new BreakdownAnswer(0, true, 5250L, 625),
+                                                BreakdownAnswer.missed())),
+                                        new ParticipantBreakdown(BOT, List.of(
+                                                new BreakdownAnswer(2, false, 6000L, 0),
+                                                new BreakdownAnswer(1, false, 2100L, 0),
+                                                new BreakdownAnswer(3, true, 5370L, 642)))))),
+                        new TypeReference<ServerMessage<MatchEndedPayload>>() { }),
+                new Sample("match-completed.json",
+                        new MatchCompletedEvent(EVENT_ID, MATCH_ID, MatchMode.QUICK, null, QuestionSource.BANK, true,
+                                SERVER_TIME.minusSeconds(80), SERVER_TIME, 8000L, List.of(
+                                        new CompletedParticipant(ANJU, null, ParticipantKind.GUEST, "Guest 4821", 1500, 2,
+                                                false, 1),
+                                        new CompletedParticipant(BOT, null, ParticipantKind.BOT, "Minnal Bot", 642, 1,
+                                                false, 2))),
+                        new TypeReference<MatchCompletedEvent>() { }),
                 new Sample("error-answer-rejected.json",
                         ServerMessage.error(ErrorCode.ANSWER_REJECTED, MATCH_ID, 3L, SERVER_TIME),
                         new TypeReference<ServerMessage<ErrorPayload>>() { }),
@@ -261,6 +299,31 @@ class RealtimeSamplesTest {
                 "participants", "youForfeited");
         JsonNode receipt = ContractJson.MAPPER.valueToTree(MyAnswer.receipt(2));
         assertThat(receipt.propertyNames()).containsExactly("pickedIndex");
+    }
+
+    /** Story 1.10: an unanswered breakdown slot carries only {@code correct} and {@code points}. */
+    @Test
+    void aMissedBreakdownAnswerOmitsPickAndResponseTime() {
+        JsonNode missed = ContractJson.MAPPER.valueToTree(BreakdownAnswer.missed());
+        assertThat(missed.propertyNames()).containsExactly("correct", "points");
+    }
+
+    /** AD-8: a guest's event has no userId; rated follows the source; the stream key has no prefix. */
+    @Test
+    void theCompletedEventOmitsGuestIdsAndDerivesRated() {
+        MatchCompletedEvent event = MatchCompletedEvent.of(MATCH_ID, MatchMode.QUICK, null, QuestionSource.BANK,
+                SERVER_TIME, SERVER_TIME, null, List.of(
+                        new CompletedParticipant(ANJU, null, ParticipantKind.GUEST, "Guest", 0, 0, false, 1)));
+        assertThat(event.rated()).isTrue();
+        assertThat(event.eventId()).isNotNull();
+        assertThat(MatchCompletedEvent.of(MATCH_ID, MatchMode.QUICK, null, QuestionSource.CUSTOM, SERVER_TIME,
+                SERVER_TIME, null, List.of()).rated()).isFalse();
+        JsonNode json = ContractJson.MAPPER.valueToTree(event);
+        assertThat(json.has("queueWaitMs")).isFalse();
+        assertThat(json.has("roomId")).isFalse();
+        assertThat(json.get("participants").get(0).has("userId")).isFalse();
+        assertThat(MatchCompletedEvent.STREAM).isEqualTo("minnal.match.completed");
+        assertThat(MatchCompletedEvent.PAYLOAD_FIELD).isEqualTo("payload");
     }
 
     /**

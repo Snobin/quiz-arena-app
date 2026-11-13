@@ -1,6 +1,7 @@
 package in.minnal.game.match.domain;
 
 import in.minnal.contracts.internal.InternalQuestion;
+import in.minnal.contracts.internal.QuestionSource;
 import in.minnal.contracts.realtime.MatchMode;
 import in.minnal.contracts.realtime.Participant;
 import java.time.Instant;
@@ -16,6 +17,7 @@ import java.util.UUID;
  * @param questions    the drawn set, answers included (AD-5: never leaves the server as is)
  * @param queueWaitMs  each human's {@code sub} → her wait in the queue
  * @param ratings      every participant's id → the rating she plays at (a bot plays at its human's)
+ * @param questionSource where the questions came from (always {@code BANK} until Epic 6)
  */
 public record MatchSetup(
         UUID matchId,
@@ -25,9 +27,20 @@ public record MatchSetup(
         List<InternalQuestion> questions,
         Map<String, Long> queueWaitMs,
         Map<UUID, Integer> ratings,
-        Instant createdAt) {
+        Instant createdAt,
+        QuestionSource questionSource) {
+
+    /** A setup drawn from the question bank. */
+    public MatchSetup(UUID matchId, MatchMode mode, List<Participant> participants, Map<String, UUID> humans,
+            List<InternalQuestion> questions, Map<String, Long> queueWaitMs, Map<UUID, Integer> ratings,
+            Instant createdAt) {
+        this(matchId, mode, participants, humans, questions, queueWaitMs, ratings, createdAt, QuestionSource.BANK);
+    }
 
     public MatchSetup {
+        if (questionSource == null) {
+            throw new IllegalArgumentException("a match needs a question source");
+        }
         participants = List.copyOf(participants);
         humans = Map.copyOf(humans);
         questions = List.copyOf(questions);

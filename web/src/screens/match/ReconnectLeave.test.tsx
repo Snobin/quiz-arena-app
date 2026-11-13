@@ -22,7 +22,7 @@ import {
   useFakeRealtime,
   type FakeStomp,
 } from '../../test-utils/realtime.ts';
-import { FORFEIT_NOTICE_MS } from './LiveMatchScreen.tsx';
+import { FORFEIT_NOTICE_MS, MATCH_ENDED_WAIT_MS, RESULTS_HOLD_MS } from './LiveMatchScreen.tsx';
 
 /** Story 1.9 on the screens: the reconnect banner, the Leave dialog, the notices and /results. */
 
@@ -277,31 +277,39 @@ describe('notices', () => {
 });
 
 describe('the end', () => {
-  it('a match that ended while she was away (NOT_IN_MATCH after Q1) shows "Match over" with Home, not a stuck screen', async () => {
+  it('a match that ended while she was away (NOT_IN_MATCH after Q1) opens the results, not a stuck screen', async () => {
     const m = await inMatch();
     start(m, 0);
     revealQ(m, 0, 900, 300);
     start(m, 1);
     act(() => socket().drop());
     await waitFor(() => expect(clients).toHaveLength(2), { timeout: 2000 });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
     act(() => socket().open());
     act(() => socket().deliver(serverError('NOT_IN_MATCH', m.matchId)));
     expect(screen.queryByTestId('reconnect-banner')).toBeNull();
     expect(content()).not.toHaveAttribute('inert');
-    expect(screen.getByTestId('match-over')).toHaveTextContent('900');
-    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/');
     expect(screen.queryByTestId('leave-button')).toBeNull();
     expect(window.location.pathname).toBe('/match');
     // The Back guard entry is dropped once play ends here.
-    await waitFor(() => expect((window.history.state as { minnalGuard?: boolean } | null)?.minnalGuard).not.toBe(true));
-    expect(window.location.pathname).toBe('/match');
+    await act(() => vi.advanceTimersByTimeAsync(50));
+    expect((window.history.state as { minnalGuard?: boolean } | null)?.minnalGuard).not.toBe(true);
+    // No MATCH_ENDED is coming: after the hold and the wait, the minimal results.
+    await act(() => vi.advanceTimersByTimeAsync(RESULTS_HOLD_MS + 50));
+    await act(() => vi.advanceTimersByTimeAsync(MATCH_ENDED_WAIT_MS + 50));
+    expect(window.location.pathname).toBe('/results');
+    expect(screen.getByTestId('result-self')).toHaveTextContent('900');
+    // /results replaced /match: one Back leaves it without landing on /match.
+    act(() => window.history.back());
+    await act(() => vi.advanceTimersByTimeAsync(50));
+    expect(window.location.pathname).not.toBe('/match');
+    expect(window.location.pathname).not.toBe('/results');
   });
 
   it('after a normal end the Back guard is gone: one Back leaves /match', async () => {
     const m = await inMatch();
     start(m, 9);
     revealQ(m, 9, 5000, 4000);
-    expect(screen.getByTestId('match-over')).toBeInTheDocument();
     await waitFor(() => expect((window.history.state as { minnalGuard?: boolean } | null)?.minnalGuard).not.toBe(true));
     act(() => window.history.back());
     await waitFor(() => expect(window.location.pathname).toBe('/'));

@@ -26,7 +26,7 @@ class MatchDrainTest {
     final MatchRegistry registry = new MatchRegistry(participation, new PlayerSessions(event -> { }), new RecordingChannel(),
             new RecordingBroadcaster(), Clock.systemUTC(), timers, MatchTestKit.fast(Duration.ofMillis(150)),
             new BotBrain(new BotSettings(Duration.ofMillis(5), Duration.ofMillis(20), 0.65, 0.1), new Random(3)),
-            new DrainState(), new SimpleMeterRegistry());
+            new DrainState(), new SimpleMeterRegistry(), event -> { });
 
     @AfterEach
     void stop() {

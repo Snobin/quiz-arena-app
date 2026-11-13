@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-11-2026 09:40
-last_updated: 12-11-2026 23:03
+last_updated: 13-11-2026 08:40
 project: quiz-arena
 project_key: NOKEY
 tracking_system: file-system
@@ -45,7 +45,7 @@ development_status:
   1-7-live-match-engine: review
   1-8-live-match-screen-and-peak-moments: review
   1-9-reconnect-forfeit-and-leave: review
-  1-10-results-and-rematch: backlog
+  1-10-results-and-rematch: review
   1-11-instant-1v1-feedback-and-early-close: review
   epic-1-retrospective: optional
 

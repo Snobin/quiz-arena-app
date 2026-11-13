@@ -261,6 +261,8 @@ class MatchReconnectFlowTest extends GameIntegrationTest {
         awaitIdle(anjuSub);
         assertThat(Duration.ofNanos(System.nanoTime() - before)).as("closed at once").isLessThan(Duration.ofSeconds(2));
         assertThat(counter(MatchMetrics.ENDED)).isEqualTo(completed + 1);
+        // Story 1.10: completed, so she gets MATCH_ENDED with the two asked questions.
+        assertThat(anju.next("MATCH_ENDED").get("payload").get("questions")).hasSize(2);
         anju.expectNothing(Duration.ofMillis(200));
         assertThat(anju.pendingBroadcasts()).as("no further question").isZero();
     }

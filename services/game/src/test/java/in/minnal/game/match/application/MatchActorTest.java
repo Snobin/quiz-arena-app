@@ -3,7 +3,16 @@ package in.minnal.game.match.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import in.minnal.contracts.events.CompletedParticipant;
+import in.minnal.contracts.events.MatchCompletedEvent;
 import in.minnal.contracts.internal.InternalQuestion;
+import in.minnal.contracts.internal.QuestionSource;
+import in.minnal.contracts.realtime.BreakdownAnswer;
+import in.minnal.contracts.realtime.MatchEndedPayload;
+import in.minnal.contracts.realtime.MatchMode;
+import in.minnal.contracts.realtime.Participant;
+import in.minnal.contracts.realtime.ParticipantKind;
+import in.minnal.contracts.realtime.ResultParticipant;
 import in.minnal.contracts.realtime.AbortReason;
 import in.minnal.contracts.realtime.AnswerAcceptedPayload;
 import in.minnal.contracts.realtime.ErrorPayload;
@@ -50,6 +59,7 @@ class MatchActorTest {
     final AtomicReference<MatchActor> endedWith = new AtomicReference<>();
     final List<MatchActor> actors = new ArrayList<>();
     final List<String> released = new CopyOnWriteArrayList<>();
+    final List<MatchCompletedEvent> published = new CopyOnWriteArrayList<>();
 
     @AfterEach
     void stop() {
@@ -68,7 +78,7 @@ class MatchActorTest {
     MatchActor actor(MatchSetup setup, MatchSettings settings, BotBrain bots, Predicate<String> hasSession) {
         MatchState state = MatchState.of(setup, settings.window(), sub -> true);
         MatchActor actor = new MatchActor(setup, state, settings, Clock.systemUTC(), timers, channel, broadcaster, bots,
-                new MatchMetrics(meters), endedWith::set, hasSession, released::add);
+                new MatchMetrics(meters), endedWith::set, hasSession, released::add, published::add);
         actors.add(actor);
         return actor;
     }
@@ -564,5 +574,176 @@ class MatchActorTest {
         assertThat(aborted.payload()).isEqualTo(new MatchAbortedPayload(AbortReason.ERROR));
         await().atMost(Duration.ofSeconds(2)).until(() -> endedWith.get() == actor);
         assertThat(actor.isFailed()).isTrue();
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Story 1.10: MATCH_ENDED and minnal.match.completed
+
+    /** The private MATCH_ENDED messages sent so far. */
+    List<Sent> matchEnded() {
+        return channel.sent.stream().filter(s -> s.message().type() == MessageType.MATCH_ENDED).toList();
+    }
+
+    /**
+     * Two humans (h0 a registered USER, h1 a guest) and a bot over 3 questions: h0 answers every
+     * question right, h1 answers Q0 right and leaves at Q1, the bot is silent. Both still have a
+     * session at the end, so both get MATCH_ENDED (h1 forfeited), and one event is published.
+     */
+    @Test
+    void aCompletedMatchSendsMatchEndedToEveryLiveHumanThenPublishesOneEvent() throws Exception {
+        MatchSetup base = MatchTestKit.setup(2, 1, 3);
+        List<Participant> participants = new ArrayList<>(base.participants());
+        Participant user = participants.getFirst();
+        participants.set(0, new Participant(user.participantId(), "Anju", ParticipantKind.USER));
+        MatchSetup setup = new MatchSetup(base.matchId(), MatchMode.QUICK, participants, base.humans(), base.questions(),
+                java.util.Map.of("h0", 2_000L, "h1", 5_000L), base.ratings(), base.createdAt(), QuestionSource.BANK);
+        MatchActor actor = actor(setup, graced(Duration.ofMillis(400), Duration.ofSeconds(10)), silentBots(),
+                sub -> true);
+        UUID h0 = setup.humans().get("h0");
+        UUID h1 = setup.humans().get("h1");
+        actor.tell(new MatchEvent.Begin());
+        Instant q1StartedAt = null;
+        for (int q = 0; q < 3; q++) {
+            QuestionStartedPayload started = (QuestionStartedPayload) broadcaster
+                    .next(MessageType.QUESTION_STARTED, Duration.ofSeconds(2)).payload();
+            if (q == 0) {
+                q1StartedAt = started.startedAt();
+            }
+            int right = setup.questions().get(q).answerIndex();
+            actor.tell(new MatchEvent.Answer(h0, q, right, started.startedAt().plusMillis(100),
+                    new MatchEvent.ReplyTo("h0", "s0")));
+            if (q == 0) {
+                actor.tell(new MatchEvent.Answer(h1, q, right, started.startedAt().plusMillis(200),
+                        new MatchEvent.ReplyTo("h1", "s1")));
+            } else if (q == 1) {
+                actor.tell(new MatchEvent.Leave("h1"));
+            }
+            broadcaster.next(MessageType.QUESTION_REVEALED, Duration.ofSeconds(2));
+        }
+        await().atMost(Duration.ofSeconds(2)).until(() -> endedWith.get() == actor);
+
+        assertThat(matchEnded()).extracting(Sent::sub).containsExactlyInAnyOrder("h0", "h1");
+        ServerMessage<?> message = matchEnded().getFirst().message();
+        assertThat(message.seq()).as("private: no seq").isNull();
+        assertThat(message.matchId()).isEqualTo(setup.matchId());
+        MatchEndedPayload payload = (MatchEndedPayload) message.payload();
+        assertThat(payload.mode()).isEqualTo(MatchMode.QUICK);
+        assertThat(payload.questionSource()).isEqualTo(QuestionSource.BANK);
+        assertThat(payload.questions()).hasSize(3);
+        assertThat(payload.questions().get(1).answerIndex()).isEqualTo(setup.questions().get(1).answerIndex());
+        assertThat(payload.participants()).extracting(ResultParticipant::participantId)
+                .containsExactly(h0, h1, setup.participants().get(2).participantId());
+        ResultParticipant anju = payload.participants().get(0);
+        ResultParticipant left = payload.participants().get(1);
+        ResultParticipant bot = payload.participants().get(2);
+        assertThat(anju.correctCount()).isEqualTo(3);
+        assertThat(anju.placement()).isEqualTo(1);
+        assertThat(left.forfeited()).isTrue();
+        assertThat(left.correctCount()).isEqualTo(1);
+        assertThat(left.score()).isPositive();
+        assertThat(left.placement()).isEqualTo(2);
+        assertThat(bot.score()).isZero();
+        assertThat(bot.placement()).isEqualTo(3);
+        assertThat(bot.kind()).isEqualTo(ParticipantKind.BOT);
+        List<BreakdownAnswer> anjuAnswers = payload.breakdown().get(0).answers();
+        assertThat(anjuAnswers).hasSize(3).allSatisfy(a -> {
+            assertThat(a.correct()).isTrue();
+            assertThat(a.responseMs()).isEqualTo(100L);
+        });
+        assertThat(anjuAnswers.stream().mapToInt(BreakdownAnswer::points).sum()).isEqualTo(anju.score());
+        assertThat(payload.breakdown().get(1).answers().get(1)).isEqualTo(BreakdownAnswer.missed());
+        assertThat(payload.breakdown().get(2).answers()).containsOnly(BreakdownAnswer.missed());
+
+        await().atMost(Duration.ofSeconds(1)).until(() -> published.size() == 1);
+        MatchCompletedEvent event = published.getFirst();
+        assertThat(event.matchId()).isEqualTo(setup.matchId());
+        assertThat(event.rated()).isTrue();
+        assertThat(event.questionSource()).isEqualTo(QuestionSource.BANK);
+        assertThat(event.startedAt()).isEqualTo(q1StartedAt);
+        assertThat(event.endedAt()).isAfterOrEqualTo(event.startedAt());
+        assertThat(event.queueWaitMs()).isEqualTo(5_000L);
+        assertThat(event.roomId()).isNull();
+        assertThat(event.participants()).extracting(CompletedParticipant::userId).containsExactly("h0", null, null);
+        assertThat(event.participants()).extracting(CompletedParticipant::placement).containsExactly(1, 2, 3);
+        assertThat(event.participants()).extracting(CompletedParticipant::forfeited).containsExactly(false, true, false);
+        Thread.sleep(100);
+        assertThat(published).hasSize(1);
+    }
+
+    @Test
+    void aHumanWithoutALiveSessionGetsNoMatchEndedButTheEventIsStillPublished() throws Exception {
+        MatchSetup setup = MatchTestKit.setup(2, 0, 1);
+        MatchActor actor = actor(setup, graced(Duration.ofMillis(150), Duration.ofSeconds(10)), silentBots(),
+                sub -> sub.equals("h0"));
+        actor.tell(new MatchEvent.Begin());
+        await().atMost(Duration.ofSeconds(2)).until(() -> endedWith.get() == actor);
+        assertThat(matchEnded()).extracting(Sent::sub).containsExactly("h0");
+        MatchEndedPayload payload = (MatchEndedPayload) matchEnded().getFirst().message().payload();
+        assertThat(payload.participants()).extracting(ResultParticipant::placement).as("0 to 0 is a full tie")
+                .containsExactly(1, 1);
+        assertThat(published).hasSize(1);
+        assertThat(published.getFirst().queueWaitMs()).as("no wait known").isNull();
+    }
+
+    @Test
+    void whenEveryHumanLeavesAtQ3TheResultsListOnlyTheAskedQuestions() throws Exception {
+        MatchSetup setup = MatchTestKit.setup(1, 1, 10);
+        MatchActor actor = actor(setup, graced(Duration.ofMillis(200), Duration.ofSeconds(10)), silentBots(),
+                sub -> true);
+        actor.tell(new MatchEvent.Begin());
+        for (int q = 0; q < 2; q++) {
+            broadcaster.next(MessageType.QUESTION_REVEALED, Duration.ofSeconds(2));
+        }
+        broadcaster.next(MessageType.QUESTION_STARTED, Duration.ofSeconds(2)); // Q3 open
+        actor.tell(new MatchEvent.Leave("h0"));
+        await().atMost(Duration.ofSeconds(2)).until(() -> endedWith.get() == actor);
+        assertThat(matchEnded()).hasSize(1);
+        MatchEndedPayload payload = (MatchEndedPayload) matchEnded().getFirst().message().payload();
+        assertThat(payload.questions()).hasSize(3);
+        assertThat(payload.breakdown()).allSatisfy(b -> assertThat(b.answers()).hasSize(3));
+        assertThat(payload.participants().getFirst().forfeited()).isTrue();
+        assertThat(published).hasSize(1);
+    }
+
+    @Test
+    void anAbortedMatchSendsNoMatchEndedAndPublishesNothing() throws Exception {
+        MatchSetup setup = MatchTestKit.setup(1, 1, 10);
+        MatchActor actor = actor(setup, graced(Duration.ofSeconds(3), Duration.ofSeconds(10)), silentBots(),
+                sub -> true);
+        actor.tell(new MatchEvent.Begin());
+        broadcaster.next(MessageType.QUESTION_STARTED, Duration.ofSeconds(2));
+        actor.tell(new MatchEvent.Leave("h0"));
+        await().atMost(Duration.ofSeconds(2)).until(() -> endedWith.get() == actor);
+        assertThat(matchEnded()).isEmpty();
+        assertThat(published).isEmpty();
+    }
+
+    @Test
+    void aFailedMatchSendsNoMatchEndedAndPublishesNothingEvenAfterQ1() throws Exception {
+        MatchSetup setup = MatchTestKit.setup(1, 1, 3);
+        MatchActor actor = actor(setup, graced(Duration.ofMillis(150), Duration.ofSeconds(10)), silentBots(),
+                sub -> true);
+        actor.tell(new MatchEvent.Begin());
+        broadcaster.next(MessageType.QUESTION_REVEALED, Duration.ofSeconds(2));
+        actor.tell(new MatchEvent.NextQuestion(0, Instant.now())); // out of order: the state throws
+        await().atMost(Duration.ofSeconds(2)).until(() -> endedWith.get() == actor);
+        assertThat(actor.isFailed()).isTrue();
+        assertThat(matchEnded()).isEmpty();
+        assertThat(published).isEmpty();
+    }
+
+    @Test
+    void aPublisherThatThrowsDoesNotStopTheEnd() throws Exception {
+        MatchSetup setup = MatchTestKit.setup(1, 0, 1);
+        MatchSettings settings = graced(Duration.ofMillis(100), Duration.ofSeconds(10));
+        MatchState state = MatchState.of(setup, settings.window(), sub -> true);
+        MatchActor actor = new MatchActor(setup, state, settings, Clock.systemUTC(), timers, channel, broadcaster,
+                silentBots(), new MatchMetrics(meters), endedWith::set, sub -> true, released::add, event -> {
+                    throw new IllegalStateException("boom");
+                });
+        actors.add(actor);
+        actor.tell(new MatchEvent.Begin());
+        await().atMost(Duration.ofSeconds(2)).until(() -> endedWith.get() == actor);
+        assertThat(matchEnded()).hasSize(1);
     }
 }

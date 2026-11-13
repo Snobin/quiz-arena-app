@@ -66,10 +66,12 @@ public class MatchRegistry implements MatchAccess, DisposableBean {
     private final MatchSettings settings;
     private final BotBrain bots;
     private final MatchMetrics metrics;
+    private final MatchCompletedPublisher publisher;
 
     public MatchRegistry(ParticipationRegistry participation, PlayerSessions sessions, PlayerChannel channel,
             MatchBroadcaster broadcaster, Clock clock, MatchTimers timers, MatchSettings settings, BotBrain bots,
-            DrainState drain, MeterRegistry meters) {
+            DrainState drain, MeterRegistry meters, MatchCompletedPublisher publisher) {
+        this.publisher = publisher;
         this.drain = drain;
         this.participation = participation;
         this.sessions = sessions;
@@ -96,7 +98,7 @@ public class MatchRegistry implements MatchAccess, DisposableBean {
             MatchState state = MatchState.of(setup, settings.window(), sessions::hasSession);
             UUID matchId = setup.matchId();
             match = new MatchActor(setup, state, settings, clock, timers, channel, broadcaster, bots, metrics, this::ended,
-                    sessions::hasSession, sub -> participation.release(sub, new Activity.InMatch(matchId)));
+                    sessions::hasSession, sub -> participation.release(sub, new Activity.InMatch(matchId)), publisher);
             live.put(setup.matchId(), match);
         }
         for (String sub : setup.humans().keySet()) {
