@@ -1,0 +1,26 @@
+# Fixture for check-compose.test.mjs: game-service heap is too big; ratings-service has no -Xmx.
+services:
+  core-service:
+    image: busybox
+    restart: unless-stopped
+    mem_limit: 640m
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx384m"
+    healthcheck:
+      test: ["CMD", "true"]
+  game-service:
+    image: busybox
+    restart: unless-stopped
+    mem_limit: 640m
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx512m"
+    healthcheck:
+      test: ["CMD", "true"]
+  ratings-service:
+    image: busybox
+    restart: unless-stopped
+    mem_limit: 640m
+    environment:
+      JAVA_TOOL_OPTIONS: "-XX:+UseSerialGC"
+    healthcheck:
+      test: ["CMD", "true"]

@@ -166,3 +166,28 @@ npm run build        # output in web/dist
 ```
 
 Start the Compose stack first so the dev proxy has something to talk to.
+
+## CI
+
+`.github/workflows/ci.yml` runs on every push to any branch (and by hand from the Actions tab).
+Any failing step turns the run red. It has three jobs:
+
+- **backend**: JDK 25 (Temurin), `./mvnw -B verify`. Core's integration tests start Postgres with
+  Testcontainers, so they need Docker.
+- **web**: Node 22, `npm ci`, then `typecheck`, `test`, `check:i18n`, `check:tokens` and
+  `build:check`.
+- **compose**: `node --test deploy/` (the check script's own tests), then
+  `node deploy/check-compose.mjs`. The check resolves `deploy/compose.yaml` with
+  `docker compose config` and fails if a service has no memory limit, healthcheck or
+  `restart: unless-stopped`, if a JVM service's `JAVA_TOOL_OPTIONS` lacks `-Xmx384m` or lower, or
+  if the memory limits add up to 3.2 GB or more. It prints the total. Required `${VAR:?}` values get
+  placeholders, and it never reads `deploy/.env`.
+
+Run the same checks locally from the repo root:
+
+```sh
+./mvnw -B verify
+(cd web && npm ci && npm run typecheck && npm test && npm run check:i18n && npm run check:tokens && npm run build:check)
+node --test deploy/
+node deploy/check-compose.mjs
+```

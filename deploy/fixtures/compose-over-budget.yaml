@@ -1,0 +1,32 @@
+# Fixture for check-compose.test.mjs: limits sum to 3200 MB, exactly at the budget.
+services:
+  core-service:
+    image: busybox
+    restart: unless-stopped
+    mem_limit: 1g
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx384m"
+    healthcheck:
+      test: ["CMD", "true"]
+  game-service:
+    image: busybox
+    restart: unless-stopped
+    mem_limit: 1g
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx384m"
+    healthcheck:
+      test: ["CMD", "true"]
+  ratings-service:
+    image: busybox
+    restart: unless-stopped
+    mem_limit: 1g
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx384m"
+    healthcheck:
+      test: ["CMD", "true"]
+  postgres:
+    image: busybox
+    restart: unless-stopped
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "true"]
