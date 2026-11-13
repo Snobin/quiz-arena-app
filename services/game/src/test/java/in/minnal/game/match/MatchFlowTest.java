@@ -29,6 +29,7 @@ class MatchFlowTest extends GameIntegrationTest {
     @Autowired
     MatchRegistry matches;
 
+
     final List<StompTestClient> clients = new ArrayList<>();
     final List<String> subs = new ArrayList<>();
 
@@ -48,6 +49,19 @@ class MatchFlowTest extends GameIntegrationTest {
         StompTestClient client = connect(guestToken(sub));
         clients.add(client);
         return client;
+    }
+
+    /**
+     * A refused SUBSCRIBE: an ERROR frame, or the socket closing (the server's ERROR can race its
+     * close and be lost; either way nothing is delivered).
+     */
+    static void assertRefused(RawStomp raw, String destination) throws InterruptedException {
+        String frame = raw.nextFrame(WAIT);
+        if (frame == null) {
+            assertThat(raw.awaitClosed(Duration.ZERO)).as("%s: neither ERROR nor closed", destination).isTrue();
+        } else {
+            assertThat(frame).as(destination).startsWith("ERROR\n");
+        }
     }
 
     static String answer(String matchId) {
@@ -220,7 +234,7 @@ class MatchFlowTest extends GameIntegrationTest {
             raw.connect("Bearer " + guestToken(stranger));
             assertThat(raw.nextFrame(WAIT)).startsWith("CONNECTED\n");
             raw.send("SUBSCRIBE", "id:0", topic);
-            assertThat(raw.nextFrame(WAIT)).startsWith("ERROR\n");
+            assertRefused(raw, topic);
             assertThat(raw.awaitClosed(WAIT)).isTrue();
         }
         // Any other topic, even for a participant: refused.
@@ -230,7 +244,7 @@ class MatchFlowTest extends GameIntegrationTest {
                 raw.connect("Bearer " + guestToken(participantSub));
                 assertThat(raw.nextFrame(WAIT)).startsWith("CONNECTED\n");
                 raw.send("SUBSCRIBE", "id:0", "destination:" + other);
-                assertThat(raw.nextFrame(WAIT)).as(other).startsWith("ERROR\n");
+                assertRefused(raw, other);
             }
         }
         // The participant herself, on a second connection: allowed, and broadcasts arrive.
@@ -245,37 +259,56 @@ class MatchFlowTest extends GameIntegrationTest {
 
     @Test
     void aFloodIsCutToTheRateAndOtherSessionsAreUnaffected() {
-        StompTestClient flooder = guest(newSub());
-        StompTestClient bystander = guest(newSub());
-        for (int i = 0; i < 25; i++) {
-            flooder.cancel();
-        }
-        int processed = 0;
-        int limited = 0;
-        while (true) {
-            JsonNode message;
-            try {
-                message = flooder.next(Duration.ofMillis(700));
-            } catch (AssertionError none) {
-                break;
+        // The limiter's time stands still for the flood, so the counts are exact on any machine.
+        nanos.freeze();
+        try {
+            StompTestClient flooder = guest(newSub());
+            StompTestClient bystander = guest(newSub());
+            for (int i = 0; i < 25; i++) {
+                flooder.cancel();
             }
-            String code = message.get("payload").get("code").asString();
-            if (code.equals("RATE_LIMITED")) {
-                limited++;
-            } else {
-                assertThat(code).isEqualTo("NOT_IN_QUEUE");
-                processed++;
+            // 10 tokens, one already spent on the private-queue SUBSCRIBE: 9 processed and one
+            // RATE_LIMITED, then silent drops. The interceptor sends RATE_LIMITED at once while the
+            // matchmaking actor answers the others, so only the counts are fixed, not the order.
+            int processed = 0;
+            int limited = 0;
+            for (int i = 0; i < 10; i++) {
+                JsonNode message = flooder.next("ERROR");
+                String code = message.get("payload").get("code").asString();
+                if (code.equals("RATE_LIMITED")) {
+                    limited++;
+                } else {
+                    assertThat(code).isEqualTo("NOT_IN_QUEUE");
+                    processed++;
+                }
             }
+            assertThat(processed).isEqualTo(9);
+            assertThat(limited).isEqualTo(1);
+            flooder.expectNothing(Duration.ofMillis(500));
+            assertThat(flooder.isConnected()).isTrue();
+            bystander.cancel();
+            bystander.error("NOT_IN_QUEUE");
+            // A second later the bucket is full again (10 tokens) and a new RATE_LIMITED notice is due.
+            nanos.advance(Duration.ofSeconds(1));
+            for (int i = 0; i < 11; i++) {
+                flooder.cancel();
+            }
+            processed = 0;
+            limited = 0;
+            for (int i = 0; i < 11; i++) {
+                String code = flooder.next("ERROR").get("payload").get("code").asString();
+                if (code.equals("RATE_LIMITED")) {
+                    limited++;
+                } else {
+                    assertThat(code).isEqualTo("NOT_IN_QUEUE");
+                    processed++;
+                }
+            }
+            assertThat(processed).isEqualTo(10);
+            assertThat(limited).isEqualTo(1);
+        } finally {
+            nanos.release();
         }
-        // 10 tokens, one already spent on the private-queue SUBSCRIBE.
-        assertThat(processed).isBetween(8, 12);
-        assertThat(limited).isEqualTo(1);
-        assertThat(flooder.isConnected()).isTrue();
-        bystander.cancel();
-        bystander.error("NOT_IN_QUEUE");
-        // A second later the bucket has refilled.
-        flooder.cancel();
-        flooder.error("NOT_IN_QUEUE");
     }
 
     @Test
