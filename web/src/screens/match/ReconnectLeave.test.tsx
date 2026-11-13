@@ -1,18 +1,23 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../App.tsx';
 import { guestSession } from '../../auth/guestSession.ts';
 import i18n from '../../i18n.ts';
 import { joinQuickMatch, resetRealtime } from '../../realtime/connection.ts';
-import { matchLeave, matchResync } from '../../realtime/protocol.ts';
+import * as lastResult from '../../realtime/lastResult.ts';
+import { liveGameStore } from '../../realtime/liveGameStore.ts';
+import * as liveMatchId from '../../realtime/liveMatchId.ts';
+import { matchAnswer, matchLeave, matchResync, matchTopic, parseMatchEnded } from '../../realtime/protocol.ts';
 import { resetAnnouncements, useAnnouncements } from '../../shell/announce.ts';
 import { clearReturnFocus } from '../../shell/returnFocus.ts';
-import { syncFromLocation } from '../../shell/router.ts';
+import { navigate, syncFromLocation } from '../../shell/router.ts';
 import { clearScrollMemory } from '../../shell/scrollMemory.ts';
 import { restartGuestSession, stubFetch } from '../../test-utils/guest.ts';
 import {
   matchAborted,
+  matchEnded,
   matchFound,
   participantForfeited,
   questionRevealed,
@@ -321,5 +326,239 @@ describe('/results', () => {
   it('with no outcome it goes Home', async () => {
     renderApp('/results');
     await waitFor(() => expect(window.location.pathname).toBe('/'));
+  });
+});
+
+describe('rejoin after a reload', () => {
+  /** A match she is in on the server; this tab has just reloaded, so the store is empty. */
+  function aMatch() {
+    const { payload } = matchFound({ name: 'Minnal Bot', kind: 'BOT' });
+    const self = payload.selfParticipantId;
+    const opponent = payload.participants.find((p) => p.participantId !== self)!.participantId;
+    return { matchId: payload.matchId, self, opponent, participants: payload.participants };
+  }
+
+  async function rejoining(path: string, matchId: string) {
+    renderApp(path);
+    expect(screen.getByTestId('rejoining')).toHaveTextContent('Reconnecting…');
+    expect(screen.queryByRole('button')).toBeNull();
+    await waitFor(() => expect(clients).toHaveLength(1));
+    act(() => socket().open());
+    expect(socket().isSubscribed(matchTopic(matchId))).toBe(true);
+    expect(socket().sentTo(matchResync(matchId))).toBe(1);
+  }
+
+  beforeEach(() => window.sessionStorage.clear());
+  afterEach(() => window.sessionStorage.clear());
+
+  it('from the stored id: "Reconnecting…", then the open question with her score, and she can answer', async () => {
+    const { matchId, self, opponent, participants } = aMatch();
+    liveMatchId.save({ matchId });
+    await rejoining('/match', matchId);
+    await flushAnnouncements();
+    expect(politeText()).toBe('Reconnecting…');
+    act(() =>
+      socket().deliver(
+        snapshot(matchId, {
+          refSeq: 7,
+          questionIndex: 2,
+          startedAt: Date.now(),
+          scores: [{ participantId: self, score: 1640 }, { participantId: opponent, score: 900 }],
+          participants,
+          selfParticipantId: self,
+        }),
+      ),
+    );
+    expect(screen.queryByTestId('rejoining')).toBeNull();
+    expect(screen.getByTestId('progress')).toHaveTextContent('Q 3/10');
+    expect(screen.getByTestId('score-strip')).toHaveTextContent('1,640');
+    fireEvent.click(screen.getByTestId('option-1'));
+    expect(socket().bodiesTo(matchAnswer(matchId))).toEqual([{ questionIndex: 2, optionIndex: 1 }]);
+  });
+
+  it('from ?matchId= with nothing stored: rejoins that match', async () => {
+    const { matchId, self, opponent, participants } = aMatch();
+    await rejoining(`/match?matchId=${matchId}`, matchId);
+    act(() =>
+      socket().deliver(
+        snapshot(matchId, {
+          refSeq: 1,
+          phase: 'LEAD_IN',
+          scores: [{ participantId: self, score: 0 }, { participantId: opponent, score: 0 }],
+          participants,
+        }),
+      ),
+    );
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Get ready');
+  });
+
+  it('a slow reload (grace expired): the Forfeited notice, then the results', async () => {
+    const { matchId, self, opponent, participants } = aMatch();
+    liveMatchId.save({ matchId });
+    await rejoining('/match', matchId);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    act(() =>
+      socket().deliver(
+        snapshot(matchId, {
+          refSeq: 9,
+          phase: 'REVEAL',
+          questionIndex: 4,
+          scores: [{ participantId: self, score: 2100, forfeited: true }, { participantId: opponent, score: 1300 }],
+          participants,
+          youForfeited: true,
+        }),
+      ),
+    );
+    expect(screen.getByTestId('notice-forfeited')).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(FORFEIT_NOTICE_MS));
+    expect(window.location.pathname).toBe('/results');
+    expect(screen.getByTestId('result-self')).toHaveTextContent('2,100');
+  });
+
+  it('the match is over and its result is stored: NOT_IN_MATCH opens /results', async () => {
+    const { matchId } = aMatch();
+    liveMatchId.save({ matchId });
+    const ended = parseMatchEnded(
+      matchEnded(matchId, {
+        participants: [
+          { participantId: 'me', displayName: 'Guest 4821', kind: 'GUEST', score: 900, correctCount: 1, placement: 1 },
+          { participantId: 'bot', displayName: 'Minnal Bot', kind: 'BOT', score: 0, correctCount: 0, placement: 2 },
+        ],
+        breakdown: { me: [{ pickedIndex: 0, correct: true, responseMs: 2000, points: 900 }], bot: [{ correct: false, points: 0 }] },
+      }).payload,
+    )!;
+    lastResult.save({ matchId, selfId: 'me', payload: ended });
+    await rejoining('/match', matchId);
+    act(() => socket().deliver(serverError('NOT_IN_MATCH', matchId)));
+    await waitFor(() => expect(window.location.pathname).toBe('/results'));
+    expect(liveMatchId.load()).toBeNull();
+  });
+
+  it('a stale or foreign id with no stored result: NOT_IN_MATCH goes Home', async () => {
+    const { matchId } = aMatch();
+    liveMatchId.save({ matchId });
+    await rejoining('/match', matchId);
+    act(() => socket().deliver(serverError('NOT_IN_MATCH', matchId)));
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(liveMatchId.load()).toBeNull();
+  });
+
+  it('no SNAPSHOT within 10 s: Home', async () => {
+    const { matchId } = aMatch();
+    liveMatchId.save({ matchId });
+    // Fake timers from the start: the give-up is armed when the screen asks to rejoin.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    renderApp('/match');
+    expect(screen.getByTestId('rejoining')).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(clients).toHaveLength(1);
+    act(() => socket().open());
+    expect(socket().sentTo(matchResync(matchId))).toBe(1);
+    await act(() => vi.advanceTimersByTimeAsync(9_000));
+    // The resync was retried every 3 s meanwhile.
+    expect(socket().sentTo(matchResync(matchId))).toBe(4);
+    expect(window.location.pathname).toBe('/match');
+    await act(() => vi.advanceTimersByTimeAsync(1_100));
+    expect(window.location.pathname).toBe('/');
+  });
+
+  it('a settled match of another id in the store does not block the rejoin', async () => {
+    const m = await inMatch();
+    broadcast(m, (seq) => matchAborted(m.matchId, seq));
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    const { matchId, self, opponent, participants } = aMatch();
+    act(() => navigate(`/match?matchId=${matchId}`));
+    expect(screen.getByTestId('rejoining')).toBeInTheDocument();
+    expect(socket().sentTo(matchResync(matchId))).toBe(1);
+    act(() =>
+      socket().deliver(
+        snapshot(matchId, {
+          refSeq: 3,
+          questionIndex: 1,
+          startedAt: Date.now(),
+          scores: [{ participantId: self, score: 0 }, { participantId: opponent, score: 0 }],
+          participants,
+        }),
+      ),
+    );
+    expect(screen.getByTestId('progress')).toHaveTextContent('Q 2/10');
+  });
+
+  it('leaving /match while pending cancels the rejoin: a late SNAPSHOT changes nothing', async () => {
+    const { matchId, self, opponent, participants } = aMatch();
+    liveMatchId.save({ matchId });
+    await rejoining('/match', matchId);
+    act(() => navigate('/'));
+    expect(socket().isSubscribed(matchTopic(matchId))).toBe(false);
+    act(() =>
+      socket().deliver(
+        snapshot(matchId, {
+          refSeq: 3,
+          scores: [{ participantId: self, score: 0 }, { participantId: opponent, score: 0 }],
+          participants,
+        }),
+      ),
+    );
+    expect(window.location.pathname).toBe('/');
+    expect(liveGameStore.getState()).toMatchObject({ live: null, rejoin: null, phase: 'idle' });
+    expect(liveMatchId.load()).toEqual({ matchId });
+  });
+
+  it('a leftover gone does not count: after a timeout (Home), the same id again rejoins and stays on /match', async () => {
+    const { matchId } = aMatch();
+    liveMatchId.save({ matchId });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    renderApp('/match');
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    act(() => socket().open());
+    await act(() => vi.advanceTimersByTimeAsync(10_100));
+    expect(window.location.pathname).toBe('/');
+    expect(liveGameStore.getState().rejoin).toEqual({ matchId, state: 'gone' });
+    const sent = socket().sentTo(matchResync(matchId));
+    act(() => navigate(`/match?matchId=${matchId}`));
+    await act(() => vi.advanceTimersByTimeAsync(50));
+    expect(window.location.pathname).toBe('/match');
+    expect(screen.getByTestId('rejoining')).toHaveTextContent('Reconnecting…');
+    expect(socket().sentTo(matchResync(matchId))).toBe(sent + 1);
+  });
+
+  it('under StrictMode (mount, cleanup, mount): one rejoin, one resync, "Reconnecting…" announced once', async () => {
+    const { matchId, self, opponent, participants } = aMatch();
+    liveMatchId.save({ matchId });
+    const before = useAnnouncements.getState().polite.seq;
+    window.history.pushState(null, '', '/match');
+    syncFromLocation();
+    render(
+      <StrictMode>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <App />
+        </QueryClientProvider>
+      </StrictMode>,
+    );
+    await flushAnnouncements();
+    expect(useAnnouncements.getState().polite.seq).toBe(before + 1);
+    expect(politeText()).toBe('Reconnecting…');
+    await waitFor(() => expect(clients.length).toBeGreaterThan(0));
+    act(() => socket().open());
+    expect(socket().sentTo(matchResync(matchId))).toBe(1);
+    act(() =>
+      socket().deliver(
+        snapshot(matchId, {
+          refSeq: 3,
+          questionIndex: 1,
+          startedAt: Date.now(),
+          scores: [{ participantId: self, score: 0 }, { participantId: opponent, score: 0 }],
+          participants,
+        }),
+      ),
+    );
+    expect(screen.getByTestId('progress')).toHaveTextContent('Q 2/10');
+  });
+
+  it('with no id anywhere: the "no match" view, and nothing is asked', async () => {
+    renderApp('/match');
+    expect(screen.getByText("There's no match on this screen.")).toBeInTheDocument();
+    expect(screen.queryByTestId('rejoining')).toBeNull();
+    expect(clients).toHaveLength(0);
   });
 });

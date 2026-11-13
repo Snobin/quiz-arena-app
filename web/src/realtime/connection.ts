@@ -3,6 +3,7 @@ import { guestSession } from '../auth/guestSession.ts';
 import {
   INITIAL_LIVE_GAME,
   liveGameStore,
+  liveMatchBase,
   liveMatchFor,
   type LiveGameState,
   type LiveMatch,
@@ -11,6 +12,7 @@ import {
   type MyAnswer,
 } from './liveGameStore.ts';
 import * as lastResult from './lastResult.ts';
+import * as liveMatchId from './liveMatchId.ts';
 import {
   ENDPOINT_PATH,
   matchAnswer,
@@ -55,6 +57,13 @@ import {
  * Results (Story 1.10): MATCH_ENDED (private) is kept on the live match as `ended`, whenever it
  * comes (before or after the last reveal, or after her own forfeit), and in `sessionStorage`
  * (`lastResult.ts`) so `/results` survives a reload. The next MATCH_FOUND clears the stored one.
+ *
+ * Rejoin after a reload: the live match id is kept in `sessionStorage` (`liveMatchId.ts`) from
+ * MATCH_FOUND until the match settles for her. `rejoinMatch(id)` (called by `/match` when it has
+ * an id but no live match) is the reconnect path with no prior state: it subscribes to the topic,
+ * sends `resync` (with its retry), buffers topic frames for that match, and builds the live match
+ * from the SNAPSHOT (participants, total, `selfParticipantId`) before applying it. NOT_IN_MATCH,
+ * or no SNAPSHOT within `REJOIN_TIMEOUT_MS`, marks the rejoin `gone` and clears the stored id.
  */
 
 /** The part of the stompjs `Client` this module uses; tests inject a fake through the factory. */
@@ -86,6 +95,8 @@ export const RETRY_WINDOW_MS = 120_000;
 export const RESYNC_RETRY_MS = 3_000;
 /** Leave: with no reply within this, she goes to the results anyway. */
 export const LEAVE_TIMEOUT_MS = 3_000;
+/** A rejoin with no SNAPSHOT within this gives up (the screen goes Home). */
+export const REJOIN_TIMEOUT_MS = 10_000;
 
 /** The STOMP ERROR `message` game-service sends for a refused CONNECT. */
 export const UNAUTHENTICATED = 'UNAUTHENTICATED';
@@ -116,6 +127,17 @@ export type Realtime = {
   submitAnswer: (optionIndex: number) => boolean;
   /** Leaves the live match (an immediate forfeit). False when there is no match in play. */
   leaveMatch: () => boolean;
+  /**
+   * Rejoins `matchId` after a reload (no live state): subscribe, `resync`, and build the live
+   * match from the SNAPSHOT. Does nothing when that match is already the live one, or already
+   * being rejoined. The store's `rejoin` says how it went.
+   */
+  rejoinMatch: (matchId: string) => void;
+  /**
+   * Stops a pending rejoin of `matchId` (she left `/match`): timers, topic and held frames go, the
+   * store's `rejoin` is cleared, and the stored id is kept. Does nothing for any other match.
+   */
+  cancelRejoin: (matchId: string) => void;
   /** 'sent': wait for MATCHMAKING_CANCELLED; 'closed': the attempt is gone, go Home now; 'none': not searching. */
   cancelMatchmaking: () => CancelResult;
   /** Closes the socket and resets the store (tests). */
@@ -150,6 +172,10 @@ export function createRealtime(env: RealtimeEnv): Realtime {
   let giveUpTimer: ReturnType<typeof setTimeout> | undefined;
   let leaveTimer: ReturnType<typeof setTimeout> | undefined;
   let resyncTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The match being rejoined after a reload (no live match for it yet), or null. */
+  let rejoining: string | null = null;
+  let rejoinTimer: ReturnType<typeof setTimeout> | undefined;
+  let rejoinRetryTimer: ReturnType<typeof setTimeout> | undefined;
 
   const set = (patch: Partial<LiveGameState>) => liveGameStore.setState(patch);
   const phase = () => liveGameStore.getState().phase;
@@ -217,6 +243,8 @@ export function createRealtime(env: RealtimeEnv): Realtime {
   function finish(kind: MatchOutcome['kind']): void {
     const current = live();
     if (!current) return;
+    // Settled for her: a reload no longer rejoins it.
+    liveMatchId.clear();
     if (current.outcome && kind !== 'aborted') return;
     if (current.outcome?.kind === 'aborted') return;
     setLive({ outcome: { kind, scores: scoresOf(current) } });
@@ -238,6 +266,47 @@ export function createRealtime(env: RealtimeEnv): Realtime {
     giveUpTimer = clearTimer(giveUpTimer);
     leaveTimer = clearTimer(leaveTimer);
     resyncTimer = clearTimer(resyncTimer);
+    endRejoin(null);
+  }
+
+  /**
+   * Ends a rejoin: `gone` (NOT_IN_MATCH, or no SNAPSHOT in time) clears the stored id and tells the
+   * screen; `null` just stops it (it succeeded, or a new match replaced it).
+   */
+  function endRejoin(outcome: 'gone' | null): void {
+    const matchId = rejoining;
+    rejoinTimer = clearTimer(rejoinTimer);
+    rejoinRetryTimer = clearTimer(rejoinRetryTimer);
+    if (matchId === null) return;
+    rejoining = null;
+    awaitingSnapshot = false;
+    buffer = [];
+    resyncTimer = clearTimer(resyncTimer);
+    if (outcome === 'gone') {
+      dropTopic();
+      // Only this match's id: a failed URL id must not wipe a different match's stored id.
+      if (liveMatchId.load()?.matchId === matchId) liveMatchId.clear();
+      set({ rejoin: { matchId, state: 'gone' } });
+    } else {
+      set({ rejoin: null });
+    }
+  }
+
+  /** The rejoin on an open socket: subscribe to the match topic and ask for a SNAPSHOT. */
+  function sendRejoin(): void {
+    if (rejoining === null || status !== 'open' || !client) return;
+    subscribeTopic(rejoining);
+    requestResync();
+  }
+
+  /** The socket closed (or failed to open) while rejoining: try again shortly. */
+  function retryRejoin(): void {
+    rejoinRetryTimer = clearTimer(rejoinRetryTimer);
+    if (rejoining === null) return;
+    rejoinRetryTimer = setTimeout(() => {
+      rejoinRetryTimer = undefined;
+      if (rejoining !== null && status === 'closed') open(true);
+    }, RETRY_DELAYS_MS[1]);
   }
 
   /**
@@ -246,9 +315,10 @@ export function createRealtime(env: RealtimeEnv): Realtime {
    */
   function requestResync(): void {
     resyncTimer = clearTimer(resyncTimer);
-    const current = live();
-    if (!current || status !== 'open' || !client) return;
-    client.publish({ destination: matchResync(current.matchId), body: '{}' });
+    // A rejoin has no live match yet: it asks about the match being rejoined.
+    const matchId = rejoining ?? live()?.matchId;
+    if (matchId === undefined || status !== 'open' || !client) return;
+    client.publish({ destination: matchResync(matchId), body: '{}' });
     resyncTimer = setTimeout(() => {
       resyncTimer = undefined;
       if (awaitingSnapshot && status === 'open' && client) requestResync();
@@ -261,6 +331,11 @@ export function createRealtime(env: RealtimeEnv): Realtime {
    * next frame in sequence is applied.
    */
   function onTopic(incoming: Incoming): void {
+    if (rejoining !== null && incoming.message.matchId === rejoining) {
+      // No live match until the SNAPSHOT: hold its frames (applied after it with seq > refSeq).
+      buffer.push(incoming);
+      return;
+    }
     const current = live();
     if (!current || incoming.message.matchId !== current.matchId) return;
     if (awaitingSnapshot) {
@@ -443,6 +518,26 @@ export function createRealtime(env: RealtimeEnv): Realtime {
         return true;
       }
       case 'SNAPSHOT': {
+        const { payload } = incoming;
+        const rejoined = rejoining;
+        if (rejoined !== null && incoming.message.matchId === rejoined && payload.selfParticipantId !== null) {
+          // A rejoin after a reload: build the live match from the SNAPSHOT, then apply it as a
+          // reconnect would (held frames after its refSeq follow).
+          const base = liveMatchBase({
+            matchId: rejoined,
+            participants: payload.participants,
+            selfParticipantId: payload.selfParticipantId,
+            total: payload.total,
+          });
+          const held = buffer;
+          endRejoin(null);
+          awaitingSnapshot = true;
+          buffer = held;
+          liveMatchId.save({ matchId: rejoined });
+          set({ phase: 'found', problem: null, live: base });
+          applySnapshot(base, payload, incoming.message.refSeq ?? 0, clockOffsetMs);
+          return true;
+        }
         const current = live();
         if (current && incoming.message.matchId === current.matchId) {
           applySnapshot(current, incoming.payload, incoming.message.refSeq ?? current.lastSeq, clockOffsetMs);
@@ -508,6 +603,12 @@ export function createRealtime(env: RealtimeEnv): Realtime {
         if (code !== 'ANSWER_REJECTED' && code !== 'NOT_IN_MATCH') return false;
         const waiting = live();
         const aboutMatch = incoming.payload.matchId ?? incoming.message.matchId;
+        if (code === 'NOT_IN_MATCH' && rejoining !== null && aboutMatch === rejoining) {
+          // The match to rejoin is over, or was never hers: the screen opens the results or Home.
+          set({ clockOffsetMs });
+          endRejoin('gone');
+          return true;
+        }
         if (code === 'NOT_IN_MATCH' && awaitingSnapshot && waiting && aboutMatch === waiting.matchId) {
           // The match is gone (it ended while she was away): apply the frames held after lastSeq,
           // in order, then settle it with what was last seen.
@@ -561,6 +662,8 @@ export function createRealtime(env: RealtimeEnv): Realtime {
       case 'MATCH_FOUND':
         // A new match replaces the last stored result.
         lastResult.clear();
+        endRejoin(null);
+        liveMatchId.save({ matchId: incoming.payload.matchId });
         set({ phase: 'found', match: incoming.payload, problem: null, clockOffsetMs, live: liveMatchFor(incoming.payload) });
         subscribeTopic(incoming.payload.matchId);
         return;
@@ -638,6 +741,10 @@ export function createRealtime(env: RealtimeEnv): Realtime {
               subscribeTopic(current.matchId);
               requestResync();
             }
+            if (rejoining !== null) {
+              rejoinRetryTimer = clearTimer(rejoinRetryTimer);
+              sendRejoin();
+            }
           },
           onStompError: (frame: IFrame) => {
             if (attempt !== generation) return;
@@ -660,6 +767,10 @@ export function createRealtime(env: RealtimeEnv): Realtime {
               startReconnect();
               return;
             }
+            if (rejoining !== null) {
+              retryRejoin();
+              return;
+            }
             if (reconnecting || pendingLeave) {
               scheduleRetry();
               return;
@@ -676,6 +787,10 @@ export function createRealtime(env: RealtimeEnv): Realtime {
         pending = [];
         if (reconnecting || pendingLeave) {
           scheduleRetry();
+          return;
+        }
+        if (rejoining !== null) {
+          retryRejoin();
           return;
         }
         connectionLost();
@@ -736,6 +851,32 @@ export function createRealtime(env: RealtimeEnv): Realtime {
         return false;
       }
       return true;
+    },
+    rejoinMatch(matchId) {
+      const current = live();
+      if (current?.matchId === matchId || rejoining === matchId) return;
+      if (inPlay(current)) {
+        // Another match is in play here: never shown as this one.
+        set({ rejoin: { matchId, state: 'gone' } });
+        return;
+      }
+      endRejoin(null);
+      rejoining = matchId;
+      awaitingSnapshot = true;
+      buffer = [];
+      set({ rejoin: { matchId, state: 'pending' } });
+      rejoinTimer = setTimeout(() => {
+        rejoinTimer = undefined;
+        endRejoin('gone');
+      }, REJOIN_TIMEOUT_MS);
+      if (status === 'open') sendRejoin();
+      else if (status === 'closed') open(true);
+      // 'connecting': onConnect sends it.
+    },
+    cancelRejoin(matchId) {
+      if (rejoining !== matchId) return;
+      dropTopic();
+      endRejoin(null);
     },
     leaveMatch() {
       const current = live();
@@ -801,6 +942,16 @@ export function leaveMatch(): boolean {
   return instance().leaveMatch();
 }
 
+/** Rejoins a match after a page reload. See `Realtime.rejoinMatch`. */
+export function rejoinMatch(matchId: string): void {
+  instance().rejoinMatch(matchId);
+}
+
+/** Stops a pending rejoin. See `Realtime.cancelRejoin`. */
+export function cancelRejoin(matchId: string): void {
+  instance().cancelRejoin(matchId);
+}
+
 /** Cancels the search. See `CancelResult`. */
 export function cancelMatchmaking(): CancelResult {
   return instance().cancelMatchmaking();
@@ -809,6 +960,7 @@ export function cancelMatchmaking(): CancelResult {
 /** Test helper: replaces parts of the environment (e.g. the client factory) and resets the module. */
 export function configureRealtimeForTests(override: Partial<RealtimeEnv>): void {
   realtime?.reset();
+  liveMatchId.clear();
   realtime = null;
   envOverride = override;
 }
@@ -816,6 +968,7 @@ export function configureRealtimeForTests(override: Partial<RealtimeEnv>): void 
 /** Test helper: closes the socket, resets the store and drops overrides. */
 export function resetRealtime(): void {
   realtime?.reset();
+  liveMatchId.clear();
   realtime = null;
   envOverride = {};
   liveGameStore.setState(INITIAL_LIVE_GAME, true);

@@ -97,6 +97,14 @@ export type LiveMatch = {
   ended: MatchEndedPayload | null;
 };
 
+/**
+ * A rejoin after a page reload (`/match` with no live match but a known match id): `pending`
+ * while the SNAPSHOT is awaited, `gone` when the server says she is not in it (NOT_IN_MATCH) or
+ * nothing answered in time. Written only by the connection module; cleared once the SNAPSHOT
+ * rebuilds the live match.
+ */
+export type LiveRejoin = { matchId: string; state: 'pending' | 'gone' };
+
 export type LiveGameState = {
   phase: LivePhase;
   /** The last MATCH_FOUND, kept until the next one. */
@@ -106,6 +114,8 @@ export type LiveGameState = {
   clockOffsetMs: number;
   /** The live match, null until MATCH_FOUND; a new MATCH_FOUND replaces it. */
   live: LiveMatch | null;
+  /** A rejoin in progress or just failed; null otherwise. */
+  rejoin: LiveRejoin | null;
 };
 
 export const INITIAL_LIVE_GAME: LiveGameState = {
@@ -114,21 +124,35 @@ export const INITIAL_LIVE_GAME: LiveGameState = {
   problem: null,
   clockOffsetMs: 0,
   live: null,
+  rejoin: null,
 };
 
 /** A fresh live match for a MATCH_FOUND. */
 export function liveMatchFor(found: MatchFoundPayload): LiveMatch {
-  return {
+  return liveMatchBase({
     matchId: found.matchId,
     participants: found.participants,
     selfParticipantId: found.selfParticipantId,
     total: found.questionCount,
+  });
+}
+
+/**
+ * A fresh live match from who plays and how many questions: the base for MATCH_FOUND, and for a
+ * rejoin after a reload, where a SNAPSHOT (participants, total, `selfParticipantId`) is all there is.
+ */
+export function liveMatchBase(base: { matchId: string; participants: Participant[]; selfParticipantId: string; total: number }): LiveMatch {
+  return {
+    matchId: base.matchId,
+    participants: base.participants,
+    selfParticipantId: base.selfParticipantId,
+    total: base.total,
     phase: 'lead-in',
     question: null,
     answered: [],
     myAnswer: null,
     reveal: null,
-    totals: Object.fromEntries(found.participants.map((p) => [p.participantId, 0])),
+    totals: Object.fromEntries(base.participants.map((p) => [p.participantId, 0])),
     lastSeq: 0,
     connection: 'live',
     reconnectDeadline: null,
@@ -145,4 +169,4 @@ export function useLiveGame<T>(selector: (state: LiveGameState) => T): T {
   return useStore(liveGameStore, selector);
 }
 
-export { cancelMatchmaking, joinQuickMatch, leaveMatch, submitAnswer } from './connection.ts';
+export { cancelMatchmaking, cancelRejoin, joinQuickMatch, leaveMatch, rejoinMatch, submitAnswer } from './connection.ts';

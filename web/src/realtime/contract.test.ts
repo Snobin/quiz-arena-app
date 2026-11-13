@@ -184,6 +184,11 @@ describe('contracts/samples', () => {
     expect(open.lastReveal!.questionIndex).toBe(2);
     expect(open.myAnswer).toEqual({ pickedIndex: 1, result: { correct: true, points: 900, answerIndex: 1, totalScore: 3040 } });
     expect(open.scores.map((s) => s.forfeited)).toEqual([false, false]);
+    expect(open.selfParticipantId).toBe('0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d');
+    // Optional on parse: a snapshot from an older server, with no selfParticipantId, still parses.
+    const { selfParticipantId: _self, ...older } = message.payload as Record<string, unknown>;
+    expect(parseSnapshot(older)!.selfParticipantId).toBeNull();
+    expect(parseSnapshot({ ...older, selfParticipantId: 7 })).toBeNull();
 
     const forfeited = parseSnapshot(parseServerMessage(read('snapshot-forfeited.json'))!.payload)!;
     expect(forfeited).toMatchObject({ phase: 'REVEAL', question: null, deadline: null, myAnswer: null, youForfeited: true });

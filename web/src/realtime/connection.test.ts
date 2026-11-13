@@ -18,8 +18,9 @@ import {
   serverError,
   snapshot,
 } from '../test-utils/realtime.ts';
-import { createRealtime, GRACE_MS, LEAVE_TIMEOUT_MS, RESYNC_RETRY_MS, sameOriginUrl, type Realtime, type RealtimeEnv } from './connection.ts';
+import { createRealtime, GRACE_MS, LEAVE_TIMEOUT_MS, REJOIN_TIMEOUT_MS, RESYNC_RETRY_MS, sameOriginUrl, type Realtime, type RealtimeEnv } from './connection.ts';
 import * as lastResult from './lastResult.ts';
+import * as liveMatchId from './liveMatchId.ts';
 import { INITIAL_LIVE_GAME, liveGameStore } from './liveGameStore.ts';
 import { matchAnswer, matchLeave, matchResync, matchTopic, USER_PRIVATE_QUEUE } from './protocol.ts';
 
@@ -867,5 +868,347 @@ describe('MATCH_ENDED (Story 1.10)', () => {
     last().deliver(matchFound({ name: 'Minnal Bot', kind: 'BOT' }));
     expect(lastResult.load()).toBeNull();
     expect(state().live!.ended).toBeNull();
+  });
+});
+
+describe('rejoin after a reload', () => {
+  const T0 = Date.parse(SERVER_TIME);
+  const tick = (ms = 0) => vi.advanceTimersByTimeAsync(ms);
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    window.sessionStorage.clear();
+    tokens = ['token-1', 'token-2', 'token-3', 'token-4', 'token-5'];
+    env.getAccessToken = vi.fn(async () => tokens.shift() ?? 'token-x');
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    window.sessionStorage.clear();
+  });
+
+  /** A match she is in, as the server knows it; the page has just reloaded (no live state). */
+  function aMatch() {
+    const { payload } = matchFound({ name: 'Minnal Bot', kind: 'BOT' });
+    const self = payload.selfParticipantId;
+    const opponent = payload.participants.find((p) => p.participantId !== self)!.participantId;
+    return { matchId: payload.matchId, self, opponent, participants: payload.participants };
+  }
+
+  /** `/match` asks to rejoin on a closed socket: it opens, subscribes and resyncs. */
+  async function rejoin(matchId: string) {
+    realtime.rejoinMatch(matchId);
+    expect(state().rejoin).toEqual({ matchId, state: 'pending' });
+    await tick();
+    last().open();
+    expect(last().isSubscribed(matchTopic(matchId))).toBe(true);
+    expect(last().sentTo(matchResync(matchId))).toBe(1);
+  }
+
+  it('MATCH_FOUND stores the live match id; an outcome clears it', async () => {
+    realtime.joinQuickMatch();
+    await tick();
+    last().open();
+    const found = matchFound({ name: 'Minnal Bot', kind: 'BOT' });
+    last().deliver(found);
+    const { matchId } = found.payload;
+    expect(liveMatchId.load()).toEqual({ matchId });
+    last().deliverTopic(matchId, matchAborted(matchId, 1));
+    expect(liveMatchId.load()).toBeNull();
+  });
+
+  it('reload mid-question: the SNAPSHOT builds the live match on the open question, and she can answer', async () => {
+    const { matchId, self, opponent, participants } = aMatch();
+    await rejoin(matchId);
+    expect(state().live).toBeNull();
+    last().deliver(
+      snapshot(matchId, {
+        refSeq: 7,
+        questionIndex: 3,
+        startedAt: T0,
+        scores: [{ participantId: self, score: 2100 }, { participantId: opponent, score: 1300 }],
+        participants,
+        selfParticipantId: self,
+      }),
+    );
+    expect(state().rejoin).toBeNull();
+    expect(state().phase).toBe('found');
+    expect(state().live).toMatchObject({
+      matchId,
+      selfParticipantId: self,
+      participants,
+      total: 10,
+      phase: 'open',
+      question: { questionIndex: 3 },
+      myAnswer: null,
+      totals: { [self]: 2100, [opponent]: 1300 },
+      lastSeq: 7,
+      connection: 'live',
+      outcome: null,
+    });
+    expect(liveMatchId.load()).toEqual({ matchId });
+    expect(realtime.submitAnswer(2)).toBe(true);
+    expect(last().sentTo(matchAnswer(matchId))).toBe(1);
+  });
+
+  it('reload after a 1v1 answer: the question shows locked with her own result', async () => {
+    const { matchId, self, opponent, participants } = aMatch();
+    await rejoin(matchId);
+    last().deliver(
+      snapshot(matchId, {
+        refSeq: 8,
+        questionIndex: 3,
+        answered: [self],
+        scores: [{ participantId: self, score: 2100 }, { participantId: opponent, score: 1300 }],
+        participants,
+        myAnswer: { pickedIndex: 1, correct: true, points: 800, answerIndex: 1, totalScore: 2900 },
+      }),
+    );
+    expect(state().live!.myAnswer).toEqual({
+      questionIndex: 3,
+      optionIndex: 1,
+      status: 'locked',
+      result: { correct: true, points: 800, answerIndex: 1, totalScore: 2900 },
+    });
+    expect(realtime.submitAnswer(2)).toBe(false);
+  });
+
+  it('reload in the lead-in: the lead-in, then Q1 starts normally', async () => {
+    const { matchId, self, opponent, participants } = aMatch();
+    await rejoin(matchId);
+    last().deliver(
+      snapshot(matchId, {
+        refSeq: 0,
+        phase: 'LEAD_IN',
+        scores: [{ participantId: self, score: 0 }, { participantId: opponent, score: 0 }],
+        participants,
+      }),
+    );
+    expect(state().live).toMatchObject({ phase: 'lead-in', question: null, lastSeq: 0 });
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 0, startedAt: T0 }));
+    expect(state().live).toMatchObject({ phase: 'open', question: { questionIndex: 0 }, lastSeq: 1 });
+  });
+
+  it('Back to your match in a new tab: rejoins on the socket already open (after ALREADY_IN_MATCH)', async () => {
+    const { matchId, self, opponent, participants } = aMatch();
+    realtime.joinQuickMatch();
+    await tick();
+    last().open();
+    last().deliver(serverError('ALREADY_IN_MATCH', matchId));
+    expect(state().problem).toEqual({ kind: 'alreadyInMatch', matchId });
+    realtime.rejoinMatch(matchId);
+    expect(clients).toHaveLength(1);
+    expect(last().isSubscribed(matchTopic(matchId))).toBe(true);
+    expect(last().sentTo(matchResync(matchId))).toBe(1);
+    last().deliver(
+      snapshot(matchId, {
+        refSeq: 5,
+        questionIndex: 2,
+        scores: [{ participantId: self, score: 1500 }, { participantId: opponent, score: 700 }],
+        participants,
+      }),
+    );
+    expect(state()).toMatchObject({ phase: 'found', problem: null, rejoin: null });
+    expect(state().live).toMatchObject({ matchId, phase: 'open', totals: { [self]: 1500 } });
+    // A fresh tab learns the id here, so its next reload rejoins too.
+    expect(liveMatchId.load()).toEqual({ matchId });
+  });
+
+  it('a slow reload (grace expired): SNAPSHOT youForfeited settles her as forfeited and clears the stored id', async () => {
+    const { matchId, self, opponent, participants } = aMatch();
+    liveMatchId.save({ matchId });
+    await rejoin(matchId);
+    last().deliver(
+      snapshot(matchId, {
+        refSeq: 9,
+        phase: 'REVEAL',
+        questionIndex: 4,
+        scores: [{ participantId: self, score: 2100, forfeited: true }, { participantId: opponent, score: 1300 }],
+        participants,
+        youForfeited: true,
+      }),
+    );
+    expect(state().live!.outcome).toEqual({
+      kind: 'forfeited',
+      scores: [{ participantId: self, score: 2100 }, { participantId: opponent, score: 1300 }],
+    });
+    expect(state().live!.forfeited).toEqual([self]);
+    expect(liveMatchId.load()).toBeNull();
+  });
+
+  it('the match is over, or not hers: NOT_IN_MATCH marks the rejoin gone and clears the stored id', async () => {
+    const { matchId } = aMatch();
+    liveMatchId.save({ matchId });
+    await rejoin(matchId);
+    last().deliver(serverError('NOT_IN_MATCH', matchId));
+    expect(state().rejoin).toEqual({ matchId, state: 'gone' });
+    expect(state().live).toBeNull();
+    expect(state().problem).toBeNull();
+    expect(liveMatchId.load()).toBeNull();
+    expect(last().isSubscribed(matchTopic(matchId))).toBe(false);
+    // Nothing more is asked.
+    await tick(RESYNC_RETRY_MS * 2);
+    expect(last().sentTo(matchResync(matchId))).toBe(1);
+  });
+
+  it('no SNAPSHOT: resync is retried every 3 s, and at 10 s the rejoin gives up', async () => {
+    const { matchId } = aMatch();
+    liveMatchId.save({ matchId });
+    await rejoin(matchId);
+    await tick(RESYNC_RETRY_MS);
+    expect(last().sentTo(matchResync(matchId))).toBe(2);
+    await tick(RESYNC_RETRY_MS);
+    expect(last().sentTo(matchResync(matchId))).toBe(3);
+    expect(state().rejoin!.state).toBe('pending');
+    await tick(REJOIN_TIMEOUT_MS - 2 * RESYNC_RETRY_MS);
+    expect(state().rejoin).toEqual({ matchId, state: 'gone' });
+    expect(liveMatchId.load()).toBeNull();
+    await tick(RESYNC_RETRY_MS * 2);
+    expect(last().sentTo(matchResync(matchId))).toBe(4);
+  });
+
+  it('frames during the rejoin are held: seq 12 and 13 before SNAPSHOT refSeq=12, 12 dropped, 13 applied', async () => {
+    const { matchId, self, opponent, participants } = aMatch();
+    await rejoin(matchId);
+    last().deliverTopic(matchId, scoreboard(matchId, 13, 3, [self, opponent]));
+    last().deliverTopic(matchId, scoreboard(matchId, 12, 3, [opponent]));
+    expect(state().live).toBeNull();
+    last().deliver(
+      snapshot(matchId, {
+        refSeq: 12,
+        questionIndex: 3,
+        answered: [self],
+        scores: [{ participantId: self, score: 0 }, { participantId: opponent, score: 0 }],
+        participants,
+      }),
+    );
+    expect(state().live).toMatchObject({ lastSeq: 13, answered: [self, opponent] });
+  });
+
+  it('the socket drops while rejoining: it reopens, re-subscribes and resyncs', async () => {
+    const { matchId, self, opponent, participants } = aMatch();
+    await rejoin(matchId);
+    last().drop();
+    expect(clients).toHaveLength(1);
+    await tick(1_000);
+    expect(clients).toHaveLength(2);
+    last().open();
+    expect(last().isSubscribed(matchTopic(matchId))).toBe(true);
+    expect(last().sentTo(matchResync(matchId))).toBe(1);
+    last().deliver(
+      snapshot(matchId, {
+        refSeq: 3,
+        questionIndex: 1,
+        scores: [{ participantId: self, score: 0 }, { participantId: opponent, score: 0 }],
+        participants,
+      }),
+    );
+    expect(state().live).toMatchObject({ matchId, phase: 'open' });
+  });
+
+  it('does nothing for the live match, or a rejoin already under way', async () => {
+    realtime.joinQuickMatch();
+    await tick();
+    last().open();
+    const found = matchFound({ name: 'Minnal Bot', kind: 'BOT' });
+    last().deliver(found);
+    const { matchId } = found.payload;
+    realtime.rejoinMatch(matchId);
+    expect(last().sentTo(matchResync(matchId))).toBe(0);
+    expect(state().rejoin).toBeNull();
+
+    // Another match id while this one is in play: never shown as that match.
+    realtime.rejoinMatch('another-match');
+    expect(state().rejoin).toEqual({ matchId: 'another-match', state: 'gone' });
+    expect(state().live!.matchId).toBe(matchId);
+  });
+
+  it('a SNAPSHOT with no selfParticipantId (an older server) cannot rebuild the match', async () => {
+    const { matchId, self, opponent, participants } = aMatch();
+    await rejoin(matchId);
+    last().deliver(
+      snapshot(matchId, {
+        refSeq: 3,
+        scores: [{ participantId: self, score: 0 }, { participantId: opponent, score: 0 }],
+        participants,
+        selfParticipantId: null,
+      }),
+    );
+    expect(state().live).toBeNull();
+    expect(state().rejoin!.state).toBe('pending');
+  });
+
+  it('self listed second: the SNAPSHOT selfParticipantId, not the first participant, is who she is', async () => {
+    const { matchId, self, opponent, participants } = aMatch();
+    const reordered = [participants[1]!, participants[0]!];
+    await rejoin(matchId);
+    last().deliver(
+      snapshot(matchId, {
+        refSeq: 4,
+        questionIndex: 2,
+        scores: [{ participantId: opponent, score: 700 }, { participantId: self, score: 1500 }],
+        participants: reordered,
+        selfParticipantId: self,
+      }),
+    );
+    expect(state().live!.selfParticipantId).toBe(self);
+    expect(state().live!.participants).toEqual(reordered);
+    expect(state().live!.totals[self]).toBe(1500);
+  });
+
+  it('a failed URL id never clears a different stored match id', async () => {
+    const { matchId } = aMatch();
+    liveMatchId.save({ matchId: 'the-stored-match' });
+    await rejoin(matchId);
+    last().deliver(serverError('NOT_IN_MATCH', matchId));
+    expect(state().rejoin).toEqual({ matchId, state: 'gone' });
+    expect(liveMatchId.load()).toEqual({ matchId: 'the-stored-match' });
+  });
+
+  it('a NOT_IN_MATCH about another match, or with no match id, does not end the rejoin', async () => {
+    const { matchId } = aMatch();
+    await rejoin(matchId);
+    last().deliver(serverError('NOT_IN_MATCH', 'another-match'));
+    last().deliver(serverError('NOT_IN_MATCH'));
+    expect(state().rejoin).toEqual({ matchId, state: 'pending' });
+  });
+
+  it('cancelRejoin stops it: timers, topic and held frames go, the stored id stays, a late SNAPSHOT changes nothing', async () => {
+    const { matchId, self, opponent, participants } = aMatch();
+    liveMatchId.save({ matchId });
+    await rejoin(matchId);
+    realtime.cancelRejoin('another-match');
+    expect(state().rejoin!.state).toBe('pending');
+    realtime.cancelRejoin(matchId);
+    expect(state().rejoin).toBeNull();
+    expect(last().isSubscribed(matchTopic(matchId))).toBe(false);
+    expect(liveMatchId.load()).toEqual({ matchId });
+    last().deliver(
+      snapshot(matchId, {
+        refSeq: 4,
+        scores: [{ participantId: self, score: 0 }, { participantId: opponent, score: 0 }],
+        participants,
+      }),
+    );
+    expect(state().live).toBeNull();
+    expect(state().phase).toBe('idle');
+    await tick(REJOIN_TIMEOUT_MS);
+    expect(state().rejoin).toBeNull();
+    expect(last().sentTo(matchResync(matchId))).toBe(1);
+    // Asking again (StrictMode's second mount) rejoins afresh.
+    realtime.rejoinMatch(matchId);
+    expect(last().sentTo(matchResync(matchId))).toBe(2);
+  });
+
+  it('a MATCH_FOUND while rejoining replaces the rejoin', async () => {
+    const { matchId } = aMatch();
+    await rejoin(matchId);
+    const found = matchFound({ name: 'Minnal Bot', kind: 'BOT' });
+    last().deliver(found);
+    expect(state().rejoin).toBeNull();
+    expect(liveMatchId.load()).toEqual({ matchId: found.payload.matchId });
+    // Its frames apply at once (nothing is held for the old rejoin).
+    last().deliverTopic(found.payload.matchId, questionStarted(found.payload.matchId, { seq: 1, questionIndex: 0, startedAt: T0 }));
+    expect(state().live!.phase).toBe('open');
   });
 });

@@ -133,6 +133,7 @@ class MatchReconnectFlowTest extends GameIntegrationTest {
         assertThat(payload.get("deadline").asString()).isEqualTo(started.get("payload").get("deadline").asString());
         assertThat(payload.get("question").has("answerIndex")).isFalse();
         assertThat(payload.get("youForfeited").asBoolean()).isFalse();
+        assertThat(payload.get("selfParticipantId").asString()).isEqualTo(match.ids().get(0).toString());
         assertThat(payload.get("myAnswer").get("pickedIndex").asInt()).isZero();
         assertThat(payload.get("myAnswer").get("correct").asBoolean()).isTrue();
         assertThat(payload.get("answered")).extracting(JsonNode::asString)
@@ -200,6 +201,7 @@ class MatchReconnectFlowTest extends GameIntegrationTest {
         back.send(to(match.matchId(), "resync"));
         JsonNode snapshot = back.next("SNAPSHOT").get("payload");
         assertThat(snapshot.get("youForfeited").asBoolean()).isTrue();
+        assertThat(snapshot.get("selfParticipantId").asString()).isEqualTo(match.ids().get(0).toString());
         assertThat(snapshot.get("scores").get(0).get("forfeited").asBoolean()).isTrue();
         back.send(to(match.matchId(), "answer"), body(0, 0));
         back.error("ANSWER_REJECTED");

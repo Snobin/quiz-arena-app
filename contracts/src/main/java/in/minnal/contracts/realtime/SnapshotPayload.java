@@ -23,6 +23,8 @@ import java.util.UUID;
  * @param participants  every participant
  * @param youForfeited  whether the receiver has forfeited
  * @param myAnswer      the receiver's accepted answer to the open question, or null
+ * @param selfParticipantId which participant the receiver is (so a client with no prior state,
+ *                      such as after a page reload, can tell herself apart)
  */
 public record SnapshotPayload(
         SnapshotPhase phase,
@@ -36,7 +38,8 @@ public record SnapshotPayload(
         List<ParticipantScore> scores,
         List<Participant> participants,
         boolean youForfeited,
-        MyAnswer myAnswer) {
+        MyAnswer myAnswer,
+        UUID selfParticipantId) {
 
     public SnapshotPayload {
         answered = List.copyOf(answered);
