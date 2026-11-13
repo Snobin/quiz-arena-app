@@ -14,6 +14,11 @@ import {
   participantForfeited,
   questionRevealed,
   questionStarted,
+  rematchCancelSend,
+  rematchDeclined,
+  rematchExpired,
+  rematchRequested,
+  rematchSend,
   scoreboard,
   serverError,
   snapshot,
@@ -868,6 +873,156 @@ describe('MATCH_ENDED (Story 1.10)', () => {
     last().deliver(matchFound({ name: 'Minnal Bot', kind: 'BOT' }));
     expect(lastResult.load()).toBeNull();
     expect(state().live!.ended).toBeNull();
+  });
+});
+
+describe('rematch (Story 1.10 part 2)', () => {
+  const EXPIRES = '2026-11-12T10:16:30.123Z';
+
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
+
+  async function ended() {
+    await joinAndOpen();
+    const found = matchFound({ name: 'Vishnu R', kind: 'GUEST' });
+    last().deliver(found);
+    const { matchId, selfParticipantId: self, participants } = found.payload;
+    const opponent = participants.find((p) => p.participantId !== self)!.participantId;
+    return { matchId, self, opponent };
+  }
+
+  it('Rematch sends to the ended match and starts; her own REMATCH_REQUESTED makes it waiting', async () => {
+    const { matchId, self } = await ended();
+    expect(realtime.requestRematch(matchId)).toBe(true);
+    expect(last().sentTo(rematchSend(matchId))).toBe(1);
+    expect(state().rematch).toEqual({ matchId, state: 'starting' });
+    expect(realtime.requestRematch(matchId)).toBe(false);
+    last().deliver(rematchRequested(matchId, self, EXPIRES));
+    expect(state().rematch).toEqual({ matchId, state: 'waiting', expiresAt: EXPIRES });
+  });
+
+  it("the opponent's request makes it incoming, and accepting sends a rematch too", async () => {
+    const { matchId, opponent } = await ended();
+    last().deliver(rematchRequested(matchId, opponent, EXPIRES));
+    expect(state().rematch).toEqual({ matchId, state: 'incoming', expiresAt: EXPIRES });
+    expect(realtime.requestRematch(matchId)).toBe(true);
+    expect(state().rematch!.state).toBe('starting');
+    expect(last().sentTo(rematchSend(matchId))).toBe(1);
+  });
+
+  it("while starting, a crossing request from the opponent keeps it starting; MATCH_FOUND clears it", async () => {
+    const { matchId, opponent } = await ended();
+    realtime.requestRematch(matchId);
+    last().deliver(rematchRequested(matchId, opponent, EXPIRES));
+    expect(state().rematch!.state).toBe('starting');
+    const next = matchFound({ name: 'Vishnu R', kind: 'GUEST' });
+    last().deliver(next);
+    expect(state().rematch).toBeNull();
+    expect(state().live!.matchId).toBe(next.payload.matchId);
+    expect(last().isSubscribed(matchTopic(next.payload.matchId))).toBe(true);
+  });
+
+  it('declined, expired, a failed set and draining each revert it with their note', async () => {
+    const { matchId, self } = await ended();
+    realtime.requestRematch(matchId);
+    last().deliver(rematchDeclined(matchId, 'UNAVAILABLE'));
+    expect(state().rematch).toEqual({ matchId, state: 'idle', note: 'unavailable' });
+
+    realtime.requestRematch(matchId);
+    last().deliver(rematchRequested(matchId, self, EXPIRES));
+    last().deliver(rematchExpired(matchId));
+    expect(state().rematch).toEqual({ matchId, state: 'idle', note: 'expired' });
+
+    realtime.requestRematch(matchId);
+    last().deliver(MATCHMAKING_FAILED);
+    expect(state().rematch).toEqual({ matchId, state: 'idle', note: 'failed' });
+    expect(state().phase).toBe('found');
+    expect(state().problem).toBeNull();
+
+    realtime.requestRematch(matchId);
+    last().deliver(serverError('SERVER_DRAINING'));
+    expect(state().rematch).toEqual({ matchId, state: 'idle', note: 'draining' });
+    expect(state().problem).toBeNull();
+  });
+
+  it("the opponent's cancel reverts an incoming request with the cancelled note", async () => {
+    const { matchId, opponent } = await ended();
+    last().deliver(rematchRequested(matchId, opponent, EXPIRES));
+    last().deliver(rematchDeclined(matchId, 'CANCELLED'));
+    expect(state().rematch).toEqual({ matchId, state: 'idle', note: 'cancelled' });
+  });
+
+  it('cancel withdraws a pending request; with nothing pending it sends nothing', async () => {
+    const { matchId, self } = await ended();
+    expect(realtime.cancelRematch()).toBe(false);
+    realtime.requestRematch(matchId);
+    last().deliver(rematchRequested(matchId, self, EXPIRES));
+    expect(realtime.cancelRematch()).toBe(true);
+    expect(last().sentTo(rematchCancelSend(matchId))).toBe(1);
+    expect(state().rematch).toEqual({ matchId, state: 'idle' });
+    expect(realtime.cancelRematch()).toBe(false);
+  });
+
+  it('her own echo arriving after she cancelled locally is ignored', async () => {
+    const { matchId, self } = await ended();
+    realtime.requestRematch(matchId);
+    expect(realtime.cancelRematch()).toBe(true);
+    last().deliver(rematchRequested(matchId, self, EXPIRES));
+    expect(state().rematch).toEqual({ matchId, state: 'idle' });
+  });
+
+  it('rematch messages about another match are ignored', async () => {
+    const { matchId, opponent } = await ended();
+    last().deliver(rematchRequested('another-match', opponent, EXPIRES));
+    expect(state().rematch).toBeNull();
+    realtime.requestRematch(matchId);
+    last().deliver(rematchDeclined('another-match', 'UNAVAILABLE'));
+    last().deliver(rematchExpired('another-match'));
+    expect(state().rematch!.state).toBe('starting');
+  });
+
+  it('after a reload the stored result says who she is, and Rematch opens the socket', async () => {
+    const { matchId, self } = await ended();
+    lastResult.save({
+      matchId,
+      selfId: self,
+      payload: {
+        matchId,
+        mode: 'QUICK',
+        questionSource: 'BANK',
+        participants: [{ participantId: self, displayName: 'Guest', kind: 'GUEST', score: 0, correctCount: 0, forfeited: false, placement: 1 }],
+        questions: [],
+        breakdown: [{ participantId: self, answers: [] }],
+      },
+    });
+    realtime.reset();
+    realtime = createRealtime(env);
+    realtime.requestRematch(matchId);
+    await flush();
+    last().open();
+    expect(last().sentTo(rematchSend(matchId))).toBe(1);
+    last().deliver(rematchRequested(matchId, self, EXPIRES));
+    expect(state().rematch!.state).toBe('waiting');
+  });
+
+  it('a socket lost before it settles reverts it as unavailable', async () => {
+    const { matchId, self } = await ended();
+    // The match is over for her: a drop is not a reconnect.
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 0, startedAt: Date.parse(SERVER_TIME) }));
+    realtime.leaveMatch();
+    last().deliverTopic(matchId, participantForfeited(matchId, 2, self));
+    realtime.requestRematch(matchId);
+    last().deliver(rematchRequested(matchId, self, EXPIRES));
+    last().drop();
+    expect(state().rematch).toEqual({ matchId, state: 'idle', note: 'unavailable' });
+  });
+
+  it('a new search clears it', async () => {
+    const { matchId } = await ended();
+    realtime.requestRematch(matchId);
+    realtime.joinQuickMatch();
+    expect(state().rematch).toBeNull();
   });
 });
 

@@ -8,9 +8,9 @@ import i18n from '../../i18n.ts';
 import { useReduceEffectsStore } from '../../motion/reduceEffects.ts';
 import { joinQuickMatch, leaveMatch, resetRealtime } from '../../realtime/connection.ts';
 import { LAST_RESULT_KEY } from '../../realtime/lastResult.ts';
-import { resetAnnouncements } from '../../shell/announce.ts';
+import { resetAnnouncements, useAnnouncements } from '../../shell/announce.ts';
 import { clearReturnFocus } from '../../shell/returnFocus.ts';
-import { syncFromLocation } from '../../shell/router.ts';
+import { navigate, syncFromLocation } from '../../shell/router.ts';
 import { clearScrollMemory } from '../../shell/scrollMemory.ts';
 import { restartGuestSession, stubFetch } from '../../test-utils/guest.ts';
 import {
@@ -19,6 +19,13 @@ import {
   participantForfeited,
   questionRevealed,
   questionStarted,
+  MATCHMAKING_FAILED,
+  rematchCancelSend,
+  rematchDeclined,
+  rematchExpired,
+  rematchRequested,
+  rematchSend,
+  serverError,
   useFakeRealtime,
   type EndedAnswer,
   type FakeStomp,
@@ -423,5 +430,139 @@ describe('reload, title and fallbacks', () => {
     expect(screen.getByTestId('results-band')).toHaveAttribute('data-result', 'loss');
     expect(screen.getAllByTestId('breakdown-row')).toHaveLength(3);
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('rematch (Story 1.10 part 2)', () => {
+  const LOSS = { self: { score: 2980, placement: 2 }, opponent: { score: 3140, placement: 1 } };
+  const polite = () => useAnnouncements.getState().polite.text;
+  /** A REMATCH_REQUESTED stamped now, lapsing in 60 s. */
+  const requested = (m: Match, by: string) => {
+    const now = Date.now();
+    return rematchRequested(m.matchId, by, new Date(now + 60_000).toISOString(), new Date(now).toISOString());
+  };
+
+  it('the bar has Rematch (primary) and Home (secondary); the minimal view keeps Home only', async () => {
+    await liveResults(LOSS);
+    const bar = screen.getByTestId('results-actions');
+    expect(within(bar).getAllByRole('button').map((b) => b.textContent)).toEqual(['Rematch', 'Home']);
+    expect(within(bar).getByRole('button', { name: 'Home' }).className).toContain('border-ink');
+    cleanup();
+    resetRealtime();
+    clients = useFakeRealtime();
+    const m = await found();
+    act(() => socket().deliverTopic(m.matchId, questionStarted(m.matchId, { seq: 1, questionIndex: 2, startedAt: Date.now() })));
+    act(() => void leaveMatch());
+    act(() => socket().deliverTopic(m.matchId, participantForfeited(m.matchId, 2, m.self, 2)));
+    renderApp('/results');
+    expect(screen.queryByRole('button', { name: 'Rematch' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Home' })).toBeInTheDocument();
+  });
+
+  it('Rematch sends it; her pending request shows the waiting card with a countdown; Cancel withdraws it', async () => {
+    const m = await liveResults(LOSS);
+    fireEvent.click(screen.getByRole('button', { name: 'Rematch' }));
+    expect(socket().sentTo(rematchSend(m.matchId))).toBe(1);
+    expect(screen.getByTestId('rematch-button')).toHaveAttribute('aria-busy', 'true');
+    // A second tap while it is on its way sends nothing more.
+    fireEvent.click(screen.getByTestId('rematch-button'));
+    expect(socket().sentTo(rematchSend(m.matchId))).toBe(1);
+
+    act(() => socket().deliver(requested(m, m.self)));
+    const card = screen.getByTestId('rematch-waiting');
+    expect(card).toHaveTextContent('Waiting for Vishnu R…');
+    expect(screen.getByTestId('rematch-seconds')).toHaveTextContent(/^(60|59) s left$/);
+    expect(screen.queryByRole('button', { name: 'Rematch' })).toBeNull();
+
+    fireEvent.click(within(card).getByRole('button', { name: 'Cancel' }));
+    expect(socket().sentTo(rematchCancelSend(m.matchId))).toBe(1);
+    expect(screen.queryByTestId('rematch-waiting')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Rematch' })).toBeInTheDocument();
+    expect(screen.queryByTestId('rematch-note')).toBeNull();
+  });
+
+  it('when the opponent asks first the button reads "Accept rematch", and accepting sends a rematch', async () => {
+    const m = await liveResults(LOSS);
+    act(() => socket().deliver(requested(m, m.opponent)));
+    expect(screen.getByRole('button', { name: 'Accept rematch' })).toBeInTheDocument();
+    await waitFor(() => expect(polite()).toBe('Accept rematch'));
+    fireEvent.click(screen.getByRole('button', { name: 'Accept rematch' }));
+    expect(socket().sentTo(rematchSend(m.matchId))).toBe(1);
+  });
+
+  it.each([
+    ['expired', (m: Match) => rematchExpired(m.matchId), 'The rematch request ran out of time'],
+    ['cancelled', (m: Match) => rematchDeclined(m.matchId, 'CANCELLED'), 'Vishnu R cancelled the rematch'],
+    ['unavailable', (m: Match) => rematchDeclined(m.matchId, 'UNAVAILABLE'), "A rematch isn't possible right now"],
+    ['failed', () => MATCHMAKING_FAILED, "Couldn't start the rematch. Try again."],
+    ['draining', () => serverError('SERVER_DRAINING'), 'Minnal is updating. Try again in a moment.'],
+  ])('%s: a one-line note, announced politely once; Rematch can be sent again', async (_, message, text) => {
+    const m = await liveResults(LOSS);
+    fireEvent.click(screen.getByRole('button', { name: 'Rematch' }));
+    act(() => socket().deliver(requested(m, m.self)));
+    act(() => socket().deliver(message(m)));
+    expect(screen.getByTestId('rematch-note')).toHaveTextContent(text);
+    await waitFor(() => expect(polite()).toBe(text));
+    const seq = useAnnouncements.getState().polite.seq;
+    // A re-render (a new clock offset from a message about another match) does not repeat it.
+    act(() => socket().deliver(rematchExpired('another-match')));
+    await act(async () => {});
+    expect(useAnnouncements.getState().polite.seq).toBe(seq);
+    fireEvent.click(screen.getByRole('button', { name: 'Rematch' }));
+    expect(socket().sentTo(rematchSend(m.matchId))).toBe(2);
+    expect(screen.queryByTestId('rematch-note')).toBeNull();
+  });
+
+  it('on the new MATCH_FOUND it opens /match at once', async () => {
+    await liveResults(LOSS, { name: 'Minnal Bot', kind: 'BOT' });
+    fireEvent.click(screen.getByRole('button', { name: 'Rematch' }));
+    act(() => socket().deliver(matchFound({ name: 'Minnal Bot', kind: 'BOT' })));
+    await waitFor(() => expect(window.location.pathname).toBe('/match'));
+  });
+
+  it('Home while waiting sends a cancel and goes Home', async () => {
+    const m = await liveResults(LOSS);
+    fireEvent.click(screen.getByRole('button', { name: 'Rematch' }));
+    act(() => socket().deliver(requested(m, m.self)));
+    fireEvent.click(screen.getByRole('button', { name: 'Home' }));
+    expect(socket().sentTo(rematchCancelSend(m.matchId))).toBe(1);
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+  });
+
+  it('leaving /results another way while waiting sends one cancel', async () => {
+    const m = await liveResults(LOSS);
+    fireEvent.click(screen.getByRole('button', { name: 'Rematch' }));
+    act(() => socket().deliver(requested(m, m.self)));
+    act(() => navigate('/'));
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(socket().sentTo(rematchCancelSend(m.matchId))).toBe(1);
+  });
+
+  it('the countdown runs on the server clock: a server 30 s ahead still shows about 60 s left', async () => {
+    const m = await liveResults(LOSS);
+    fireEvent.click(screen.getByRole('button', { name: 'Rematch' }));
+    const serverNow = Date.now() + 30_000;
+    act(() =>
+      socket().deliver(
+        rematchRequested(m.matchId, m.self, new Date(serverNow + 60_000).toISOString(), new Date(serverNow).toISOString()),
+      ),
+    );
+    expect(screen.getByTestId('rematch-seconds')).toHaveTextContent(/^(60|59) s left$/);
+  });
+
+  it('after a reload Rematch still works from the stored result', async () => {
+    const m = await liveResults(LOSS);
+    const saved = window.sessionStorage.getItem(LAST_RESULT_KEY)!;
+    cleanup();
+    resetRealtime();
+    clients = useFakeRealtime();
+    window.sessionStorage.setItem(LAST_RESULT_KEY, saved);
+    renderApp('/results');
+    fireEvent.click(screen.getByRole('button', { name: 'Rematch' }));
+    await waitFor(() => expect(clients).toHaveLength(1));
+    act(() => socket().open());
+    expect(socket().sentTo(rematchSend(m.matchId))).toBe(1);
+    act(() => socket().deliver(requested(m, m.self)));
+    expect(screen.getByTestId('rematch-waiting')).toBeInTheDocument();
   });
 });

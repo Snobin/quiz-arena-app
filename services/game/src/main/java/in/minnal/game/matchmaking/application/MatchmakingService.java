@@ -44,13 +44,14 @@ public class MatchmakingService implements DisposableBean {
     private final ParticipationRegistry participation;
     private final PlayerChannel channel;
     private final Clock clock;
+    private final RematchCoordinator rematches;
     private final Map<MatchMode, MatchmakingActor> actors = new EnumMap<>(MatchMode.class);
     private final ScheduledExecutorService ticker = Executors.newSingleThreadScheduledExecutor(
             Thread.ofPlatform().name("matchmaking-ticker").daemon(true).factory());
 
     public MatchmakingService(DrainState drain, ParticipationRegistry participation, PlayerSessions sessions,
             PlayerChannel channel, Clock clock, RatingCache ratings, QuestionSetClient questionSets,
-            MatchRegistry matches, MeterRegistry meters,
+            MatchRegistry matches, MeterRegistry meters, RematchCoordinator rematches,
             @Value("${minnal.matchmaking.tick:250ms}") Duration tick,
             @Value("${minnal.matchmaking.widen-after:4s}") Duration widenAfter,
             @Value("${minnal.matchmaking.bot-after:8s}") Duration botAfter) {
@@ -58,6 +59,7 @@ public class MatchmakingService implements DisposableBean {
         this.participation = participation;
         this.channel = channel;
         this.clock = clock;
+        this.rematches = rematches;
         MatchmakingRules rules = new MatchmakingRules(MatchmakingRules.DEFAULT.band(), MatchmakingRules.DEFAULT.widenedBand(),
                 widenAfter, botAfter);
         actors.put(MatchMode.QUICK, new MatchmakingActor(MatchMode.QUICK, new MatchmakingQueue(rules), clock, ratings,
@@ -92,6 +94,8 @@ public class MatchmakingService implements DisposableBean {
             return;
         }
         actor.tell(new MatchmakingEvent.Join(player, sessionId));
+        // Queued now: a pending rematch with her can no longer happen (Story 1.10).
+        rematches.joinedMatchmaking(player.sub());
     }
 
     public void cancel(MinnalPrincipal player, String sessionId, String modeName) {

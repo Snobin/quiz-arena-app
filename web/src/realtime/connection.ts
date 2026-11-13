@@ -10,6 +10,7 @@ import {
   type LiveMatchPhase,
   type MatchOutcome,
   type MyAnswer,
+  type RematchState,
 } from './liveGameStore.ts';
 import * as lastResult from './lastResult.ts';
 import * as liveMatchId from './liveMatchId.ts';
@@ -17,6 +18,8 @@ import {
   ENDPOINT_PATH,
   matchAnswer,
   matchLeave,
+  matchRematch,
+  matchRematchCancel,
   matchResync,
   matchmakingCancel,
   matchmakingJoin,
@@ -57,6 +60,12 @@ import {
  * Results (Story 1.10): MATCH_ENDED (private) is kept on the live match as `ended`, whenever it
  * comes (before or after the last reveal, or after her own forfeit), and in `sessionStorage`
  * (`lastResult.ts`) so `/results` survives a reload. The next MATCH_FOUND clears the stored one.
+ *
+ * Rematch (Story 1.10 part 2): `requestRematch(matchId)` sends Rematch (or Accept) for the ended
+ * match and marks the store's `rematch` as `starting`; REMATCH_REQUESTED makes it `waiting` (hers)
+ * or `incoming` (the opponent's); REMATCH_DECLINED, REMATCH_EXPIRED, and a MATCHMAKING_FAILED or
+ * SERVER_DRAINING while one is under way revert it to `idle` with a note. The new match arrives
+ * as an ordinary MATCH_FOUND, which clears it. `cancelRematch` withdraws a pending request.
  *
  * Rejoin after a reload: the live match id is kept in `sessionStorage` (`liveMatchId.ts`) from
  * MATCH_FOUND until the match settles for her. `rejoinMatch(id)` (called by `/match` when it has
@@ -140,6 +149,10 @@ export type Realtime = {
   cancelRejoin: (matchId: string) => void;
   /** 'sent': wait for MATCHMAKING_CANCELLED; 'closed': the attempt is gone, go Home now; 'none': not searching. */
   cancelMatchmaking: () => CancelResult;
+  /** Asks for a rematch of the ended `matchId` (or accepts the opponent's). False when one is already under way. */
+  requestRematch: (matchId: string) => boolean;
+  /** Withdraws her pending rematch request. False when none is pending. */
+  cancelRematch: () => boolean;
   /** Closes the socket and resets the store (tests). */
   reset: () => void;
 };
@@ -179,6 +192,19 @@ export function createRealtime(env: RealtimeEnv): Realtime {
 
   const set = (patch: Partial<LiveGameState>) => liveGameStore.setState(patch);
   const phase = () => liveGameStore.getState().phase;
+  const rematch = () => liveGameStore.getState().rematch;
+  /** A rematch sent and not yet settled (no note can be pending on it). */
+  const rematchUnderway = (): RematchState | null => {
+    const current = rematch();
+    return current && (current.state === 'starting' || current.state === 'waiting') ? current : null;
+  };
+  /** Her participant id in the ended match `matchId`: from the live match, else the stored result. */
+  const selfIdFor = (matchId: string): string | null => {
+    const current = live();
+    if (current?.matchId === matchId) return current.selfParticipantId;
+    const stored = lastResult.load();
+    return stored?.matchId === matchId ? stored.selfId : null;
+  };
   const live = () => liveGameStore.getState().live;
   const setLive = (patch: Partial<LiveMatch>) => {
     const current = live();
@@ -650,6 +676,9 @@ export function createRealtime(env: RealtimeEnv): Realtime {
   }
 
   function connectionLost(): void {
+    // The server drops her requests when her last session closes: nothing is pending any more.
+    const asked = rematch();
+    if (asked && asked.state !== 'idle') set({ rematch: { matchId: asked.matchId, state: 'idle', note: 'unavailable' } });
     const current = phase();
     if (current === 'searching' || current === 'cancelling') set({ phase: 'failed', problem: { kind: 'connection' } });
   }
@@ -664,12 +693,68 @@ export function createRealtime(env: RealtimeEnv): Realtime {
         lastResult.clear();
         endRejoin(null);
         liveMatchId.save({ matchId: incoming.payload.matchId });
-        set({ phase: 'found', match: incoming.payload, problem: null, clockOffsetMs, live: liveMatchFor(incoming.payload) });
+        set({
+          phase: 'found',
+          match: incoming.payload,
+          problem: null,
+          clockOffsetMs,
+          live: liveMatchFor(incoming.payload),
+          rematch: null,
+        });
         subscribeTopic(incoming.payload.matchId);
         return;
-      case 'MATCHMAKING_FAILED':
+      case 'MATCHMAKING_FAILED': {
+        const asked = rematchUnderway();
+        if (asked) {
+          // The rematch's question set did not come: a note on the results, not a matchmaking problem.
+          set({ rematch: { matchId: asked.matchId, state: 'idle', note: 'failed' }, clockOffsetMs });
+          return;
+        }
         set({ phase: 'failed', problem: { kind: 'matchmaking' }, clockOffsetMs });
         return;
+      }
+      case 'REMATCH_REQUESTED': {
+        const { matchId } = incoming.message;
+        const selfId = selfIdFor(matchId);
+        if (selfId === null) {
+          set({ clockOffsetMs });
+          return;
+        }
+        const { requestedBy, expiresAt } = incoming.payload;
+        const current = rematch();
+        if (requestedBy === selfId && !(current?.matchId === matchId && current.state === 'starting')) {
+          // Her own echo after she cancelled locally (or never asked here): nothing is pending.
+          set({ clockOffsetMs });
+          return;
+        }
+        if (requestedBy !== selfId && current?.matchId === matchId && current.state === 'starting') {
+          // Both asked at once: her own request settles it (MATCH_FOUND follows).
+          set({ clockOffsetMs });
+          return;
+        }
+        set({ clockOffsetMs, rematch: { matchId, state: requestedBy === selfId ? 'waiting' : 'incoming', expiresAt } });
+        return;
+      }
+      case 'REMATCH_DECLINED': {
+        const { matchId } = incoming.message;
+        if (rematch()?.matchId === matchId) {
+          const note = incoming.payload.reason === 'CANCELLED' ? 'cancelled' : 'unavailable';
+          set({ clockOffsetMs, rematch: { matchId, state: 'idle', note } });
+        } else {
+          set({ clockOffsetMs });
+        }
+        return;
+      }
+      case 'REMATCH_EXPIRED': {
+        const { matchId } = incoming.message;
+        const current = rematch();
+        if (current?.matchId === matchId && current.state !== 'idle') {
+          set({ clockOffsetMs, rematch: { matchId, state: 'idle', note: 'expired' } });
+        } else {
+          set({ clockOffsetMs });
+        }
+        return;
+      }
       case 'MATCHMAKING_CANCELLED':
         // Only an outstanding cancel ends the search: a late ack (e.g. from a previous visit's
         // unmount cancel) must not end a search started since.
@@ -685,6 +770,11 @@ export function createRealtime(env: RealtimeEnv): Realtime {
         }
         if (code === 'NOT_IN_QUEUE' && phase() === 'cancelling') {
           set({ phase: 'cancelled', problem: null, clockOffsetMs });
+          return;
+        }
+        const asked = rematchUnderway();
+        if (code === 'SERVER_DRAINING' && asked) {
+          set({ rematch: { matchId: asked.matchId, state: 'idle', note: 'draining' }, clockOffsetMs });
           return;
         }
         const problem =
@@ -830,8 +920,28 @@ export function createRealtime(env: RealtimeEnv): Realtime {
         resetResilience();
         set({ live: null });
       }
-      set({ phase: 'searching', problem: null });
+      set({ phase: 'searching', problem: null, rematch: null });
       send((c) => c.publish({ destination: matchmakingJoin('QUICK'), body: '{}' }));
+    },
+    requestRematch(matchId) {
+      const current = rematch();
+      if (current?.matchId === matchId && (current.state === 'starting' || current.state === 'waiting')) return false;
+      set({ rematch: { matchId, state: 'starting' } });
+      send((c) => c.publish({ destination: matchRematch(matchId), body: '{}' }));
+      return true;
+    },
+    cancelRematch() {
+      const current = rematchUnderway();
+      if (!current) return false;
+      set({ rematch: { matchId: current.matchId, state: 'idle' } });
+      if (status === 'open' && client) {
+        try {
+          client.publish({ destination: matchRematchCancel(current.matchId), body: '{}' });
+        } catch {
+          // The socket is going: the server drops her request when it closes.
+        }
+      }
+      return true;
     },
     submitAnswer(optionIndex) {
       const current = live();
@@ -950,6 +1060,16 @@ export function rejoinMatch(matchId: string): void {
 /** Stops a pending rejoin. See `Realtime.cancelRejoin`. */
 export function cancelRejoin(matchId: string): void {
   instance().cancelRejoin(matchId);
+}
+
+/** Asks for (or accepts) a rematch of the ended match. See `Realtime.requestRematch`. */
+export function requestRematch(matchId: string): boolean {
+  return instance().requestRematch(matchId);
+}
+
+/** Withdraws her pending rematch request. See `Realtime.cancelRematch`. */
+export function cancelRematch(): boolean {
+  return instance().cancelRematch();
 }
 
 /** Cancels the search. See `CancelResult`. */

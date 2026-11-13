@@ -38,6 +38,18 @@ class DrainingTest extends GameIntegrationTest {
         }
     }
 
+    /** Story 1.10: a rematch request while draining is refused the same way. */
+    @Test
+    void whileDrainingARematchRequestIsRefusedWithServerDraining() {
+        String a = newSub();
+        try (StompTestClient anju = connect(guestToken(a))) {
+            drain.begin();
+            anju.send("/app/match/" + java.util.UUID.randomUUID() + "/rematch");
+            anju.error("SERVER_DRAINING");
+            assertThat(participation.activityOf(a)).isEmpty();
+        }
+    }
+
     /** A pairing whose set arrives after draining began never starts: the shutdown waits only for live matches. */
     @Test
     void aPairingInFlightWhenDrainingBeginsFails() {

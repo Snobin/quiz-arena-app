@@ -156,6 +156,22 @@ class RealtimeSamplesTest {
                                         new CompletedParticipant(BOT, null, ParticipantKind.BOT, "Minnal Bot", 642, 1,
                                                 false, 2))),
                         new TypeReference<MatchCompletedEvent>() { }),
+                new Sample("rematch-requested.json",
+                        ServerMessage.aboutMatch(MessageType.REMATCH_REQUESTED, MATCH_ID, SERVER_TIME,
+                                new RematchRequestedPayload(ANJU, SERVER_TIME.plusSeconds(60))),
+                        new TypeReference<ServerMessage<RematchRequestedPayload>>() { }),
+                new Sample("rematch-declined.json",
+                        ServerMessage.aboutMatch(MessageType.REMATCH_DECLINED, MATCH_ID, SERVER_TIME,
+                                new RematchDeclinedPayload(RematchDeclineReason.CANCELLED)),
+                        new TypeReference<ServerMessage<RematchDeclinedPayload>>() { }),
+                new Sample("rematch-declined-unavailable.json",
+                        ServerMessage.aboutMatch(MessageType.REMATCH_DECLINED, MATCH_ID, SERVER_TIME,
+                                new RematchDeclinedPayload(RematchDeclineReason.UNAVAILABLE)),
+                        new TypeReference<ServerMessage<RematchDeclinedPayload>>() { }),
+                new Sample("rematch-expired.json",
+                        ServerMessage.aboutMatch(MessageType.REMATCH_EXPIRED, MATCH_ID, SERVER_TIME,
+                                new RematchExpiredPayload()),
+                        new TypeReference<ServerMessage<RematchExpiredPayload>>() { }),
                 new Sample("error-answer-rejected.json",
                         ServerMessage.error(ErrorCode.ANSWER_REJECTED, MATCH_ID, 3L, SERVER_TIME),
                         new TypeReference<ServerMessage<ErrorPayload>>() { }),
@@ -206,7 +222,8 @@ class RealtimeSamplesTest {
     void enumsJsonListsEveryEnumValue() throws IOException {
         Map<String, List<String>> enums = new LinkedHashMap<>();
         for (Class<? extends Enum<?>> type : List.<Class<? extends Enum<?>>>of(MessageType.class, ErrorCode.class,
-                MatchMode.class, ParticipantKind.class, QuestionSource.class, SnapshotPhase.class, AbortReason.class)) {
+                MatchMode.class, ParticipantKind.class, QuestionSource.class, SnapshotPhase.class, AbortReason.class,
+                RematchDeclineReason.class)) {
             enums.put(type.getSimpleName(), Arrays.stream(type.getEnumConstants()).map(Enum::name).toList());
         }
         assertGolden("enums.json", ContractJson.MAPPER.writeValueAsString(enums) + "\n");
@@ -288,6 +305,8 @@ class RealtimeSamplesTest {
         assertThat(Destinations.matchTopic(MATCH_ID)).isEqualTo("/topic/match/" + MATCH_ID);
         assertThat(Destinations.roomTopic(MATCH_ID)).isEqualTo("/topic/room/" + MATCH_ID);
         assertThat(Destinations.USER_PRIVATE_QUEUE).isEqualTo("/user/queue/game");
+        assertThat(Destinations.matchRematch(MATCH_ID)).isEqualTo("/app/match/" + MATCH_ID + "/rematch");
+        assertThat(Destinations.matchRematchCancel(MATCH_ID)).isEqualTo("/app/match/" + MATCH_ID + "/rematch/cancel");
     }
 
     /** Story 1.9: a snapshot outside an open question carries no question, times or own answer. */

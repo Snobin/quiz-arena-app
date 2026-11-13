@@ -9,7 +9,7 @@ import { Lang } from '../../i18n/Lang.tsx';
 import { useDocumentTitle } from '../../i18n/useDocumentTitle.ts';
 import { useReducedEffects } from '../../motion/reduceEffects.ts';
 import * as lastResult from '../../realtime/lastResult.ts';
-import { useLiveGame, type LiveMatch } from '../../realtime/liveGameStore.ts';
+import { cancelRematch, requestRematch, useLiveGame, type LiveMatch } from '../../realtime/liveGameStore.ts';
 import type { MatchEndedPayload } from '../../realtime/protocol.ts';
 import { announce } from '../../shell/announce.ts';
 import { navigate } from '../../shell/router.ts';
@@ -17,6 +17,7 @@ import { useHideTabBar } from '../../shell/useHideTabBar.ts';
 import { BreakdownRow } from './BreakdownRow.tsx';
 import { DotStrip } from './DotStrip.tsx';
 import { resultView, type ResultView } from './outcome.ts';
+import { RematchCard } from './RematchCard.tsx';
 import { ResultsBand } from './ResultsBand.tsx';
 import { WinTakeover } from './WinTakeover.tsx';
 
@@ -30,6 +31,9 @@ type FullResult = { payload: MatchEndedPayload; selfId: string; liveArrival: boo
  * in this page session, else from `sessionStorage` after a reload (`lastResult.ts`). It shows
  * the win takeover (live arrivals only, never on a reload), the loss or draw band, the dot strip,
  * the breakdown and a fixed Home bar. Every placement, correctness and point is the server's.
+ *
+ * The full view's bar offers Rematch (Story 1.10 part 2): see `RematchActions`. When a new match
+ * arrives (MATCH_FOUND, typically the rematch) while she is here, `/match` opens at once.
  *
  * Without MATCH_ENDED yet (she forfeited or left while the match goes on, or the match settled
  * with no MATCH_ENDED) it shows the minimal view of Story 1.9 from the store's `outcome`, and
@@ -49,18 +53,28 @@ export function ResultsScreen() {
   } else if (stored && (live === null || stored.matchId === live.matchId)) {
     full = { payload: stored.payload, selfId: stored.selfId, liveArrival: false };
   }
+  // The match these results are about, fixed at mount: a different live match later is a new one.
+  const [shownMatchId] = useState(() => live?.matchId ?? stored?.matchId ?? null);
+  const newMatch = live !== null && shownMatchId !== null && live.matchId !== shownMatchId && live.outcome === null;
+  if (newMatch) full = null;
   const view = full ? resultView(full.payload, full.selfId) : null;
-  const outcome = live?.outcome ?? null;
+  const outcome = newMatch ? null : (live?.outcome ?? null);
   const minimal = view === null && live !== null && outcome !== null && outcome.kind !== 'aborted';
   const show = view !== null || minimal;
 
   useEffect(() => {
-    if (show) return;
+    // The rematch (or any new match) started: straight to it.
+    if (newMatch) navigate('/match', { replace: true });
+  }, [newMatch]);
+
+  useEffect(() => {
+    if (show || newMatch) return;
     // An abort that lands here (Leave before the first reveal): Home shows the notice.
     if (outcome?.kind === 'aborted') announce(t('match.aborted'));
     navigate('/', { replace: true });
-  }, [show]);
+  }, [show, newMatch]);
 
+  if (newMatch) return null;
   if (view && full) return <FullResults key={full.payload.matchId} full={full} view={view} />;
   if (minimal) return <MinimalResults live={live} />;
   return null;
@@ -135,9 +149,7 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
               })}
             </ol>
           </main>
-          <ActionBar>
-            <Button onClick={() => navigate('/')}>{t('common.home')}</Button>
-          </ActionBar>
+          <RematchActions matchId={matchId} rivalName={view.rival?.displayName ?? ''} />
         </PageColumn>
       </div>
       {takeover ? (
@@ -153,11 +165,96 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
 }
 
 /**
- * The fixed results action bar (Home only until rematch, Story 1.10 part 2), on card with a
- * hairline top border like the tab bar. An in-flow spacer as tall as the bar keeps the last row
- * clear of it. Buttons wrap to full width when they don't fit.
+ * The rematch half of the results bar (Story 1.10 part 2). Every state comes from the store's
+ * `rematch`, which only the server's messages (and her own sends) change:
+ * - Rematch (primary), or "Accept rematch" when the opponent asked first; while her request is
+ *   on its way the button is busy;
+ * - while her request is pending, the waiting card (name, seconds left, Cancel);
+ * - after a revert, a one-line note, announced politely once; Rematch can be sent again.
+ * Home (secondary) is always there. Home, or leaving `/results` any other way, withdraws a pending
+ * request.
  */
-function ActionBar({ children }: { children: ReactNode }) {
+function RematchActions({ matchId, rivalName }: { matchId: string; rivalName: string }) {
+  const { t } = useTranslation();
+  const stored = useLiveGame((s) => s.rematch);
+  const clockOffsetMs = useLiveGame((s) => s.clockOffsetMs);
+  const rematch = stored?.matchId === matchId ? stored : null;
+  const state = rematch?.state ?? 'idle';
+  const note = rematch?.note ? t(`rematch.note.${rematch.note}`, { name: rivalName }) : null;
+
+  // Each revert is a new store value: its note is announced once.
+  useEffect(() => {
+    if (note) announce(note);
+  }, [rematch]);
+
+  const incoming = state === 'incoming';
+  useEffect(() => {
+    if (incoming) announce(t('rematch.accept'));
+  }, [incoming]);
+
+  // The swap between the button and the waiting card removes the focused control: keep focus
+  // on whichever of them is there now (never on the first render).
+  const waiting = state === 'waiting';
+  const swapped = useRef(false);
+  useEffect(() => {
+    if (!swapped.current) {
+      swapped.current = true;
+      return;
+    }
+    const focused = document.activeElement;
+    if (focused === null || focused === document.body) {
+      document.querySelector<HTMLElement>('[data-testid="rematch-cancel"], [data-testid="rematch-button"]')?.focus();
+    }
+  }, [waiting]);
+
+  // Leaving /results (Home, Back, a link) withdraws a pending request.
+  useEffect(() => () => void cancelRematch(), []);
+
+  const onRematch = () => {
+    if (state === 'starting') return;
+    requestRematch(matchId);
+  };
+  const onHome = () => {
+    cancelRematch();
+    navigate('/');
+  };
+
+  return (
+    <ActionBar
+      note={
+        note ? (
+          <p data-testid="rematch-note" className="text-body text-muted">
+            {note}
+          </p>
+        ) : null
+      }
+    >
+      {state === 'waiting' && rematch?.expiresAt ? (
+        <RematchCard
+          name={rivalName}
+          expiresAt={rematch.expiresAt}
+          clockOffsetMs={clockOffsetMs}
+          onCancel={() => cancelRematch()}
+        />
+      ) : (
+        <Button data-testid="rematch-button" aria-busy={state === 'starting' ? true : undefined} onClick={onRematch}>
+          {incoming ? t('rematch.accept') : t('rematch.request')}
+        </Button>
+      )}
+      <Button variant="secondary" onClick={onHome}>
+        {t('common.home')}
+      </Button>
+    </ActionBar>
+  );
+}
+
+/**
+ * The fixed results action bar, on card with a hairline top border like the tab bar. An in-flow
+ * spacer as tall as the bar keeps the last row clear of it. Its children wrap to full width when
+ * they don't fit (the waiting card keeps a minimum width, so it stacks above Home on a narrow
+ * phone). A `note` line sits above them.
+ */
+function ActionBar({ children, note }: { children: ReactNode; note?: ReactNode }) {
   const barRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(0);
   useLayoutEffect(() => {
@@ -177,7 +274,10 @@ function ActionBar({ children }: { children: ReactNode }) {
         data-testid="results-actions"
         className="fixed inset-x-[0] bottom-[0] z-10 border-t border-hairline bg-card pb-[env(safe-area-inset-bottom)]"
       >
-        <div className="mx-auto flex w-full max-w-[480px] flex-wrap gap-3 px-gutter-card py-3 [&>*]:flex-1">{children}</div>
+        <div className="mx-auto w-full max-w-[480px] px-gutter-card py-3">
+          {note}
+          <div className={`flex flex-wrap gap-3 [&>*]:flex-1 ${note ? 'mt-2' : ''}`}>{children}</div>
+        </div>
       </div>
     </>
   );

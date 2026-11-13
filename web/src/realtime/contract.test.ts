@@ -15,6 +15,9 @@ import {
   parseQuestionRevealed,
   parseQuestionStarted,
   parseQuestionView,
+  parseRematchDeclined,
+  parseRematchExpired,
+  parseRematchRequested,
   parseScoreboard,
   parseServerMessage,
   parseSnapshot,
@@ -61,6 +64,10 @@ describe('contracts/samples', () => {
         'participant-forfeited.json',
         'match-aborted.json',
         'match-ended.json',
+        'rematch-requested.json',
+        'rematch-declined.json',
+        'rematch-declined-unavailable.json',
+        'rematch-expired.json',
       ]),
     );
   });
@@ -323,5 +330,29 @@ describe('parsers reject what the contract does not allow', () => {
     ['an unknown source', { ...ended, questionSource: 'GPT' }],
   ])('MATCH_ENDED payload: %s', (_, value) => {
     expect(parseMatchEnded(value)).toBeNull();
+  });
+
+  it('the rematch samples: private messages about the ended match, with their payloads', () => {
+    const requested = parseServerMessage(read('rematch-requested.json'))!;
+    expect(requested.seq).toBeUndefined();
+    expect(requested.matchId).toBeDefined();
+    expect(parseRematchRequested(requested.payload)).toEqual(requested.payload);
+    expect(parseRematchDeclined(parseServerMessage(read('rematch-declined.json'))!.payload)).toEqual({ reason: 'CANCELLED' });
+    expect(parseRematchDeclined(parseServerMessage(read('rematch-declined-unavailable.json'))!.payload)).toEqual({
+      reason: 'UNAVAILABLE',
+    });
+    const expired = parseIncoming(JSON.stringify(read('rematch-expired.json')))!;
+    expect(expired.type).toBe('REMATCH_EXPIRED');
+    expect(expired.message.matchId).toBe(requested.matchId);
+  });
+
+  it('malformed rematch messages are ignored', () => {
+    expect(parseRematchRequested({ requestedBy: 'a', expiresAt: 'soon' })).toBeNull();
+    expect(parseRematchDeclined({ reason: 'BORED' })).toBeNull();
+    expect(parseRematchExpired(null)).toBeNull();
+    // Each is about an ended match: without the envelope's matchId it is dropped.
+    expect(
+      parseIncoming('{"type":"REMATCH_EXPIRED","serverTime":"2026-11-12T10:00:00Z","payload":{}}'),
+    ).toBeNull();
   });
 });

@@ -326,6 +326,41 @@ export const catalogue = {
     en: 'The match is still going; the full results will show here when it ends',
     signoff: ['ml', 'en'],
   },
+  // Story 1.10 part 2: rematch. Drafted in both languages; every entry awaits native review.
+  'rematch.request': { ml: 'റീമാച്ച്', en: 'Rematch', signoff: ['ml', 'en'] },
+  'rematch.accept': { ml: 'റീമാച്ച് സ്വീകരിക്കുക', en: 'Accept rematch', signoff: ['ml', 'en'] },
+  'rematch.secondsLeft': {
+    ml: '{{seconds, number}} സെക്കൻഡ് ബാക്കി',
+    en: '{{seconds, number}} s left',
+    signoff: ['ml', 'en'],
+    params: { ml: { seconds: 42 }, en: { seconds: 42 } },
+  },
+  'rematch.note.expired': {
+    ml: 'റീമാച്ച് അഭ്യർത്ഥനയുടെ സമയം കഴിഞ്ഞു',
+    en: 'The rematch request ran out of time',
+    signoff: ['ml', 'en'],
+  },
+  'rematch.note.cancelled': {
+    ml: '{{name}} · റീമാച്ച് റദ്ദാക്കി',
+    en: '{{name}} cancelled the rematch',
+    signoff: ['ml', 'en'],
+    params: { ml: { name: 'Vishnu R' }, en: { name: 'Vishnu R' } },
+  },
+  'rematch.note.unavailable': {
+    ml: 'ഇപ്പോൾ റീമാച്ച് സാധ്യമല്ല',
+    en: "A rematch isn't possible right now",
+    signoff: ['ml', 'en'],
+  },
+  'rematch.note.failed': {
+    ml: 'റീമാച്ച് തുടങ്ങാനായില്ല. വീണ്ടും ശ്രമിക്കൂ.',
+    en: "Couldn't start the rematch. Try again.",
+    signoff: ['ml', 'en'],
+  },
+  'rematch.note.draining': {
+    ml: 'മിന്നൽ അപ്ഡേറ്റ് ചെയ്യുകയാണ്. അൽപ്പം കഴിഞ്ഞ് വീണ്ടും ശ്രമിക്കൂ.',
+    en: 'Minnal is updating. Try again in a moment.',
+    signoff: ['ml', 'en'],
+  },
   'rooms.placeholder': {
     ml: 'റൂമുകൾ ഉടൻ വരുന്നു. ബാച്ചിനെ മുഴുവൻ ഒരുമിച്ച് കളിപ്പിക്കാം.',
     en: 'Rooms are coming soon. Your whole batch will play together here.',
