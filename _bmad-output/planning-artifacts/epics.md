@@ -114,7 +114,7 @@ Source precedence: the SPEC (`SPEC.md` + companions) is the primary contract; PR
 
 **Ratings & leaderboards (PRD FR-10 · CAP-10)**
 
-- FR59: There are three independent ELO tracks (Quick Match, Topic Duel, Battle Room), standard ELO with K = 32, every new user starting at 1200 in each; win/loss/draw derives only from placement (score, then correct count, else tie); a bot opponent counts at the human's current rating; a guest opponent counts as 1200 and the registered player is still rated [Step-1 resolution]; forfeiters are rated on their earned placement. (PRD FR-10.1, FR-10.2 · CAP-10, AD-8)
+- FR59: There are three independent ELO tracks (Quick Match, Topic Duel, Battle Room), standard ELO with K = 32, every new user starting at 1200 in each; win/loss/draw derives only from placement (score, then correct count, else tie); a bot opponent counts at the human's current rating; a guest opponent counts as 1200 and the registered player is still rated [Step-1 resolution]; in a 1v1 match the forfeiter always places last (a loss); in a Battle Room forfeiters are rated on their earned placement. (PRD FR-10.1, FR-10.2 · CAP-10, AD-8; amended 2026-11-13, sprint-change-proposal-2026-11-13)
 - FR60: Each mode has daily, weekly and all-time all-Kerala leaderboards; days and weeks follow IST with weeks starting Monday; daily/weekly rank by rating gained in the period and all-time by current rating; each row shows rank, display name and district. (PRD FR-10.3, FR-10.4 · CAP-10, AD-17)
 - FR61: A registered player sees their own leaderboard row pinned when it is outside the visible list, and in place when scrolled to; no pinned row when they have no position. [UX] (CAP-10)
 - FR62: Guest play and unrated (custom-topic) matches never change any rating or leaderboard. (PRD FR-10.5, FR-6.9 · CAP-10)
@@ -122,8 +122,8 @@ Source precedence: the SPEC (`SPEC.md` + companions) is the primary contract; PR
 **Resilient play — disconnect, leave, abort (PRD NFR-Reliability · CAP-12)**
 
 - FR63: A player who drops mid-match has 10 s to reconnect; returning in time resumes at the current question, deadline and scores. [SPEC delta: 10 s reconnect] (CAP-12, AD-11)
-- FR64: After 10 s disconnected — or on confirmed Leave — the player forfeits the remaining questions (scoring 0), the match continues for everyone else, and the leaver still receives the result their score earned. (CAP-12, game-modes Disconnects)
-- FR65: A match counts as completed once its first question has been revealed; if every human leaves before the first reveal, the match is aborted, counts nowhere (no ratings, no history, no product metric such as sessions, return or Battle Room usage), and players return Home with a notice; its only trace is the completed-vs-aborted counter-metric (NFR18). [Clarified at Step 4] (game-modes Disconnects, AD-8)
+- FR64: After 10 s disconnected — or on confirmed Leave — the player forfeits. In a 1v1 match (Quick Match, Topic Duel) this ends the match at once: the remaining player wins and the leaver loses whatever her score. In a Battle Room she forfeits the remaining questions (scoring 0), the match continues for everyone else, and she still receives the result her score earned. (CAP-12, game-modes Disconnects; amended 2026-11-13, sprint-change-proposal-2026-11-13)
+- FR65: A match counts as completed once its first question has been revealed, or, in a human-vs-human 1v1, as soon as one player forfeits while the other remains. A match is aborted when every human leaves before the first reveal; in practice that means a human-vs-bot match, or a Battle Room. An aborted match counts nowhere (no ratings, no history, no product metric such as sessions, return or Battle Room usage), and players return Home with a notice; its only trace is the completed-vs-aborted counter-metric (NFR18). [Clarified at Step 4] (game-modes Disconnects, AD-8; amended 2026-11-13, sprint-change-proposal-2026-11-13)
 
 **Share card (CAP-13) [SPEC delta]**
 
@@ -1015,12 +1015,12 @@ So that a network blip doesn't cost me the match and my opponent's game is never
 
 **Given** a participant has been disconnected for 10 s
 **When** the grace period ends
-**Then** she is marked `forfeited`, scores 0 on every remaining question, the match continues for everyone else, and a later reconnect gets a `SNAPSHOT` showing she forfeited, with answers rejected
+**Then** she is marked `forfeited`, scores 0 on every remaining question, the match continues for everyone else (in a 1v1, the match ends at once instead; Story 1.12), and a later reconnect gets a `SNAPSHOT` showing she forfeited, with answers rejected
 **And** her client shows the Forfeited copy ("ബാക്കി ചോദ്യങ്ങൾ നഷ്ടമായി, മാച്ച് തുടരുന്നു") and goes to the results route with the score she earned (a minimal view in this story; the full results screen is Story 1.10)
 
 **Given** a 1v1 match where the opponent forfeits
 **When** the forfeit is broadcast
-**Then** the remaining player sees a one-line "opponent left" notice, announced politely once, and keeps playing to the end
+**Then** (amended by Story 1.12) the match ends at once: the remaining player sees "<name> left · you win", announced politely once, and goes to her results; in a Battle Room (Epic 5) the others keep playing
 
 **Given** a player taps Leave or presses Android back during play
 **When** the confirm dialog opens
@@ -1029,9 +1029,9 @@ So that a network blip doesn't cost me the match and my opponent's game is never
 
 **Given** the player confirms Leave
 **When** the client sends `/app/match/{matchId}/leave` (per AD-10)
-**Then** she is forfeited at once (no 10 s grace), the match continues for the others, and she goes to the results route with her earned score
+**Then** she is forfeited at once (no 10 s grace), the match continues for the others (in a 1v1, the match ends at once instead; Story 1.12), and she goes to the results route with her earned score
 
-**Given** every human participant has forfeited or left before Q1 is revealed (including a human vs bot match)
+**Given** every human has forfeited or left before Q1 is revealed and no human remains (a human vs bot match, or a room; amended by Story 1.12: in a human-vs-human 1v1 the first forfeit ends the match as completed, so it never aborts)
 **When** the actor sees this
 **Then** the match is aborted: it stops, nothing is published, no results are produced, and the completed-vs-aborted counter-metric records it as aborted, which is the only place an aborted match is counted (FR65: no rating, history or product metric); any still-connected human client returns Home with a one-line notice that the match did not count, announced politely
 
@@ -1052,7 +1052,7 @@ So that I learn from my mistakes and want to play again straight away.
 
 **Given** the `Ranking` function in `contracts`
 **When** it ranks participants
-**Then** it orders by score descending, then correct count descending, else a tie with a shared placement; unit tests cover a clear win, a correct-count tiebreak, a full tie and a forfeiter ranked on earned score
+**Then** it orders by score descending, then correct count descending, else a tie with a shared placement; in a 1v1, a forfeiter always places last; in a Battle Room a forfeiter is ranked on earned score; unit tests cover a clear win, a correct-count tiebreak, a full tie, a 1v1 forfeiter who led on score placing last, and a room forfeiter ranked on earned score (amended by Story 1.12)
 
 **Given** the final question has been revealed in a completed match
 **When** the actor ends play
@@ -1146,6 +1146,41 @@ So that the match feels fast and responsive instead of making me wait out every 
 **Given** the contracts
 **When** I inspect them
 **Then** `AnswerAcceptedPayload` has optional `correct`, `points` and `answerIndex`, with golden samples for the 1v1 and room shapes and matching web parsers
+
+### Story 1.12: A 1v1 forfeit ends the match
+
+As Anju, whose Quick Match opponent has left,
+I want to win at once instead of answering the remaining questions against nobody,
+So that a walk-out never wastes my time and the leaver can't escape the loss.
+
+**Requirements:** FR59, FR64, FR65 (as amended 2026-11-13), AD-8, AD-11 (amended). Source: `sprint-change-proposal-2026-11-13.md`.
+
+**Acceptance Criteria:**
+
+**Given** a human-vs-human 1v1 (Quick Match or Topic Duel) in any phase (lead-in, question open, reveal)
+**When** one player forfeits (confirmed Leave, or the 10 s grace expires)
+**Then** the actor ends the match at once: the open question, if any, is closed and revealed as in an early close; no further questions start; the match is completed (even before the Q1 reveal); `MATCH_ENDED` goes to both humans with live sessions, and one `minnal.match.completed` is published
+**And** `Ranking`, in a 1v1, places the forfeiter last regardless of score or correct count, with a unit test where the forfeiter led
+
+**Given** a human vs bot match
+**When** the human forfeits before the Q1 reveal
+**Then** the match is aborted as today
+
+**Given** a human vs bot match
+**When** the human forfeits after the Q1 reveal
+**Then** the match ends at once as completed and she places last; the bot wins
+
+**Given** the remaining player
+**When** the opponent's forfeit arrives
+**Then** she sees "<name> left · you win" (announced politely once), then `/results` with the win takeover once `MATCH_ENDED` is in, after the usual reveal hold if a question was just revealed
+
+**Given** the leaver (still connected)
+**When** her forfeit is confirmed
+**Then** her notice reads "You left · <name> wins" (replacing "the match goes on" in 1v1), and her results show the loss
+
+**Given** a Battle Room (Epic 5)
+**When** anyone forfeits
+**Then** nothing changes: the others play on, and forfeiters are ranked on their earned score
 
 ## Epic 2: Anju gets an account and a rating
 
@@ -1386,7 +1421,7 @@ So that my rating reflects my real level and matchmaking pairs me with players l
 **Given** a `minnal.match.completed` event with `rated: true`
 **When** ratings-service handles it through its `ratings-service` consumer group
 **Then** in one transaction it writes, for each `USER` participant, a `rating_event`, an updated `rating` (created at 1200 first if missing), a `match_record` with result from placement and `rating_delta`, and one `minnal.rating.updated {eventId, userId, mode, rating, ratedAt}` outbox row per rated user; the stream entry is `XACK`ed only after that commit
-**And** a forfeiter is rated on the placement she earned, exactly like any other participant
+**And** a forfeiter is rated on the placement in the event, exactly like any other participant (in a 1v1 that is always last, a loss; amended 2026-11-13, sprint-change-proposal-2026-11-13)
 
 **Given** an event with `rated: false` (custom-topic source)
 **When** it is handled
@@ -2088,7 +2123,7 @@ So that I can train and prove myself on a weak topic without my Quick Match rati
 
 **Given** the set was fetched
 **When** each player gets `MATCH_FOUND`
-**Then** it carries `{matchId, mode: TOPIC_DUEL, participants, questionCount: 10, topic {topicId, name, subjectName}}`, and the match runs exactly as in Stories 1.7–1.9 and 1.11 (early close, instant own feedback; 10 × 15 s, the shared `Scoring`, server clock, first answer counts, bot answers through the same path, reconnect and forfeit), finishing within 4 minutes
+**Then** it carries `{matchId, mode: TOPIC_DUEL, participants, questionCount: 10, topic {topicId, name, subjectName}}`, and the match runs exactly as in Stories 1.7–1.9, 1.11 and 1.12 (early close, instant own feedback, a forfeit ends the match; 10 × 15 s, the shared `Scoring`, server clock, first answer counts, bot answers through the same path, reconnect and forfeit), finishing within 4 minutes
 **And** `MATCH_ENDED` and `SNAPSHOT` also carry `topic`, so a reloaded results screen and a reconnecting client show it
 
 **Given** the live match screen in a Topic Duel

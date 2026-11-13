@@ -79,7 +79,9 @@ A sharp, friendly tuition-batch classmate: short, warm, lightly competitive, nev
 | Loss band | Vishnu ജയിച്ചു · അടുത്ത തവണ നിങ്ങൾക്ക് | [ASSUMPTION] Vishnu won · Next time's yours |
 | Draw | സമനില | Draw |
 | Reconnect | കണക്ഷൻ പോയി, തിരിച്ചു വരുന്നു… 8 | Reconnecting… 8 |
-| Forfeited | ബാക്കി ചോദ്യങ്ങൾ നഷ്ടമായി, മാച്ച് തുടരുന്നു | [ASSUMPTION] You missed the remaining questions; the match goes on |
+| Forfeited (Battle Room) | ബാക്കി ചോദ്യങ്ങൾ നഷ്ടമായി, മാച്ച് തുടരുന്നു | [ASSUMPTION] You missed the remaining questions; the match goes on |
+| Forfeited (1v1) | [ASSUMPTION] നിങ്ങൾ പോയി · {name} ജയിച്ചു | You left · {name} wins |
+| Opponent left (1v1) | [ASSUMPTION] {name} പോയി · നിങ്ങൾ ജയിച്ചു | {name} left · you win |
 | Leave confirm | [ASSUMPTION] പുറത്തുപോകണോ? ബാക്കി ചോദ്യങ്ങൾ നഷ്ടമാകും | Leave? You'll forfeit the remaining questions |
 | Report link | തെറ്റുണ്ടോ? | [ASSUMPTION] Something wrong? |
 | Rematch waiting | [ASSUMPTION] Vishnu R · കാത്തിരിക്കുന്നു… | Waiting for Vishnu R… |
@@ -204,10 +206,11 @@ Behavioural. Visual specs live in `DESIGN.md` › Components.
 | Question open | Live match | Monochrome; timer line; first-tap hint in the footer. |
 | Locked / waiting | Live match | 1v1: own result band at once; footer "Waiting for <opponent>…" until the question closes. Battle Room: locked option styled; footer "Locked in · result when time runs out"; no correctness hint. |
 | Reveal (correct / wrong) | Live match | Peak band per Component Patterns; explanation + attribution + report link. |
-| Leave confirm | Live match | Dialog over a 42% dim; Leave → Results with the score earned so far (forfeit). Stay → back to the live question. |
+| Leave confirm | Live match | Dialog over a 42% dim; Leave → Results (in 1v1 a loss; in a Battle Room the score earned so far). Stay → back to the live question. |
 | Reconnecting | Live match | 10 s grace. Back in time → resume from `SNAPSHOT` at the current question and scores. |
 | Forfeited | Live match → Results | After 10 s the banner shows the Forfeited copy, then Results with the score earned so far. |
-| Match aborted | Live match | All humans gone before the first reveal → not counted. [ASSUMPTION] Return Home with a one-line notice. |
+| Opponent left (1v1) | Live match → Results | The match ends at once; a one-line notice, then Results with the win takeover. |
+| Match aborted | Live match | All humans gone before the first reveal and none remains (vs the bot, or a room) → not counted. [ASSUMPTION] Return Home with a one-line notice. |
 | Result: win | Results | Takeover → settled band (volt). |
 | Result: loss | Results | Opens straight to the settled view; ink band, no volt, grey delta. |
 | Result: draw | Results | "സമനില / Draw" band, no volt, no bolt. |
