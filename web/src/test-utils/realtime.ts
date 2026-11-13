@@ -256,6 +256,8 @@ export type SnapshotOptions = {
   participants: { participantId: string; displayName: string; kind: string }[];
   youForfeited?: boolean;
   myAnswer?: { pickedIndex: number; correct?: boolean; points?: number; answerIndex?: number; totalScore?: number };
+  /** Who the receiver is: defaults to the first participant; `null` leaves the field out (an older server). */
+  selfParticipantId?: string | null;
   serverTime?: string;
 };
 
@@ -266,6 +268,7 @@ export function snapshot(matchId: string, o: SnapshotOptions) {
   const open = phase === 'QUESTION_OPEN';
   const startedAt = o.startedAt ?? Date.parse(SERVER_TIME);
   const started = questionStarted(matchId, { seq: 0, questionIndex: index, startedAt, windowMs: o.windowMs }).payload;
+  const self = o.selfParticipantId === undefined ? o.participants[0]?.participantId : o.selfParticipantId;
   return {
     type: 'SNAPSHOT',
     matchId,
@@ -282,6 +285,7 @@ export function snapshot(matchId: string, o: SnapshotOptions) {
       participants: o.participants,
       youForfeited: o.youForfeited ?? false,
       ...(o.myAnswer ? { myAnswer: o.myAnswer } : {}),
+      ...(self ? { selfParticipantId: self } : {}),
     },
   };
 }

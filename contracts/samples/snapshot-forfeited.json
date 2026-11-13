@@ -46,6 +46,7 @@
       "displayName" : "Minnal Bot",
       "kind" : "BOT"
     } ],
-    "youForfeited" : true
+    "youForfeited" : true,
+    "selfParticipantId" : "0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d"
   }
 }

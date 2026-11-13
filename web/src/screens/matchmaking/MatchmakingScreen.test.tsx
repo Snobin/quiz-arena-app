@@ -7,6 +7,7 @@ import { guestSession } from '../../auth/guestSession.ts';
 import i18n from '../../i18n.ts';
 import { useReduceEffectsStore } from '../../motion/reduceEffects.ts';
 import { resetRealtime } from '../../realtime/connection.ts';
+import { matchResync, matchTopic } from '../../realtime/protocol.ts';
 import { resetAnnouncements, useAnnouncements } from '../../shell/announce.ts';
 import { clearReturnFocus } from '../../shell/returnFocus.ts';
 import { navigate, syncFromLocation } from '../../shell/router.ts';
@@ -19,6 +20,7 @@ import {
   MATCHMAKING_FAILED,
   matchFound,
   serverError,
+  snapshot,
   useFakeRealtime,
   type FakeStomp,
 } from '../../test-utils/realtime.ts';
@@ -218,15 +220,31 @@ describe('failures', () => {
   it('ALREADY_IN_MATCH with a matchId offers "Back to your match"', async () => {
     const user = userEvent.setup();
     await searching();
-    act(() => socket().deliver(serverError('ALREADY_IN_MATCH', crypto.randomUUID())));
+    const { payload } = matchFound({ name: 'Minnal Bot', kind: 'BOT' });
+    const matchId = payload.matchId;
+    act(() => socket().deliver(serverError('ALREADY_IN_MATCH', matchId)));
     const alert = screen.getByRole('alert');
     expect(alert).toHaveTextContent("You're already in a match.");
     await user.click(within(alert).getByRole('button', { name: 'Back to your match' }));
     expect(window.location.pathname).toBe('/match');
-    expect(new URLSearchParams(window.location.search).get('matchId')).toBeTruthy();
-    // This tab never saw the match itself.
-    expect(screen.getByText("There's no match on this screen.")).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/');
+    expect(new URLSearchParams(window.location.search).get('matchId')).toBe(matchId);
+    // This tab never saw the match itself: it rejoins it (subscribe + resync) and waits.
+    expect(screen.getByTestId('rejoining')).toHaveTextContent('Reconnecting…');
+    expect(socket().isSubscribed(matchTopic(matchId))).toBe(true);
+    expect(socket().sentTo(matchResync(matchId))).toBe(1);
+    act(() =>
+      socket().deliver(
+        snapshot(matchId, {
+          refSeq: 4,
+          questionIndex: 2,
+          scores: payload.participants.map((p) => ({ participantId: p.participantId, score: 0 })),
+          participants: payload.participants,
+          selfParticipantId: payload.selfParticipantId,
+        }),
+      ),
+    );
+    expect(screen.queryByTestId('rejoining')).toBeNull();
+    expect(screen.getByTestId('timer-bar')).toBeInTheDocument();
   });
 
   it('"Back to your match" never shows a different (stale) match from the store', async () => {

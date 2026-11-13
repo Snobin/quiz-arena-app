@@ -379,7 +379,8 @@ public final class MatchState {
                 open ? answered : List.of(),
                 scores, views,
                 self != null && self.forfeited(),
-                myAnswer);
+                myAnswer,
+                participantId);
         return ServerMessage.reply(MessageType.SNAPSHOT, matchId, seq, now, payload);
     }
 

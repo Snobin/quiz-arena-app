@@ -267,6 +267,8 @@ export const catalogue = {
     signoff: ['ml', 'en'],
   },
   'match.reconnected': { ml: 'തിരിച്ചെത്തി, മാച്ച് തുടരുന്നു', en: "You're back in the match", signoff: ['ml', 'en'] },
+  // Rejoin after a reload: "Reconnecting…" with no countdown (match.reconnecting has one). Drafted; awaits review.
+  'match.rejoining': { ml: 'തിരിച്ചു വരുന്നു…', en: 'Reconnecting…', signoff: ['ml', 'en'] },
   'results.title': { ml: 'ഫലം', en: 'Results', signoff: ['ml', 'en'] },
   // Story 1.10: the results screen. Drafted in both languages; every entry awaits native review.
   'result.winTitle': { ml: 'ജയിച്ചു!', en: 'You won!', signoff: ['ml', 'en'] },

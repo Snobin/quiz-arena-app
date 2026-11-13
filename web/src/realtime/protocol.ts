@@ -184,6 +184,8 @@ export type SnapshotPayload = {
   participants: Participant[];
   youForfeited: boolean;
   myAnswer: SnapshotAnswer | null;
+  /** Which participant the receiver is; null from an older server (lets a reloaded client rejoin). */
+  selfParticipantId: string | null;
 };
 
 /** PARTICIPANT_FORFEITED (broadcast): a participant left the match (grace ran out, or Leave). */
@@ -430,6 +432,12 @@ export function parseSnapshot(value: unknown): SnapshotPayload | null {
     if (result === undefined) return null;
     myAnswer = { pickedIndex: value.myAnswer.pickedIndex, result };
   }
+  // Optional on the wire parse (an older sample has none); the server always sets it.
+  let selfParticipantId: string | null = null;
+  if (value.selfParticipantId !== undefined) {
+    if (!isString(value.selfParticipantId)) return null;
+    selfParticipantId = value.selfParticipantId;
+  }
   return {
     phase,
     questionIndex,
@@ -443,6 +451,7 @@ export function parseSnapshot(value: unknown): SnapshotPayload | null {
     participants: parsedParticipants as Participant[],
     youForfeited,
     myAnswer,
+    selfParticipantId,
   };
 }
 

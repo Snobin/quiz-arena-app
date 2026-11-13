@@ -488,6 +488,7 @@ class MatchStateTest {
         assertThat(leadIn.phase()).isEqualTo(SnapshotPhase.LEAD_IN);
         assertThat(leadIn.question()).isNull();
         assertThat(leadIn.lastReveal()).isNull();
+        assertThat(leadIn.selfParticipantId()).isEqualTo(id(state, 0));
 
         state.startQuestion(0, clock.instant());
         answer(state, 0, 0, answerOf(state));
@@ -516,12 +517,14 @@ class MatchStateTest {
         assertThat(payload.scores()).first().isEqualTo(new ParticipantScore(id(state, 0), q0, false));
         assertThat(payload.participants()).hasSize(n);
         assertThat(payload.youForfeited()).isFalse();
+        assertThat(payload.selfParticipantId()).isEqualTo(id(state, 0));
         assertThat(payload.myAnswer()).isEqualTo(MyAnswer.withResult(answer, true, 750, answer, q0 + 750));
 
         // The other answerer's snapshot carries her own wrong pick only.
         SnapshotPayload other = state.snapshot(id(state, 1), clock.instant()).payload();
         assertThat(other.myAnswer().pickedIndex()).isEqualTo(wrong);
         assertThat(other.myAnswer().correct()).isFalse();
+        assertThat(other.selfParticipantId()).isEqualTo(id(state, 1));
         // AD-5: nothing on the wire about anyone else's pick, nor the open question's explanation.
         // p0 picked 0 on Q0 and the answer on Q1; p1's wrong Q1 pick must not appear in p0's snapshot.
         String json = JSON.writeValueAsString(state.snapshot(id(state, 0), clock.instant()));

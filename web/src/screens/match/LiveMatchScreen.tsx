@@ -7,7 +7,9 @@ import { formatSigned } from '../../i18n/format.ts';
 import { detectLanguage } from '../../i18n/Lang.tsx';
 import { useDocumentTitle } from '../../i18n/useDocumentTitle.ts';
 import { useReducedEffects } from '../../motion/reduceEffects.ts';
-import { leaveMatch, submitAnswer, useLiveGame, type LiveMatch } from '../../realtime/liveGameStore.ts';
+import * as lastResult from '../../realtime/lastResult.ts';
+import { cancelRejoin, leaveMatch, rejoinMatch, submitAnswer, useLiveGame, type LiveMatch } from '../../realtime/liveGameStore.ts';
+import * as liveMatchId from '../../realtime/liveMatchId.ts';
 import { announce } from '../../shell/announce.ts';
 import { Link } from '../../shell/Link.tsx';
 import { navigate, searchParam } from '../../shell/router.ts';
@@ -57,6 +59,11 @@ export const MATCH_ENDED_WAIT_MS = 3_000;
  * (which shows the notice). An opponent who left gets a one-line notice and keeps her score.
  *
  * Story 1.10: a completed match opens `/results` after the reveal hold, once MATCH_ENDED is in.
+ *
+ * Rejoin after a reload: with no live match but a match id (`?matchId=`, else the one kept in
+ * `sessionStorage`), it asks the connection module to rejoin and shows "Reconnecting…" until the
+ * SNAPSHOT rebuilds the match. If the match is gone it opens `/results` when that match's result
+ * is stored, else Home. With no id at all it shows the "no match" line.
  */
 export function LiveMatchScreen() {
   const { t } = useTranslation();
@@ -68,6 +75,19 @@ export function LiveMatchScreen() {
   useDocumentTitle(
     question ? t('title.question', { n: question.questionIndex + 1, total: question.total }) : t('title.match'),
   );
+  // Read once per mount: the stored id is only a hint for which match to ask about.
+  const [storedId] = useState(() => liveMatchId.load()?.matchId ?? null);
+  // Only when no match is in play here: a different match in play is never shown as the wanted
+  // one (the "no match" view, as before); a settled one does not block the rejoin.
+  const storedInPlay = stored !== null && stored.outcome === null && stored.phase !== 'ended';
+  const rejoinId = live || storedInPlay ? null : (wanted ?? storedId);
+  // The match this screen rejoined: when it arrives it is a live arrival (not for any later match).
+  const rejoinedId = useRef<string | null>(null);
+  if (rejoinId !== null) rejoinedId.current = rejoinId;
+
+  if (!live && rejoinId !== null) {
+    return <RejoiningView matchId={rejoinId} />;
+  }
 
   if (!live) {
     return (
@@ -85,10 +105,50 @@ export function LiveMatchScreen() {
     );
   }
   // Keyed by match: the per-question announcement guards start fresh for a new match.
-  return <LiveMatchView key={live.matchId} live={live} />;
+  return <LiveMatchView key={live.matchId} live={live} arrived={rejoinedId.current === live.matchId} />;
 }
 
-function LiveMatchView({ live }: { live: LiveMatch }) {
+/**
+ * Rejoining after a reload: "Reconnecting…" with no options until the SNAPSHOT. A match that is
+ * gone opens its stored results, else Home.
+ */
+function RejoiningView({ matchId }: { matchId: string }) {
+  const { t } = useTranslation();
+  const rejoin = useLiveGame((s) => s.rejoin);
+  // A `gone` left from before this screen asked does not count.
+  const initialRejoin = useRef(rejoin);
+
+  // Once per mount (StrictMode re-runs the effect; the ref survives it).
+  const announced = useRef(false);
+  useEffect(() => {
+    rejoinMatch(matchId);
+    if (!announced.current) {
+      announced.current = true;
+      announce(t('match.rejoining'));
+    }
+    // Leaving /match while pending stops it, so a late SNAPSHOT never lands behind another screen.
+    return () => cancelRejoin(matchId);
+  }, [matchId]);
+
+  const gone = rejoin !== initialRejoin.current && rejoin?.matchId === matchId && rejoin.state === 'gone';
+  useEffect(() => {
+    if (!gone) return;
+    navigate(lastResult.load()?.matchId === matchId ? '/results' : '/', { replace: true });
+  }, [gone]);
+
+  return (
+    <PageColumn className="justify-center py-6">
+      <main className="flex flex-col items-start gap-3">
+        <h1 tabIndex={-1} className="font-title text-title">
+          {t('title.match')}
+        </h1>
+        <p data-testid="rejoining">{t('match.rejoining')}</p>
+      </main>
+    </PageColumn>
+  );
+}
+
+function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean }) {
   const { t } = useTranslation();
   const reduced = useReducedEffects();
   const clockOffsetMs = useLiveGame((s) => s.clockOffsetMs);
@@ -206,8 +266,9 @@ function LiveMatchView({ live }: { live: LiveMatch }) {
 
   // The outcome as it arrives while she is here: forfeited (notice, then results), left
   // (results), aborted (Home, which shows the notice). One she already had when the screen
-  // opened (Back from the results) does not navigate again.
-  const initialOutcome = useRef(outcome);
+  // opened (Back from the results) does not navigate again. After a rejoin the match has just
+  // arrived, so an outcome its SNAPSHOT carried (a forfeit after a slow reload) still navigates.
+  const initialOutcome = useRef(arrived ? null : outcome);
   useEffect(() => {
     if (!outcome || outcome === initialOutcome.current) return undefined;
     if (outcome.kind === 'aborted') {
