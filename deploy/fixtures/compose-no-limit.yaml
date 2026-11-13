@@ -1,0 +1,31 @@
+# Fixture for check-compose.test.mjs: valkey has no memory limit.
+services:
+  core-service:
+    image: busybox
+    restart: unless-stopped
+    mem_limit: 640m
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx384m"
+    healthcheck:
+      test: ["CMD", "true"]
+  game-service:
+    image: busybox
+    restart: unless-stopped
+    mem_limit: 640m
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx384m"
+    healthcheck:
+      test: ["CMD", "true"]
+  ratings-service:
+    image: busybox
+    restart: unless-stopped
+    mem_limit: 640m
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx384m"
+    healthcheck:
+      test: ["CMD", "true"]
+  valkey:
+    image: busybox
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "true"]
