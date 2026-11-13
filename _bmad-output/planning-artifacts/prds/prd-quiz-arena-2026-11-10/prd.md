@@ -253,7 +253,7 @@ They already run informal batch battles. They need a tool that is instant to set
 | Requirement | Target |
 |---|---|
 | Uptime | ≥ 99.5% [ASSUMPTION] |
-| Match recovery | If a player disconnects mid-match, the match continues. The player has 10 seconds to reconnect and resume where the match is; after that they forfeit the remaining questions. A player who quits after the first question still takes the result |
+| Match recovery | If a player disconnects mid-match, she has 10 seconds to reconnect and resume where the match is. After that, or at once if she leaves, she forfeits. In a 1v1 match a forfeit ends the match at once: the remaining player wins and the leaver loses, whatever the score, even before the first question is revealed. The exception is a match against the bot, which a leave before the first reveal aborts (not counted). In a Battle Room the match continues for the others, and a player who quits after the first question still takes the result her score earned |
 
 ### Accessibility & Localisation
 

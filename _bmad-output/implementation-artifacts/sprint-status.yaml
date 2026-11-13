@@ -47,6 +47,7 @@ development_status:
   1-9-reconnect-forfeit-and-leave: done
   1-10-results-and-rematch: review
   1-11-instant-1v1-feedback-and-early-close: done
+  1-12-a-1v1-forfeit-ends-the-match: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog
