@@ -5,7 +5,10 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 
-/** Replaces the server clock with a {@link MutableClock}, so the 4 s and 8 s rules need no sleeps. */
+/**
+ * Replaces the server clock with a {@link MutableClock}, so the 4 s and 8 s rules need no sleeps,
+ * and the {@code minnal.match.completed} publisher with a {@link RecordingMatchCompletedPublisher}.
+ */
 @TestConfiguration(proxyBeanMethods = false)
 public class TestClockConfiguration {
 
@@ -13,5 +16,11 @@ public class TestClockConfiguration {
     @Primary
     MutableClock testClock() {
         return new MutableClock(Instant.parse("2026-11-12T10:00:00Z"));
+    }
+
+    @Bean
+    @Primary
+    RecordingMatchCompletedPublisher recordingMatchCompletedPublisher() {
+        return new RecordingMatchCompletedPublisher();
     }
 }

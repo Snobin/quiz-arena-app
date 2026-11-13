@@ -10,6 +10,7 @@ import {
   type MatchOutcome,
   type MyAnswer,
 } from './liveGameStore.ts';
+import * as lastResult from './lastResult.ts';
 import {
   ENDPOINT_PATH,
   matchAnswer,
@@ -50,6 +51,10 @@ import {
  *   afterwards it sends `leave` instead of `resync`.
  * - `leaveMatch` forfeits on purpose: her own PARTICIPANT_FORFEITED (or 3 s without one) ends the
  *   match for her as `left`. MATCH_ABORTED ends it as `aborted`.
+ *
+ * Results (Story 1.10): MATCH_ENDED (private) is kept on the live match as `ended`, whenever it
+ * comes (before or after the last reveal, or after her own forfeit), and in `sessionStorage`
+ * (`lastResult.ts`) so `/results` survives a reload. The next MATCH_FOUND clears the stored one.
  */
 
 /** The part of the stompjs `Client` this module uses; tests inject a fake through the factory. */
@@ -474,6 +479,17 @@ export function createRealtime(env: RealtimeEnv): Realtime {
         resetResilience();
         return true;
       }
+      case 'MATCH_ENDED': {
+        const current = live();
+        const { payload } = incoming;
+        if (current && payload.matchId === current.matchId && (incoming.message.matchId ?? payload.matchId) === current.matchId) {
+          set({ clockOffsetMs, live: { ...current, ended: payload } });
+          lastResult.save({ matchId: payload.matchId, selfId: current.selfParticipantId, payload });
+        } else {
+          set({ clockOffsetMs });
+        }
+        return true;
+      }
       case 'ANSWER_ACCEPTED': {
         const current = live();
         const mine = current?.myAnswer;
@@ -543,6 +559,8 @@ export function createRealtime(env: RealtimeEnv): Realtime {
     if (onMatchMessage(incoming, clockOffsetMs)) return;
     switch (incoming.type) {
       case 'MATCH_FOUND':
+        // A new match replaces the last stored result.
+        lastResult.clear();
         set({ phase: 'found', match: incoming.payload, problem: null, clockOffsetMs, live: liveMatchFor(incoming.payload) });
         subscribeTopic(incoming.payload.matchId);
         return;

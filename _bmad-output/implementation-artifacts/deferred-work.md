@@ -81,3 +81,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-9-reconnect-forfeit-and-leave.md`
   summary: Bound the time to detect a silent network drop (tune STOMP heartbeats or the server's inactivity timeout) so the 10 s reconnect grace starts close to the real drop.
   evidence: The server publishes `LastSessionClosed` only when the socket closes; a silent drop is seen at the heartbeat timeout (10 s heartbeats plus Spring's inactivity margin), so the forfeit lands at about heartbeat timeout + 10 s and the opponent waits full windows meanwhile. Every `MatchReconnectFlowTest` case uses a clean close.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-10-results-and-rematch.md`
+  summary: Story 1.10 part 2 — rematch: `/app/match/{matchId}/rematch` within the 60 s `POST_MATCH` window (human accept, instant bot accept, cancel/timeout/unavailable notes, fresh question set with the `MATCHMAKING_FAILED` path) and the waiting card on the results action bar.
+  evidence: Split from Story 1.10 at build time (owner chose "A+B now, C next"); rematch is independently shippable on top of `MATCH_ENDED`/`POST_MATCH` and the results screen.

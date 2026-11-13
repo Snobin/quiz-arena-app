@@ -9,6 +9,7 @@ import {
   parseIncoming,
   parseMatchFound,
   parseMatchAborted,
+  parseMatchEnded,
   parseMatchmakingFailed,
   parseParticipantForfeited,
   parseQuestionRevealed,
@@ -28,12 +29,13 @@ import {
 const SAMPLES = resolve(dirname(fileURLToPath(import.meta.url)), '../../../contracts/samples');
 const read = (file: string): unknown => JSON.parse(readFileSync(join(SAMPLES, file), 'utf8'));
 
-// The question-set DTOs travel only between services (never to the browser), so the client has
-// no parser for them; `client-*` samples are bodies the client sends; every other sample is a
-// STOMP frame body the server sends.
+// The question-set DTOs and the `minnal.match.completed` event travel only between services
+// (never to the browser), so the client has no parser for them; `client-*` samples are bodies the
+// client sends; every other sample is a STOMP frame body the server sends.
+const SERVER_ONLY = new Set(['enums.json', 'match-completed.json']);
 const SERVER_MESSAGES = readdirSync(SAMPLES).filter(
   (file) =>
-    file.endsWith('.json') && file !== 'enums.json' && !file.startsWith('question-set-') && !file.startsWith('client-'),
+    file.endsWith('.json') && !SERVER_ONLY.has(file) && !file.startsWith('question-set-') && !file.startsWith('client-'),
 );
 
 describe('contracts/samples', () => {
@@ -58,6 +60,7 @@ describe('contracts/samples', () => {
         'snapshot-forfeited.json',
         'participant-forfeited.json',
         'match-aborted.json',
+        'match-ended.json',
       ]),
     );
   });
@@ -291,5 +294,29 @@ describe('parsers reject what the contract does not allow', () => {
 
   it('an unknown abort reason is ignored', () => {
     expect(parseMatchAborted({ reason: 'BORED' })).toBeNull();
+  });
+  const ended = (read('match-ended.json') as Record<string, unknown>).payload as Record<string, unknown>;
+
+  it('match-ended.json: a private message with no seq; the payload parses with missing fields as null', () => {
+    const message = parseServerMessage(read('match-ended.json'))!;
+    expect(message.seq).toBeUndefined();
+    expect(message.refSeq).toBeUndefined();
+    const payload = parseMatchEnded(message.payload)!;
+    expect(payload.participants.map((p) => p.placement)).toEqual([1, 2]);
+    expect(payload.questions).toHaveLength(3);
+    expect(payload.questions[0]!.attribution).toBe('Kerala PSC 2019, Q 14');
+    expect(payload.questions[1]!.attribution).toBeNull();
+    expect(payload.questions[1]!.textMl).toBeUndefined();
+    expect(payload.breakdown[0]!.answers[2]).toEqual({ pickedIndex: null, correct: false, responseMs: null, points: 0 });
+    expect(payload.breakdown.every((b) => b.answers.length === payload.questions.length)).toBe(true);
+  });
+
+  it.each([
+    ['a breakdown that does not line up with the questions', { ...ended, breakdown: [{ participantId: 'a', answers: [] }] }],
+    ['a placement of 0', { ...ended, participants: [{ ...(ended.participants as object[])[0], placement: 0 }] }],
+    ['a question without its answer', { ...ended, questions: [{ ...(ended.questions as object[])[0], answerIndex: undefined }] }],
+    ['an unknown source', { ...ended, questionSource: 'GPT' }],
+  ])('MATCH_ENDED payload: %s', (_, value) => {
+    expect(parseMatchEnded(value)).toBeNull();
   });
 });

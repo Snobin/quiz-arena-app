@@ -184,6 +184,11 @@ export const motion = {
   reducedChipFade: ms(motionTokens['reduced-chip-fade']),
   easingDefault: motionTokens['easing-default'],
   easingOvertake: motionTokens['easing-overtake'],
+  /**
+   * After the win takeover collapses, the results surface ignores taps for this long
+   * (EXPERIENCE.md › Results). A JS constant only: DESIGN.md has no CSS motion token for it.
+   */
+  resultsTapGuard: 400,
 } as const;
 
 /**

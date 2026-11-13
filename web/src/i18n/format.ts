@@ -11,3 +11,10 @@ export function formatNumber(value: number): string {
 export function formatSigned(value: number): string {
   return value > 0 ? `+${formatNumber(value)}` : formatNumber(value);
 }
+
+const TENTHS = new Intl.NumberFormat('en-IN', { numberingSystem: 'latn', minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+/** Always one decimal (response times): 4.0, 4.2, 12.5. */
+export function formatTenths(value: number): string {
+  return TENTHS.format(value);
+}

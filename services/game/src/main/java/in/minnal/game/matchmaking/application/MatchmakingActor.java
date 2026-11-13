@@ -219,7 +219,7 @@ final class MatchmakingActor implements AutoCloseable {
         // Begins the match: its lead-in gives the clients time to subscribe after MATCH_FOUND. Once
         // draining, no match may start (the shutdown waits only for matches already live).
         if (matches.start(new MatchSetup(matchId, mode, participants, humans, set.questions(), waits,
-                ratingsByParticipant, now)).isEmpty()) {
+                ratingsByParticipant, now, QuestionSource.BANK)).isEmpty()) {
             log.atWarn().addKeyValue("matchId", matchId).log("pairing dropped: draining");
             ServerMessage<?> draining = ServerMessage.error(ErrorCode.SERVER_DRAINING, null, now);
             for (Seeker human : pairing.humans()) {

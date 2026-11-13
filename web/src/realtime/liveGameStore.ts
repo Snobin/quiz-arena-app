@@ -3,6 +3,7 @@ import { createStore } from 'zustand/vanilla';
 import type {
   AnswerResult,
   ErrorCode,
+  MatchEndedPayload,
   MatchFoundPayload,
   Participant,
   QuestionRevealedPayload,
@@ -89,6 +90,11 @@ export type LiveMatch = {
   forfeited: string[];
   /** How the match ended for her, once it has; null while she is still playing. */
   outcome: MatchOutcome | null;
+  /**
+   * The MATCH_ENDED payload (Story 1.10): final standings, the asked questions and the breakdown.
+   * It may arrive before or after the last reveal, and after her own outcome (a forfeit or Leave).
+   */
+  ended: MatchEndedPayload | null;
 };
 
 export type LiveGameState = {
@@ -128,6 +134,7 @@ export function liveMatchFor(found: MatchFoundPayload): LiveMatch {
     reconnectDeadline: null,
     forfeited: [],
     outcome: null,
+    ended: null,
   };
 }
 

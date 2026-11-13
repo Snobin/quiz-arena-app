@@ -19,6 +19,7 @@ public enum MessageType {
     SCOREBOARD,
     /** Broadcast: the window closed; answer and results ({@link QuestionRevealedPayload}). */
     QUESTION_REVEALED,
+    /** Private, no {@code seq}: a completed match's standings, questions and breakdown ({@link MatchEndedPayload}). */
     MATCH_ENDED,
     /** Private, with {@code refSeq}: the match as it stands, in reply to {@code resync} ({@link SnapshotPayload}). */
     SNAPSHOT,

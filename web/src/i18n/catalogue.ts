@@ -268,6 +268,62 @@ export const catalogue = {
   },
   'match.reconnected': { ml: 'തിരിച്ചെത്തി, മാച്ച് തുടരുന്നു', en: "You're back in the match", signoff: ['ml', 'en'] },
   'results.title': { ml: 'ഫലം', en: 'Results', signoff: ['ml', 'en'] },
+  // Story 1.10: the results screen. Drafted in both languages; every entry awaits native review.
+  'result.winTitle': { ml: 'ജയിച്ചു!', en: 'You won!', signoff: ['ml', 'en'] },
+  'results.continue': { ml: 'തുടരുക', en: 'Continue', signoff: ['ml', 'en'] },
+  'results.heading.win': {
+    ml: 'നിങ്ങൾ ജയിച്ചു, {{you, number}} – {{them, number}}',
+    en: 'You won, {{you, number}} to {{them, number}}',
+    signoff: ['ml', 'en'],
+    params: { ml: { you: 3140, them: 2980 }, en: { you: 3140, them: 2980 } },
+  },
+  'results.heading.loss': {
+    ml: 'ഇത്തവണ നഷ്ടമായി, {{you, number}} – {{them, number}}',
+    en: 'You lost, {{you, number}} to {{them, number}}',
+    signoff: ['ml', 'en'],
+    params: { ml: { you: 2980, them: 3140 }, en: { you: 2980, them: 3140 } },
+  },
+  'results.heading.draw': {
+    ml: 'സമനില, {{you, number}} – {{them, number}}',
+    en: 'Draw, {{you, number}} to {{them, number}}',
+    signoff: ['ml', 'en'],
+    params: { ml: { you: 3140, them: 3140 }, en: { you: 3140, them: 3140 } },
+  },
+  'results.dots': { ml: 'ഓരോ ചോദ്യവും', en: 'Question by question', signoff: ['ml', 'en'] },
+  'results.dot.correct': {
+    ml: 'Q{{n, number}} ശരി',
+    en: 'Q{{n, number}} correct',
+    signoff: ['ml', 'en'],
+    params: { ml: { n: 3 }, en: { n: 3 } },
+  },
+  'results.dot.wrong': {
+    ml: 'Q{{n, number}} തെറ്റ്',
+    en: 'Q{{n, number}} wrong',
+    signoff: ['ml', 'en'],
+    params: { ml: { n: 3 }, en: { n: 3 } },
+  },
+  'results.dot.missed': {
+    ml: 'Q{{n, number}} ഉത്തരമില്ല',
+    en: 'Q{{n, number}} not answered',
+    signoff: ['ml', 'en'],
+    params: { ml: { n: 3 }, en: { n: 3 } },
+  },
+  'results.questionShort': { ml: 'Q{{n, number}}', en: 'Q{{n, number}}', signoff: ['ml', 'en'], params: { ml: { n: 3 }, en: { n: 3 } } },
+  // `seconds` comes preformatted with exactly one decimal (formatTenths): "4.0", "9.2".
+  'results.seconds': {
+    ml: '{{seconds}} സെ',
+    en: '{{seconds}} s',
+    signoff: ['ml', 'en'],
+    params: { ml: { seconds: '9.2' }, en: { seconds: '9.2' } },
+  },
+  'results.yours': { ml: 'നിങ്ങൾ:', en: 'You:', signoff: ['ml', 'en'] },
+  'results.answer': { ml: 'ശരി:', en: 'Answer:', signoff: ['ml', 'en'] },
+  'results.notAnswered': { ml: 'ഉത്തരം നൽകിയില്ല', en: 'not answered', signoff: ['ml', 'en'] },
+  'results.pending': {
+    ml: 'മാച്ച് ഇനിയും തുടരുന്നു; അവസാനിക്കുമ്പോൾ മുഴുവൻ ഫലം ഇവിടെ കാണാം',
+    en: 'The match is still going; the full results will show here when it ends',
+    signoff: ['ml', 'en'],
+  },
   'rooms.placeholder': {
     ml: 'റൂമുകൾ ഉടൻ വരുന്നു. ബാച്ചിനെ മുഴുവൻ ഒരുമിച്ച് കളിപ്പിക്കാം.',
     en: 'Rooms are coming soon. Your whole batch will play together here.',

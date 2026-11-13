@@ -3,6 +3,8 @@ package in.minnal.game.match.application;
 import in.minnal.contracts.internal.InternalQuestion;
 import in.minnal.contracts.realtime.AbortReason;
 import in.minnal.contracts.realtime.ErrorCode;
+import in.minnal.contracts.realtime.MatchEndedPayload;
+import in.minnal.contracts.realtime.MessageType;
 import in.minnal.contracts.realtime.ParticipantForfeitedPayload;
 import in.minnal.contracts.realtime.ParticipantKind;
 import in.minnal.contracts.realtime.QuestionRevealedPayload;
@@ -41,7 +43,10 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Timeline: {@code Begin} → lead-in → {@code QUESTION_STARTED} → window → close grace →
  * {@code QUESTION_REVEALED} → reveal hold → the next question … → after the last reveal the match
- * is {@code ENDED} and {@code onEnded} runs (on the actor thread), then the actor stops.
+ * is {@code ENDED}: each human with a live session gets her private {@code MATCH_ENDED}, the
+ * {@code minnal.match.completed} event is handed to the {@link MatchCompletedPublisher} (which
+ * returns at once; Story 1.10), then {@code onEnded} runs (on the actor thread) and the actor stops.
+ * An aborted or failed match sends neither.
  *
  * <p>Early close (AD-6, Story 1.11): as soon as every participant still in the match has an
  * accepted answer, the question closes at once (its deadline timer is cancelled) and follows the
@@ -70,6 +75,7 @@ public final class MatchActor implements AutoCloseable {
     private final Consumer<MatchActor> onEnded;
     private final Predicate<String> hasSession;
     private final Consumer<String> onForfeited;
+    private final MatchCompletedPublisher publisher;
     private final Actor<MatchEvent> actor;
     /** Armed timers, cancelled on {@link #close()} (which any thread may call). */
     private final Queue<Future<?>> pending = new ConcurrentLinkedQueue<>();
@@ -101,6 +107,18 @@ public final class MatchActor implements AutoCloseable {
     public MatchActor(MatchSetup setup, MatchState state, MatchSettings settings, Clock clock, MatchTimers timers,
             PlayerChannel channel, MatchBroadcaster broadcaster, BotBrain bots, MatchMetrics metrics,
             Consumer<MatchActor> onEnded, Predicate<String> hasSession, Consumer<String> onForfeited) {
+        this(setup, state, settings, clock, timers, channel, broadcaster, bots, metrics, onEnded, hasSession, onForfeited,
+                event -> { });
+    }
+
+    /**
+     * @param publisher where a completed match's {@code minnal.match.completed} goes; must return at once
+     */
+    public MatchActor(MatchSetup setup, MatchState state, MatchSettings settings, Clock clock, MatchTimers timers,
+            PlayerChannel channel, MatchBroadcaster broadcaster, BotBrain bots, MatchMetrics metrics,
+            Consumer<MatchActor> onEnded, Predicate<String> hasSession, Consumer<String> onForfeited,
+            MatchCompletedPublisher publisher) {
+        this.publisher = publisher;
         this.hasSession = hasSession;
         this.onForfeited = onForfeited;
         this.setup = setup;
@@ -399,10 +417,41 @@ public final class MatchActor implements AutoCloseable {
         }
         ended = true;
         try {
+            if (!failed && !aborted && state.q1Revealed()) {
+                completed();
+            }
+        } catch (RuntimeException e) {
+            log.atError().addKeyValue("matchId", matchId()).setCause(e).log("could not send the match results");
+        }
+        try {
             onEnded.accept(this);
         } finally {
             close();
         }
+    }
+
+    /**
+     * A completed match (Q1 revealed, then the final reveal or an all-gone finish): rank, send each
+     * human with a live session her private {@code MATCH_ENDED} (forfeited ones included), then hand
+     * {@code minnal.match.completed} to the publisher, which returns at once. A failed send to one
+     * player does not stop the others or the event.
+     */
+    private void completed() {
+        Instant endedAt = clock.instant();
+        MatchOutcome outcome = new MatchOutcome(setup, state.results());
+        ServerMessage<MatchEndedPayload> matchEnded = ServerMessage.aboutMatch(MessageType.MATCH_ENDED, matchId(),
+                endedAt, outcome.matchEnded());
+        for (String sub : setup.humans().keySet()) {
+            if (!hasSession.test(sub)) {
+                continue;
+            }
+            try {
+                channel.toPlayer(sub, matchEnded);
+            } catch (RuntimeException e) {
+                log.atWarn().addKeyValue("matchId", matchId()).setCause(e).log("could not send MATCH_ENDED to a player");
+            }
+        }
+        publisher.publish(outcome.completedEvent(endedAt));
     }
 
     /** The state, for tests that read it once the actor is idle or ended. */

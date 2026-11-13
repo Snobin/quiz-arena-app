@@ -550,4 +550,94 @@ class MatchStateTest {
         assertThat(payload.answered()).isEmpty();
         assertThat(payload.scores().getFirst().forfeited()).isTrue();
     }
+
+    /**
+     * Story 1.10: results over every asked question. Participant {@code i} answers right on the
+     * questions {@code q} with {@code q % n == i}, wrong otherwise, except the last participant (the
+     * bot) who never answers Q0; each answer arrives {@code 1 + i} seconds after the window opened.
+     */
+    @ParameterizedTest(name = "N = {0}")
+    @ValueSource(ints = {2, 5})
+    void resultsCarryScoreCorrectCountAnswersAndResponseTimes(int n) {
+        MatchState state = state(n);
+        Instant q1 = clock.instant();
+        for (int q = 0; q < 10; q++) {
+            Instant opened = clock.instant();
+            state.startQuestion(q, opened);
+            for (int i = 0; i < n; i++) {
+                if (i == n - 1 && q == 0) {
+                    continue;
+                }
+                int option = q % n == i ? answerOf(state) : wrongOf(state);
+                state.answer(id(state, i), q, option, opened.plusSeconds(1 + i), opened.plusSeconds(1 + i));
+            }
+            clock.advance(Duration.ofSeconds(15));
+            state.closeWindow(q, clock.instant());
+            clock.advance(Duration.ofSeconds(2));
+        }
+        MatchResults results = state.results();
+
+        assertThat(results.q1StartedAt()).isEqualTo(q1);
+        assertThat(state.q1StartedAt()).isEqualTo(q1);
+        assertThat(results.asked()).hasSize(10).extracting(InternalQuestion::questionId)
+                .containsExactlyElementsOf(IntStream.range(0, 10).mapToObj(q -> state.question(q).questionId()).toList());
+        assertThat(results.entries()).hasSize(n);
+        for (int i = 0; i < n; i++) {
+            MatchResults.Entry entry = results.entries().get(i);
+            int index = i;
+            long expectedCorrect = IntStream.range(0, 10).filter(q -> q % n == index).filter(q -> !(index == n - 1 && q == 0))
+                    .count();
+            assertThat(entry.participant().participantId()).isEqualTo(id(state, i));
+            assertThat(entry.correctCount()).as("participant %d", i).isEqualTo((int) expectedCorrect);
+            assertThat(entry.score()).isEqualTo(state.participants().get(i).score());
+            assertThat(entry.forfeited()).isFalse();
+            assertThat(entry.answers()).hasSize(10);
+            assertThat(entry.sub().isPresent()).isEqualTo(i < n - 1);
+            int expectedScore = 0;
+            for (int q = 0; q < 10; q++) {
+                if (i == n - 1 && q == 0) {
+                    assertThat(entry.answers().get(q)).isEmpty();
+                    continue;
+                }
+                RecordedAnswer answer = entry.answers().get(q).orElseThrow();
+                assertThat(answer.responseMs()).isEqualTo(1000L * (1 + i));
+                assertThat(answer.pickedIndex() == state.question(q).answerIndex()).isEqualTo(q % n == i);
+                expectedScore += answer.points();
+            }
+            assertThat(entry.score()).isEqualTo(expectedScore);
+        }
+    }
+
+    /** Story 1.10: after an all-gone finish only the questions that opened are in the results. */
+    @Test
+    void resultsAfterAnEarlyFinishListOnlyTheAskedQuestionsAndKeepTheForfeit() {
+        MatchState state = state(2);
+        for (int q = 0; q < 5; q++) {
+            state.startQuestion(q, clock.instant());
+            if (q < 4) {
+                answer(state, 0, q, answerOf(state));
+                state.closeWindow(q, clock.instant());
+            }
+        }
+        state.forfeit(id(state, 0), clock.instant());
+        state.finishNow(clock.instant());
+        MatchResults results = state.results();
+
+        assertThat(state.askedCount()).isEqualTo(5);
+        assertThat(results.asked()).hasSize(5);
+        MatchResults.Entry human = results.entries().get(0);
+        assertThat(human.forfeited()).isTrue();
+        assertThat(human.correctCount()).isEqualTo(4);
+        assertThat(human.answers()).hasSize(5);
+        assertThat(human.answers().get(4)).isEmpty();
+        assertThat(human.score()).isEqualTo(4 * 1000);
+        assertThat(results.entries().get(1).correctCount()).isZero();
+    }
+
+    @Test
+    void resultsBeforeQ1HaveNothingAsked() {
+        MatchState state = state(2);
+        assertThat(state.results().asked()).isEmpty();
+        assertThat(state.results().q1StartedAt()).isNull();
+    }
 }

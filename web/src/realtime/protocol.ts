@@ -192,6 +192,48 @@ export type ParticipantForfeitedPayload = { participantId: string; questionIndex
 /** MATCH_ABORTED (broadcast): the match ended without results. */
 export type MatchAbortedPayload = { reason: AbortReason };
 
+/** One participant's final standing in MATCH_ENDED; `placement` is the server's (shared on a tie: 1, 1, 3). */
+export type ResultParticipant = {
+  participantId: string;
+  displayName: string;
+  kind: ParticipantKind;
+  score: number;
+  correctCount: number;
+  forfeited: boolean;
+  placement: number;
+};
+
+/** An asked question in MATCH_ENDED, answer included. `attribution` is null when absent. */
+export type ResultQuestion = {
+  questionId: string;
+  version: number;
+  textMl?: string;
+  textEn?: string;
+  options: string[];
+  answerIndex: number;
+  explanation: string;
+  attribution: string | null;
+};
+
+/** One participant's answer to one asked question; `pickedIndex` and `responseMs` are null when she did not answer. */
+export type BreakdownAnswer = { pickedIndex: number | null; correct: boolean; responseMs: number | null; points: number };
+
+/** One participant's answers: `answers[i]` is her answer to `questions[i]`. */
+export type ParticipantBreakdown = { participantId: string; answers: BreakdownAnswer[] };
+
+/**
+ * MATCH_ENDED (private, no seq; Story 1.10): a completed match's standings, the asked questions
+ * and every participant's breakdown. Every correctness, point and placement is the server's.
+ */
+export type MatchEndedPayload = {
+  matchId: string;
+  mode: MatchMode;
+  questionSource: QuestionSource;
+  participants: ResultParticipant[];
+  questions: ResultQuestion[];
+  breakdown: ParticipantBreakdown[];
+};
+
 /** The client's answer body (`/app/match/{matchId}/answer`). The server stamps the time itself. */
 export type AnswerRequest = { questionIndex: number; optionIndex: number };
 
@@ -414,6 +456,58 @@ export function parseMatchAborted(value: unknown): MatchAbortedPayload | null {
   return { reason: value.reason };
 }
 
+export function parseResultParticipant(value: unknown): ResultParticipant | null {
+  if (!isObject(value)) return null;
+  const { participantId, displayName, kind, score, correctCount, forfeited, placement } = value;
+  if (!isString(participantId) || !isString(displayName) || !isParticipantKind(kind)) return null;
+  if (!isInt(score) || !isIndex(correctCount) || typeof forfeited !== 'boolean' || !isInt(placement) || placement < 1) return null;
+  return { participantId, displayName, kind, score, correctCount, forfeited, placement };
+}
+
+export function parseResultQuestion(value: unknown): ResultQuestion | null {
+  if (!isObject(value)) return null;
+  const view = parseQuestionView(value);
+  const { answerIndex, explanation, attribution } = value;
+  if (!view || !isOption(answerIndex) || !isString(explanation) || !isOptionalString(attribution)) return null;
+  return { ...view, answerIndex, explanation, attribution: attribution ?? null };
+}
+
+export function parseBreakdownAnswer(value: unknown): BreakdownAnswer | null {
+  if (!isObject(value)) return null;
+  const { pickedIndex, correct, responseMs, points } = value;
+  if (typeof correct !== 'boolean' || !isInt(points)) return null;
+  if (pickedIndex !== undefined && !isOption(pickedIndex)) return null;
+  if (responseMs !== undefined && !isIndex(responseMs)) return null;
+  return { pickedIndex: pickedIndex ?? null, correct, responseMs: responseMs ?? null, points };
+}
+
+export function parseMatchEnded(value: unknown): MatchEndedPayload | null {
+  if (!isObject(value)) return null;
+  const { matchId, mode, questionSource, participants, questions, breakdown } = value;
+  if (!isString(matchId) || !isMatchMode(mode) || !isQuestionSource(questionSource)) return null;
+  if (!Array.isArray(participants) || !Array.isArray(questions) || !Array.isArray(breakdown)) return null;
+  const parsedParticipants = participants.map(parseResultParticipant);
+  const parsedQuestions = questions.map(parseResultQuestion);
+  if (parsedParticipants.some((p) => p === null) || parsedQuestions.some((q) => q === null)) return null;
+  const parsedBreakdown: ParticipantBreakdown[] = [];
+  for (const entry of breakdown) {
+    if (!isObject(entry) || !isString(entry.participantId) || !Array.isArray(entry.answers)) return null;
+    // answers[i] lines up with questions[i].
+    if (entry.answers.length !== questions.length) return null;
+    const answers = entry.answers.map(parseBreakdownAnswer);
+    if (answers.some((a) => a === null)) return null;
+    parsedBreakdown.push({ participantId: entry.participantId, answers: answers as BreakdownAnswer[] });
+  }
+  return {
+    matchId,
+    mode,
+    questionSource,
+    participants: parsedParticipants as ResultParticipant[],
+    questions: parsedQuestions as ResultQuestion[],
+    breakdown: parsedBreakdown,
+  };
+}
+
 /** A frame body the client acts on. Anything else (unknown type, bad shape) is null. */
 export type Incoming =
   | { type: 'MATCH_FOUND'; message: ServerMessage; payload: MatchFoundPayload }
@@ -427,6 +521,7 @@ export type Incoming =
   | { type: 'SNAPSHOT'; message: ServerMessage; payload: SnapshotPayload }
   | { type: 'PARTICIPANT_FORFEITED'; message: ServerMessage; payload: ParticipantForfeitedPayload }
   | { type: 'MATCH_ABORTED'; message: ServerMessage; payload: MatchAbortedPayload }
+  | { type: 'MATCH_ENDED'; message: ServerMessage; payload: MatchEndedPayload }
   | { type: 'OTHER'; message: ServerMessage };
 
 /** Parses a frame body (JSON text) into what the client acts on. */
@@ -481,6 +576,10 @@ export function parseIncoming(body: string): Incoming | null {
     case 'MATCH_ABORTED': {
       const payload = parseMatchAborted(message.payload);
       return payload ? { type: 'MATCH_ABORTED', message, payload } : null;
+    }
+    case 'MATCH_ENDED': {
+      const payload = parseMatchEnded(message.payload);
+      return payload ? { type: 'MATCH_ENDED', message, payload } : null;
     }
     default:
       return { type: 'OTHER', message };

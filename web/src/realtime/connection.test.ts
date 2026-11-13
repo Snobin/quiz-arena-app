@@ -9,6 +9,7 @@ import {
   answerAccepted,
   answerAcceptedWithResult,
   matchAborted,
+  matchEnded,
   matchFound,
   participantForfeited,
   questionRevealed,
@@ -18,6 +19,7 @@ import {
   snapshot,
 } from '../test-utils/realtime.ts';
 import { createRealtime, GRACE_MS, LEAVE_TIMEOUT_MS, RESYNC_RETRY_MS, sameOriginUrl, type Realtime, type RealtimeEnv } from './connection.ts';
+import * as lastResult from './lastResult.ts';
 import { INITIAL_LIVE_GAME, liveGameStore } from './liveGameStore.ts';
 import { matchAnswer, matchLeave, matchResync, matchTopic, USER_PRIVATE_QUEUE } from './protocol.ts';
 
@@ -792,5 +794,78 @@ describe('reconnect, forfeit and leave (Story 1.9)', () => {
     last().deliver(serverError('NOT_IN_MATCH', matchId));
     expect(state().live).toMatchObject({ connection: 'live', phase: 'ended', outcome: { kind: 'aborted' } });
     expect(state().phase).toBe('found');
+  });
+});
+
+describe('MATCH_ENDED (Story 1.10)', () => {
+  beforeEach(() => {
+    window.sessionStorage.clear();
+  });
+
+  async function inMatch() {
+    await joinAndOpen();
+    const message = matchFound({ name: 'Minnal Bot', kind: 'BOT' });
+    last().deliver(message);
+    const { matchId, selfParticipantId: self, participants } = message.payload;
+    const opponent = participants.find((p) => p.participantId !== self)!.participantId;
+    return { matchId, self, opponent };
+  }
+
+  function ended(matchId: string, self: string, opponent: string, count = 2) {
+    const answers = Array.from({ length: count }, () => ({ pickedIndex: 0, correct: true, responseMs: 3000, points: 900 }));
+    return matchEnded(matchId, {
+      participants: [
+        { participantId: self, displayName: 'Guest 4821', kind: 'GUEST', score: 900 * count, correctCount: count, placement: 1 },
+        { participantId: opponent, displayName: 'Minnal Bot', kind: 'BOT', score: 0, correctCount: 0, placement: 2 },
+      ],
+      breakdown: { [self]: answers, [opponent]: answers.map(() => ({ correct: false, points: 0 })) },
+    });
+  }
+
+  it('is kept on the live match and in sessionStorage, whether before or after the last reveal', async () => {
+    const { matchId, self, opponent } = await inMatch();
+    const message = ended(matchId, self, opponent);
+    last().deliver(message);
+    expect(state().live!.ended).toEqual(expect.objectContaining({ matchId, questionSource: 'BANK' }));
+    expect(state().live!.ended!.breakdown[1]!.answers[0]).toEqual({ pickedIndex: null, correct: false, responseMs: null, points: 0 });
+    expect(state().live!.outcome).toBeNull();
+    const stored = lastResult.load();
+    expect(stored).toEqual({ matchId, selfId: self, payload: state().live!.ended });
+  });
+
+  it('arrives after her own forfeit and still lands (the minimal results upgrade in place)', async () => {
+    const { matchId, self, opponent } = await inMatch();
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 0, startedAt: Date.parse(SERVER_TIME) }));
+    realtime.leaveMatch();
+    last().deliverTopic(matchId, participantForfeited(matchId, 2, self));
+    expect(state().live!.outcome!.kind).toBe('left');
+    last().deliver(ended(matchId, self, opponent, 1));
+    expect(state().live!.ended!.matchId).toBe(matchId);
+    expect(state().live!.outcome!.kind).toBe('left');
+  });
+
+  it('for another match it is ignored', async () => {
+    const { self, opponent } = await inMatch();
+    last().deliver(ended('another-match', self, opponent));
+    expect(state().live!.ended).toBeNull();
+    expect(lastResult.load()).toBeNull();
+  });
+
+  it('a malformed MATCH_ENDED is ignored', async () => {
+    const { matchId, self, opponent } = await inMatch();
+    const message = ended(matchId, self, opponent);
+    message.payload.breakdown[0]!.answers.pop();
+    last().deliver(message);
+    expect(state().live!.ended).toBeNull();
+  });
+
+  it('the next MATCH_FOUND clears the stored result', async () => {
+    const { matchId, self, opponent } = await inMatch();
+    last().deliver(ended(matchId, self, opponent));
+    expect(lastResult.load()).not.toBeNull();
+    realtime.joinQuickMatch();
+    last().deliver(matchFound({ name: 'Minnal Bot', kind: 'BOT' }));
+    expect(lastResult.load()).toBeNull();
+    expect(state().live!.ended).toBeNull();
   });
 });

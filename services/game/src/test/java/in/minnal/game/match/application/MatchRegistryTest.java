@@ -55,7 +55,7 @@ class MatchRegistryTest {
 
     MatchRegistry registry(MatchSettings settings, MatchBroadcaster broadcasts) {
         return new MatchRegistry(participation, sessions, channel, broadcasts, Clock.systemUTC(), timers,
-                settings, bots, drain, meters);
+                settings, bots, drain, meters, event -> { });
     }
 
     MatchRegistry registry;
