@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import in.minnal.game.matchmaking.application.RatingCache;
+import in.minnal.game.platform.session.DeletedUsers;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -46,7 +47,8 @@ class RatingFeederRunnerTest {
     @Test
     void theConfigurationHasNoFeederWithoutValkeyAndStartsAndClosesOneWithIt() {
         ApplicationContextRunner runner = new ApplicationContextRunner().withUserConfiguration(RatingFeederConfiguration.class)
-                .withBean(JsonMapper.class, () -> JsonMapper.builder().build()).withBean(RatingCache.class, RatingCache::new);
+                .withBean(JsonMapper.class, () -> JsonMapper.builder().build()).withBean(RatingCache.class, RatingCache::new)
+                .withBean(DeletedUsers.class, DeletedUsers::new);
 
         runner.run(context -> {
             assertThat(context).hasNotFailed();
@@ -59,7 +61,7 @@ class RatingFeederRunnerTest {
         when(template.opsForStream()).thenReturn(streams);
         runner.withBean(StringRedisTemplate.class, () -> template).run(context -> {
             assertThat(context).hasNotFailed();
-            assertThat(context).hasSingleBean(RatingFeederRunner.class);
+            assertThat(context.getBeansOfType(RatingFeederRunner.class)).hasSize(2); // rating cache and deleted users
         }); // closing the context closes the runner (destroyMethod)
     }
 }

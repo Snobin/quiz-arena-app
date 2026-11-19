@@ -3,7 +3,7 @@ package in.minnal.game.platform.infrastructure.valkey;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** Runs {@link RatingFeeder#pollOnce} on its own daemon thread, so the match and matchmaking actors never wait on Valkey. */
+/** Runs {@link StreamFeeder#pollOnce} on its own daemon thread, so the match and matchmaking actors never wait on Valkey. */
 final class RatingFeederRunner implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(RatingFeederRunner.class);
@@ -13,7 +13,11 @@ final class RatingFeederRunner implements AutoCloseable {
     private final Thread thread;
     private volatile boolean running = true;
 
-    RatingFeederRunner(RatingFeeder feeder) {
+    RatingFeederRunner(StreamFeeder feeder) {
+        this(feeder, "rating-cache-feeder");
+    }
+
+    RatingFeederRunner(StreamFeeder feeder, String threadName) {
         feeder.announce();
         this.thread = new Thread(() -> {
             while (running) {
@@ -32,7 +36,7 @@ final class RatingFeederRunner implements AutoCloseable {
                     }
                 }
             }
-        }, "rating-cache-feeder");
+        }, threadName);
         thread.setDaemon(true);
         thread.start();
     }

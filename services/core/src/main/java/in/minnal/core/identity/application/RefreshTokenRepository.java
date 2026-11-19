@@ -19,4 +19,10 @@ public interface RefreshTokenRepository {
 
     /** Revokes every not-yet-revoked token of the family. */
     void revokeFamily(UUID familyId, Instant at);
+
+    /** Revokes every not-yet-revoked token of the user (account deletion). */
+    void revokeAllForUser(UUID userId, Instant at);
+
+    /** The family of the token with this hash, or empty when unknown. */
+    Optional<UUID> familyOf(String tokenHash);
 }

@@ -90,6 +90,14 @@ public class RefreshTokenService {
         });
     }
 
+    /** Sign-out: revokes the presented token's whole family. An unknown or missing token is a no-op. */
+    public void revokeFamilyOf(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return;
+        }
+        tx.executeWithoutResult(status -> tokens.familyOf(hash(raw)).ifPresent(family -> tokens.revokeFamily(family, clock.instant())));
+    }
+
     private String create(UUID userId, UUID familyId, Instant now) {
         byte[] bytes = new byte[32];
         random.nextBytes(bytes);

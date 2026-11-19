@@ -45,6 +45,18 @@ class JdbcRefreshTokenRepository implements RefreshTokenRepository {
                 .param("at", Timestamp.from(at)).param("family", familyId).update();
     }
 
+    @Override
+    public void revokeAllForUser(UUID userId, Instant at) {
+        jdbc.sql("UPDATE refresh_token SET revoked_at = :at WHERE user_id = :user AND revoked_at IS NULL")
+                .param("at", Timestamp.from(at)).param("user", userId).update();
+    }
+
+    @Override
+    public Optional<UUID> familyOf(String tokenHash) {
+        return jdbc.sql("SELECT family_id FROM refresh_token WHERE token_hash = :hash").param("hash", tokenHash)
+                .query(UUID.class).optional();
+    }
+
     private static Instant instant(Timestamp ts) {
         return ts == null ? null : ts.toInstant();
     }

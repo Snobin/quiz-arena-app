@@ -62,6 +62,19 @@ public class FakeLeaderboardStore implements LeaderboardStore {
     }
 
     @Override
+    public void remove(java.util.Collection<String> keys, String member) {
+        for (String key : keys) {
+            Map<String, Double> board = boards.get(key);
+            if (board != null) {
+                board.remove(member);
+                if (board.isEmpty()) {
+                    boards.remove(key);
+                }
+            }
+        }
+    }
+
+    @Override
     public void setMarker(String key, String value) {
         markers.add(key);
     }

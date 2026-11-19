@@ -42,6 +42,21 @@ class ValkeyLeaderboardStoreIntegrationTest {
     }
 
     @Test
+    void removeTakesTheMemberOutOfEveryListedKeyAndIgnoresMissingKeys() {
+        redis.delete(List.of("test:lb:rm1", "test:lb:rm2", "test:lb:rm3"));
+        store.set("test:lb:rm1", "gone", 10, null);
+        store.set("test:lb:rm1", "stays", 5, null);
+        store.set("test:lb:rm2", "gone", 7, null);
+
+        store.remove(List.of("test:lb:rm1", "test:lb:rm2", "test:lb:rm3"), "gone");
+        store.remove(List.of("test:lb:rm1"), "gone"); // again: a no-op
+
+        assertThat(store.score("test:lb:rm1", "gone")).isEmpty();
+        assertThat(store.score("test:lb:rm2", "gone")).isEmpty();
+        assertThat(store.score("test:lb:rm1", "stays")).contains(5.0);
+    }
+
+    @Test
     void topIsHighestFirstAndRanksCountOnlyStrictlyHigherScoresIncludingNegatives() {
         String key = "test:lb:ranks";
         redis.delete(key);

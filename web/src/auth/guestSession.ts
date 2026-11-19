@@ -1,5 +1,5 @@
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
-import { deviceLanguage, type Language } from '../i18n/language.ts';
+import { deviceLanguage, preferredLanguage, type Language } from '../i18n/language.ts';
 
 /**
  * The guest session (AD-9, Story 1.5): a guest JWT from core-service, kept on the device and
@@ -91,7 +91,7 @@ function browserEnv(): GuestSessionEnv {
     storage: () => window.localStorage,
     fetch: () => window.fetch.bind(window),
     now: () => Date.now(),
-    language: () => deviceLanguage(),
+    language: () => preferredLanguage(),
     online: () => navigator.onLine !== false,
     setTimer: (callback, ms) => setTimeout(callback, ms),
     clearTimer: (handle) => clearTimeout(handle),

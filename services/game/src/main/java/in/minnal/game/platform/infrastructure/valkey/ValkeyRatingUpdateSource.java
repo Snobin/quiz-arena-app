@@ -19,14 +19,21 @@ class ValkeyRatingUpdateSource implements RatingUpdateSource {
 
     private final StreamOperations<String, Object, Object> streams;
 
+    private final String stream;
+
     ValkeyRatingUpdateSource(StreamOperations<String, Object, Object> streams) {
+        this(streams, RatingFeeder.STREAM);
+    }
+
+    ValkeyRatingUpdateSource(StreamOperations<String, Object, Object> streams, String stream) {
         this.streams = streams;
+        this.stream = stream;
     }
 
     @Override
     public Batch read(String afterId) {
         List<MapRecord<String, Object, Object>> records = streams.read(StreamReadOptions.empty().count(COUNT).block(BLOCK),
-                StreamOffset.create(RatingFeeder.STREAM, ReadOffset.from(afterId)));
+                StreamOffset.create(stream, ReadOffset.from(afterId)));
         if (records == null || records.isEmpty()) {
             return new Batch(afterId, List.of());
         }
@@ -36,7 +43,7 @@ class ValkeyRatingUpdateSource implements RatingUpdateSource {
             if (payload != null) {
                 payloads.add(String.valueOf(payload));
             } else {
-                log.warn("skipping a {} entry {} with no payload field", RatingFeeder.STREAM, record.getId().getValue());
+                log.warn("skipping a {} entry {} with no payload field", stream, record.getId().getValue());
             }
         }
         return new Batch(records.getLast().getId().getValue(), payloads);

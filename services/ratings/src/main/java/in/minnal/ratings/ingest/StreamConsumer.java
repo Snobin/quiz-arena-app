@@ -1,6 +1,7 @@
 package in.minnal.ratings.ingest;
 
 import in.minnal.contracts.events.MatchCompletedEvent;
+import in.minnal.contracts.events.UserDeletedEvent;
 import in.minnal.ratings.directory.PlayerDirectory;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -14,7 +15,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The {@code ratings-service} consumer group on {@code minnal.match.completed} and
- * {@code minnal.user.profileUpdated} (AD-15). Each poll first reclaims pending entries (a restart, or an entry
+ * {@code minnal.user.profileUpdated} and {@code minnal.user.deleted} (AD-15). Each poll first reclaims pending entries (a restart, or an entry
  * that failed) and then reads new ones; an entry is acknowledged only after its handler committed. An entry that
  * fails stays pending and is retried; when its delivery count reaches {@link #MAX_DELIVERIES} it is copied to
  * {@code minnal.deadletter} with its source, id, event id and last error, acknowledged, logged and counted.
@@ -29,11 +30,12 @@ public class StreamConsumer {
     static final int BATCH = 50;
 
     private static final Logger log = LoggerFactory.getLogger(StreamConsumer.class);
-    private static final List<String> STREAMS = List.of(MatchCompletedEvent.STREAM, PROFILE_UPDATED);
+    private static final List<String> STREAMS = List.of(MatchCompletedEvent.STREAM, PROFILE_UPDATED, UserDeletedEvent.STREAM);
 
     private final StreamClient streams;
     private final MatchCompletedHandler matches;
     private final PlayerDirectory directory;
+    private final UserDeletedHandler deletions;
     private final JsonMapper json;
     private final Counter deadLettered;
     private final String consumerName;
@@ -41,11 +43,12 @@ public class StreamConsumer {
     private final java.util.Set<String> groupsReady = new java.util.HashSet<>();
     private boolean firstPoll = true;
 
-    public StreamConsumer(StreamClient streams, MatchCompletedHandler matches, PlayerDirectory directory, JsonMapper json,
-                          MeterRegistry meters, String consumerName, Duration reclaimIdle) {
+    public StreamConsumer(StreamClient streams, MatchCompletedHandler matches, PlayerDirectory directory, UserDeletedHandler deletions,
+                          JsonMapper json, MeterRegistry meters, String consumerName, Duration reclaimIdle) {
         this.streams = streams;
         this.matches = matches;
         this.directory = directory;
+        this.deletions = deletions;
         this.json = json;
         this.deadLettered = Counter.builder(DEAD_LETTER_COUNTER).description("Stream entries given up on").register(meters);
         this.consumerName = consumerName;
@@ -94,6 +97,8 @@ public class StreamConsumer {
             }
             if (MatchCompletedEvent.STREAM.equals(entry.stream())) {
                 matches.handle(json.readValue(payload, MatchCompletedEvent.class));
+            } else if (UserDeletedEvent.STREAM.equals(entry.stream())) {
+                deletions.handle(json.readValue(payload, UserDeletedEvent.class));
             } else {
                 directory.apply(payload);
             }

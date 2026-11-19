@@ -16,7 +16,7 @@ import tools.jackson.databind.json.JsonMapper;
  * <p>Known limitation: the stream is capped at about 100,000 entries, so a long-inactive player whose last update was
  * trimmed reads as 1200 after a game-service restart.
  */
-public class RatingFeeder {
+public class RatingFeeder implements StreamFeeder {
 
     public static final String STREAM = "minnal.rating.updated";
     static final String START = "0-0";
@@ -34,12 +34,14 @@ public class RatingFeeder {
     }
 
     /** Logs the replay limitation once, at start. */
+    @Override
     public void announce() {
         log.warn("rating cache replays {} from the start; the stream is capped at about 100000 entries, so a player whose last "
                 + "update was trimmed reads as 1200 after a restart (known limitation)", STREAM);
     }
 
     /** Reads and applies one batch; returns how many updates were applied. */
+    @Override
     public int pollOnce() {
         RatingUpdateSource.Batch batch = source.read(position);
         int applied = 0;

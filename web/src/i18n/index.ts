@@ -1,11 +1,11 @@
 import i18n, { type i18n as I18n } from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { resourcesFor } from './catalogue.ts';
-import { LANGUAGES, brandLanguage, deviceLanguage, type Language } from './language.ts';
+import { LANGUAGES, brandLanguage, preferredLanguage, type Language } from './language.ts';
 import { formatNumber, formatSigned } from './format.ts';
 
 export { pendingSignoff, catalogue, type CatalogueKey, type MessageKey } from './catalogue.ts';
-export { LANGUAGES, brandLanguage, deviceLanguage, type Language } from './language.ts';
+export { LANGUAGES, brandLanguage, deviceLanguage, preferredLanguage, storeLanguage, type Language } from './language.ts';
 export { formatNumber, formatSigned } from './format.ts';
 
 /**
@@ -30,7 +30,7 @@ const resources = Object.fromEntries(
 // Guests start in the device language: Malayalam when any preferred language is ml*, else English.
 void i18n.use(initReactI18next).init({
   resources,
-  lng: deviceLanguage(),
+  lng: preferredLanguage(),
   supportedLngs: [...LANGUAGES],
   load: 'languageOnly',
   // TBD strings in one language fall back to the other; any other language resolves to ml

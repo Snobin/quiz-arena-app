@@ -15,6 +15,7 @@ import { MatchmakingScreen } from './screens/matchmaking/MatchmakingScreen.tsx';
 import { RanksScreen } from './screens/RanksScreen.tsx';
 import { ResultsScreen } from './screens/results/ResultsScreen.tsx';
 import { RoomsScreen } from './screens/RoomsScreen.tsx';
+import { SettingsScreen } from './screens/SettingsScreen.tsx';
 import { SignInPrompt } from './screens/SignInPrompt.tsx';
 import { AppShell } from './shell/AppShell.tsx';
 import { navigate, usePathname, useRouterSync } from './shell/router.ts';
@@ -51,6 +52,7 @@ const ROUTES: Record<string, ComponentType> = {
   '/rooms': RoomsScreen,
   '/ranks': RanksScreen,
   '/me': MeScreen,
+  '/settings': SettingsScreen,
   '/sign-in': SignInPrompt,
   '/matchmaking': MatchmakingScreen,
   '/match': LiveMatchScreen,

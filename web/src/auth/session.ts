@@ -1,6 +1,6 @@
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
 import { apiUrl } from '../config/apiBase.ts';
-import { deviceLanguage, type Language } from '../i18n/language.ts';
+import { deviceLanguage, preferredLanguage, type Language } from '../i18n/language.ts';
 import { guestSession as appGuestSession, type GuestSession } from './guestSession.ts';
 import { tokenClaim } from './jwt.ts';
 
@@ -20,6 +20,8 @@ import { tokenClaim } from './jwt.ts';
  */
 
 export const REFRESH_PATH = '/api/core/v1/auth/refresh';
+export const LOGOUT_PATH = '/api/core/v1/auth/logout';
+export const ME_PATH = '/api/core/v1/me';
 /** The CSRF guard header core requires on refresh (Story 2.2), with the PWA's Origin. */
 export const GUARD_HEADER = 'X-Minnal-Auth';
 /** One refresh at a time across every tab of this origin, so a rotated cookie is never replayed by a sibling. */
@@ -67,7 +69,7 @@ function browserEnv(): SessionEnv {
     fetch: () => window.fetch.bind(window),
     lock: (task) => (navigator.locks ? navigator.locks.request(REFRESH_LOCK, task) : task()),
     now: () => Date.now(),
-    language: () => deviceLanguage(),
+    language: () => preferredLanguage(),
     setTimer: (callback, ms) => setTimeout(callback, ms),
     clearTimer: (handle) => clearTimeout(handle),
     onWake: (callback) => {
@@ -105,6 +107,10 @@ export type Session = {
   confirmSignedIn: () => Promise<boolean>;
   getAccessToken: () => Promise<string>;
   invalidate: (accessToken: string) => void;
+  /** Sign out: revokes the refresh family (best effort), drops the access token and becomes a guest. */
+  signOut: () => Promise<void>;
+  /** `DELETE /api/core/v1/me`; on 204 she is signed out to a guest. False when the server did not delete the account. */
+  deleteAccount: () => Promise<boolean>;
   /** Test helper: forget everything and go back to the initial state. */
   reset: () => void;
 };
@@ -167,6 +173,16 @@ export function createSession(env: SessionEnv = browserEnv()): Session {
     const body: unknown = await response.json();
     if (!isAccessToken(body)) throw new Error('refresh response is malformed');
     return { accessToken: body.accessToken, expiresAt: body.expiresAt };
+  }
+
+  /** `POST /auth/logout`: clears the refresh cookie server-side. Any failure is ignored; the client drops its token anyway. */
+  async function revokeCookie(): Promise<void> {
+    try {
+      const fetchImpl = env.fetch?.() ?? fetch;
+      await fetchImpl(apiUrl(LOGOUT_PATH), { method: 'POST', credentials: 'include', headers: { [GUARD_HEADER]: '1' } });
+    } catch {
+      // Offline: the cookie stays until the next online refresh says otherwise.
+    }
   }
 
   /** One refresh call at a time (single-flight). */
@@ -250,6 +266,36 @@ export function createSession(env: SessionEnv = browserEnv()): Session {
         return;
       }
       guest.invalidate(accessToken);
+    },
+    async signOut() {
+      await revokeCookie();
+      becomeGuest();
+    },
+    async deleteAccount() {
+      try {
+        const fetchImpl = env.fetch?.() ?? fetch;
+        const attempt = async () => {
+          const bearer = await this.getAccessToken();
+          return fetchImpl(apiUrl(ME_PATH), {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${bearer}`, Accept: 'application/json' },
+          });
+        };
+        let response = await attempt();
+        if (response.status === 401) {
+          // An expired token, or the account is already gone: a refresh tells which.
+          const outcome = await refresh();
+          if (outcome === 'ok') response = await attempt();
+          else if (outcome === 'error') return false;
+          else response = new Response(null, { status: 204 }); // the session is gone: nothing left to delete
+        }
+        if (response.status !== 204) return false;
+      } catch {
+        return false;
+      }
+      await revokeCookie();
+      becomeGuest();
+      return true;
     },
     reset() {
       clearTimer();

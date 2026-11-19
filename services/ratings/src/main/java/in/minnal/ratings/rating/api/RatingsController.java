@@ -57,14 +57,20 @@ class RatingsController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new MyMatches(repository.matches(user, limit)));
     }
 
-    private static UUID registered(MinnalPrincipal principal) {
+    private UUID registered(MinnalPrincipal principal) {
         if (principal == null || !(principal.hasRole(Role.USER) || principal.hasRole(Role.ADMIN))) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sign in with an account to see your ratings.");
         }
+        UUID user;
         try {
-            return UUID.fromString(principal.sub());
+            user = UUID.fromString(principal.sub());
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sign in with an account to see your ratings.");
         }
+        // A deleted account holding an unexpired token is signed out (401), not forbidden.
+        if (repository.tombstoned(user)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sign in again.");
+        }
+        return user;
     }
 }

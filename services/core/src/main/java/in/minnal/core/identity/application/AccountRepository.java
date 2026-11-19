@@ -14,4 +14,7 @@ public interface AccountRepository {
 
     /** An ACTIVE account by id. */
     Optional<Account> findActive(UUID id);
+
+    /** Marks an ACTIVE account DELETED and unlinks its identities; false when it was not ACTIVE. */
+    boolean markDeleted(UUID id);
 }
