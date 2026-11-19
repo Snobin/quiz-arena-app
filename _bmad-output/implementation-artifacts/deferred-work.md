@@ -113,3 +113,13 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-1-sign-in-with-google.md`
   summary: Show the sign-in outcome note on any returnTo surface and strip a stale `?signin=` on registered Home.
   evidence: Only guest Home and the Sign-in prompt mount SignInOutcomeNote.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-2-refresh-token-rotation-and-session-continuity.md`
+  summary: Consider a short grace window for a just-rotated token, so a lost refresh response or a benign double use does not sign the player out.
+  evidence: The spec forbids a grace window; a lost 200 or a concurrent loser is treated as reuse and revokes the family, including the winner's new token.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-2-refresh-token-rotation-and-session-continuity.md`
+  summary: Purge rotated, revoked and expired refresh_token rows and add an expires_at index; add a V2-to-V3 migration backfill test.
+  evidence: Each refresh inserts a row and none is deleted; the backfill is only exercised against an empty table.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-2-refresh-token-rotation-and-session-continuity.md`
+  summary: Add a timeout around the lock-held refresh fetch, and treat a 403 from the guard as a configuration error rather than a transient one.
+  evidence: A hung request holds the Web Lock for every tab; a 403 is retried every 30 s with no visible signal.

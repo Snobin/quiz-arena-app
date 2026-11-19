@@ -281,6 +281,26 @@ class MatchReconnectFlowTest extends GameIntegrationTest {
         assertThatThrownBy(() -> connect(expired)).isInstanceOf(IllegalStateException.class);
     }
 
+    @Test
+    void anOpenSessionIsNotClosedWhenItsAccessTokenExpires() throws Exception {
+        String anjuSub = newSub();
+        String shortLivedSub = newSub();
+        Instant now = Instant.now();
+        String shortLived = JWKS.token(c -> c.subject(shortLivedSub).issueTime(Date.from(now))
+                .expirationTime(Date.from(now.plusSeconds(2))));
+        StompTestClient anju = client(anjuSub);
+        Started match = start(List.of(anjuSub), true);
+        anju.subscribe(Destinations.matchTopic(match.matchId()));
+        anju.nextBroadcast("QUESTION_STARTED");
+        try (StompTestClient expiring = connect(shortLived)) {
+            Thread.sleep(3_000); // the token is now expired; the socket was authenticated at CONNECT
+            expiring.send(to(match.matchId(), "resync"));
+            // The server still answers on the open session (she is not in this match, which proves it processed the frame).
+            expiring.error("NOT_IN_MATCH");
+        }
+        anju.send(to(match.matchId(), "leave"));
+    }
+
     /** The next topic frame of {@code type}, skipping others (the bot's scoreboards, for one). */
     static JsonNode nextOf(StompTestClient client, String type) {
         for (int i = 0; i < 20; i++) {

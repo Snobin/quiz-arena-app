@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { jsonResponse, utf8Jwt } from '../test-utils/guest.ts';
-import { REFRESH_BEFORE_EXPIRY_MS, REFRESH_PATH, RETRY_AFTER_FAILURE_MS, createSession, type SessionEnv } from './session.ts';
+import {
+  GUARD_HEADER,
+  REFRESH_LOCK,
+  REFRESH_BEFORE_EXPIRY_MS,
+  REFRESH_PATH,
+  RETRY_AFTER_FAILURE_MS,
+  createSession,
+  type SessionEnv,
+} from './session.ts';
 
 const HOUR = 3600_000;
 const NOW = Date.parse('2026-11-19T10:00:00Z');
@@ -39,6 +47,7 @@ function setup(...replies: Refresh[]) {
 const ok = (name = 'Anju', expiresInMs = HOUR): Refresh => () =>
   jsonResponse({ accessToken: utf8Jwt({ name }), expiresAt: new Date(NOW + expiresInMs).toISOString() });
 const unauthorized: Refresh = () => jsonResponse({ status: 401 }, 401, 'application/problem+json');
+const sessionEnded: Refresh = () => jsonResponse({ status: 401, reason: 'session_ended' }, 401, 'application/problem+json');
 const networkDown: Refresh = () => Promise.reject(new TypeError('Failed to fetch'));
 
 beforeEach(() => {
@@ -56,10 +65,11 @@ describe('session', () => {
     expect(session.store.getState().status).toBe('booting');
     await session.ready();
 
-    expect(session.store.getState()).toEqual({ status: 'registered', name: 'അഞ്ജു' });
+    expect(session.store.getState()).toEqual({ status: 'registered', name: 'അഞ്ജു', signedOut: false });
     const init = fetchMock.mock.calls[0]![1]!;
     expect(init.method).toBe('POST');
     expect(init.credentials).toBe('include');
+    expect((init.headers as Record<string, string>)[GUARD_HEADER]).toBe('1');
     expect(JSON.parse(String(init.body))).toEqual({ lang: 'en' });
     expect(guest.start).not.toHaveBeenCalled();
     expect(await session.getAccessToken()).toMatch(/^[\w-]+\.[\w-]+\.c2ln$/);
@@ -73,7 +83,7 @@ describe('session', () => {
     session.start();
     await session.ready();
 
-    expect(session.store.getState()).toEqual({ status: 'guest', name: null });
+    expect(session.store.getState()).toEqual({ status: 'guest', name: null, signedOut: false });
     expect(guest.start).toHaveBeenCalledOnce();
     expect(await session.getAccessToken()).toBe('guest-token');
   });
@@ -155,5 +165,132 @@ describe('session', () => {
     await session.ready();
     expect(await session.confirmSignedIn()).toBe(true);
     expect(session.store.getState().status).toBe('registered');
+  });
+
+  it('says "session ended" (once, as a guest) when the server ends the session, and nothing for a plain no-cookie boot', async () => {
+    const ended = setup(ok(), sessionEnded);
+    ended.session.start();
+    await ended.session.ready();
+    ended.timers.at(-1)!.callback();
+    await vi.waitFor(() => expect(ended.session.store.getState()).toEqual({ status: 'guest', name: null, signedOut: true }));
+
+    const plain = setup(unauthorized);
+    plain.session.start();
+    await plain.session.ready();
+    expect(plain.session.store.getState().signedOut).toBe(false);
+
+    const bootEnded = setup(sessionEnded);
+    bootEnded.session.start();
+    await bootEnded.session.ready();
+    expect(bootEnded.session.store.getState()).toEqual({ status: 'guest', name: null, signedOut: true });
+  });
+
+  it('refreshes before handing out an expired token (a reconnect never uses a dead one)', async () => {
+    const { session, fetchMock, advance } = setup(ok('Anju', HOUR), ok('Anju', 2 * HOUR));
+    session.start();
+    await session.ready();
+    advance(HOUR + 1000);
+
+    const token = await session.getAccessToken();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(token).toMatch(/^[\w-]+\.[\w-]+\.c2ln$/);
+  });
+});
+
+describe('two tabs', () => {
+  /** A fake server that rotates: only the current cookie works, and replaying an old one revokes the family. */
+  function cookieJar() {
+    let current = 'cookie-0';
+    let counter = 0;
+    let revoked = false;
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const fetchFor = async () => {
+      const presented = current; // the browser's shared cookie jar at send time
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight -= 1;
+      if (revoked || presented !== current) {
+        revoked = true;
+        return jsonResponse({ status: 401, reason: 'session_ended' }, 401, 'application/problem+json');
+      }
+      counter += 1;
+      current = `cookie-${counter}`;
+      return jsonResponse({ accessToken: utf8Jwt({ name: 'Anju' }), expiresAt: new Date(NOW + HOUR).toISOString() });
+    };
+    return { fetchFor, maxInFlight: () => maxInFlight, revoked: () => revoked };
+  }
+
+  function tab(jar: ReturnType<typeof cookieJar>, lock: SessionEnv['lock']) {
+    return createSession({
+      fetch: () => ((_input: RequestInfo | URL, _init?: RequestInit) => jar.fetchFor()) as unknown as typeof fetch,
+      now: () => NOW,
+      language: () => 'en',
+      lock,
+      guest: { start: vi.fn(), getAccessToken: vi.fn(async () => 'guest'), invalidate: vi.fn() },
+    });
+  }
+
+  it('serialises refresh through one shared lock, so only one call is in flight and none is a replay', async () => {
+    const jar = cookieJar();
+    let tail: Promise<unknown> = Promise.resolve();
+    const sharedLock: SessionEnv['lock'] = (task) => {
+      const run = tail.then(task, task);
+      tail = run.catch(() => undefined);
+      return run;
+    };
+    const a = tab(jar, sharedLock);
+    const b = tab(jar, sharedLock);
+    a.start();
+    b.start();
+    await Promise.all([a.ready(), b.ready()]);
+
+    expect(jar.maxInFlight()).toBe(1);
+    expect(jar.revoked()).toBe(false);
+    expect(a.store.getState().status).toBe('registered');
+    expect(b.store.getState().status).toBe('registered');
+  });
+
+  it('without the lock the second tab replays the rotated cookie and the family is revoked (the control)', async () => {
+    const jar = cookieJar();
+    const a = tab(jar, undefined);
+    const b = tab(jar, undefined);
+    a.start();
+    b.start();
+    await Promise.all([a.ready(), b.ready()]);
+
+    expect(jar.maxInFlight()).toBe(2);
+    expect(jar.revoked()).toBe(true);
+  });
+});
+
+describe('the browser Web Lock wiring', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('takes the shared minnal-refresh lock around the refresh call', async () => {
+    const request = vi.fn(async (_name: string, task: () => Promise<unknown>) => task());
+    vi.stubGlobal('navigator', { ...navigator, locks: { request }, onLine: true, language: 'en' });
+    const fetchMock = vi.fn(async () => jsonResponse({ accessToken: utf8Jwt({ name: 'Anju' }), expiresAt: new Date(Date.now() + HOUR).toISOString() }));
+    vi.stubGlobal('fetch', fetchMock);
+    const session = createSession(); // the default browser env
+    session.start();
+    await session.ready();
+
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0]![0]).toBe(REFRESH_LOCK);
+    expect(session.store.getState().status).toBe('registered');
+    session.reset();
+  });
+
+  it('still refreshes when the browser has no Web Locks', async () => {
+    vi.stubGlobal('navigator', { ...navigator, locks: undefined, onLine: true, language: 'en' });
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ accessToken: utf8Jwt({ name: 'Anju' }), expiresAt: new Date(Date.now() + HOUR).toISOString() })));
+    const session = createSession();
+    session.start();
+    await session.ready();
+    expect(session.store.getState().status).toBe('registered');
+    session.reset();
   });
 });
