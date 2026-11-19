@@ -24,6 +24,7 @@ import {
   snapshot,
 } from '../test-utils/realtime.ts';
 import { createRealtime, GRACE_MS, LEAVE_TIMEOUT_MS, REJOIN_TIMEOUT_MS, RESYNC_RETRY_MS, sameOriginUrl, type Realtime, type RealtimeEnv } from './connection.ts';
+import { session } from '../auth/session.ts';
 import * as lastResult from './lastResult.ts';
 import * as liveMatchId from './liveMatchId.ts';
 import { INITIAL_LIVE_GAME, liveGameStore } from './liveGameStore.ts';
@@ -836,7 +837,19 @@ describe('MATCH_ENDED (Story 1.10)', () => {
     expect(state().live!.ended!.breakdown[1]!.answers[0]).toEqual({ pickedIndex: null, correct: false, responseMs: null, points: 0 });
     expect(state().live!.outcome).toBeNull();
     const stored = lastResult.load();
-    expect(stored).toEqual({ matchId, selfId: self, payload: state().live!.ended });
+    // Played as a guest (the session was not registered): marked so the prompt can be rebuilt after a reload.
+    expect(stored).toEqual({ matchId, selfId: self, payload: state().live!.ended, guest: true });
+  });
+
+  it('marks the stored result as a registered player’s own when she was signed in at MATCH_ENDED', async () => {
+    session.store.setState({ status: 'registered', name: 'Anju', signedOut: false });
+    try {
+      const { matchId, self, opponent } = await inMatch();
+      last().deliver(ended(matchId, self, opponent));
+      expect(lastResult.load()?.guest).toBe(false);
+    } finally {
+      session.reset();
+    }
   });
 
   it('arrives after her own forfeit and still lands (the minimal results upgrade in place)', async () => {
@@ -985,6 +998,7 @@ describe('rematch (Story 1.10 part 2)', () => {
   it('after a reload the stored result says who she is, and Rematch opens the socket', async () => {
     const { matchId, self } = await ended();
     lastResult.save({
+      guest: true,
       matchId,
       selfId: self,
       payload: {

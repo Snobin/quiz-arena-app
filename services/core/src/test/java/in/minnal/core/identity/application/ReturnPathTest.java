@@ -10,7 +10,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 class ReturnPathTest {
 
     @ParameterizedTest
-    @ValueSource(strings = {"/", "/me", "/rooms?x=1#top", "/results?match=a%2Fb"})
+    @ValueSource(strings = {"/", "/me", "/results", "/rooms?x=1#top", "/results?match=a%2Fb"})
     void keepsRelativeInAppPaths(String path) {
         assertThat(ReturnPath.safe(path)).isEqualTo(path);
     }

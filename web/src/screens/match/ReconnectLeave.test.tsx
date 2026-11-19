@@ -450,7 +450,7 @@ describe('rejoin after a reload', () => {
         breakdown: { me: [{ pickedIndex: 0, correct: true, responseMs: 2000, points: 900 }], bot: [{ correct: false, points: 0 }] },
       }).payload,
     )!;
-    lastResult.save({ matchId, selfId: 'me', payload: ended });
+    lastResult.save({ matchId, selfId: 'me', payload: ended, guest: true });
     await rejoining('/match', matchId);
     act(() => socket().deliver(serverError('NOT_IN_MATCH', matchId)));
     await waitFor(() => expect(window.location.pathname).toBe('/results'));

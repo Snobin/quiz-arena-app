@@ -2,7 +2,8 @@
 title: 'Story 2.4: Guest results sign-in prompt'
 type: 'feature'
 created: '2026-11-19'
-status: 'ready-for-dev'
+status: 'done'
+baseline_commit: 'ae4ded676d59a2cbfdea196a39160b4dd79a3ed9'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -57,9 +58,9 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `web` `lastResult` + `connection` -- store `guest`; tests
-- [ ] `web` `GuestResultsPrompt` + `ResultsScreen` -- card, variants, registered-after-guest note and Play again, booting handling; i18n and tests (every variant, reload, no card for a registered match, sign-in URL, no match data in any request)
-- [ ] `core` test -- no mapping or request field accepts a match, score or guest id
+- [x] `web` `lastResult` + `connection` -- store `guest`; tests
+- [x] `web` `GuestResultsPrompt` + `ResultsScreen` -- card, variants, registered-after-guest note and Play again, booting handling; i18n and tests (every variant, reload, no card for a registered match, sign-in URL, no match data in any request)
+- [x] `core` test -- no mapping or request field accepts a match, score or guest id
 
 **Acceptance Criteria:**
 - Given the epics.md Story 2.4 criteria, when the web app and core test run, then each passes.
@@ -67,9 +68,27 @@ context:
 
 ## Implementation Notes
 
+- `LastResult.guest` is written by the connection module from `session.store.getState().status !== 'registered'`; a live arrival decides from the session now, a reload from the stored flag.
+- `GuestResultsPrompt` shows only when the match was a guest match and the session is `guest`; `booting` shows nothing, so nothing flashes.
+- The bot variant wins over win, loss and draw when the rival is a BOT. The loss variant names the winner (the opponent) as its own run after a space.
+- The results test that asserted no "rating" text anywhere now excludes the prompt (it is not a delta).
+- `NoGuestResultEndpointTest` pins core's `/api/` mappings to a closed list and checks request-body record fields; the 2.1 to 2.3 endpoints are in the list.
+- The three lazy dev-fixture waits got a 5 s timeout: they flaked at the 1 s default on a cold dynamic import.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| Finding | Verdict | Route | Evidence |
+|---|---|---|---|
+| A live arrival re-derived guest from the current session, so a later drop to guest showed the prompt on a registered player's own match | high | patch (fixed) | the guest decision is fixed when the results open, from the flag stored at MATCH_ENDED; test added |
+| A stored entry from before the flag silently read as registered; `save` defaulted the flag | medium | patch (fixed) | legacy entries read as null (unknown) and fall back to the session; `guest` is now required in `save`; tests added |
+| The Quick Match copy showed for other modes; loss text could render with no name | medium | patch (fixed) | prompt only for `QUICK` results with a named opponent; Battle Room test added |
+| No test of a registered match through the connection writer, of the live arrival path, or of the Malayalam variants | medium | patch (fixed) | tests added |
+| API-surface test weak (only `/api/`, substring blocklist, non-record bodies, null path condition) | medium | patch (fixed) | all served paths on a closed list, whole-word match, nested records, non-record bodies rejected |
+| `returnTo=/results` acceptance by core not pinned | low | patch (fixed) | vector added to `ReturnPathTest` |
+| Play again with an incomplete profile; stale rematch state; double tap; bidi isolation of names; the title as a promise; guest button label; forfeit copy | low | defer/false | profile gate already holds setup first; a reload clears rematch state; the page navigates away on tap; copy is flagged for sign-off |
+| Lazy dev-fixture waits raised to 5 s | low | false | a cold dynamic import took longer than the 1 s default under parallel load; only those three waits changed |
 
 ## Verification
 

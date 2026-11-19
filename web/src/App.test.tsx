@@ -42,12 +42,12 @@ describe('App', () => {
   it.each(['/__design', '/__design/'])('renders the dev design fixture at %s', async (path) => {
     expect(import.meta.env.DEV).toBe(true);
     renderApp(path);
-    expect(await screen.findByRole('heading', { level: 1, name: /design fixture/ })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: /design fixture/ }, { timeout: 5000 })).toBeInTheDocument();
   });
 
   it.each(['/__shaping', '/__shaping/'])('renders the dev shaping fixture at %s', async (path) => {
     renderApp(path);
-    expect(await screen.findByRole('heading', { level: 1, name: 'Malayalam shaping fixture' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Malayalam shaping fixture' }, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getAllByText(/ക്ഷ/).length).toBeGreaterThan(0);
     expect(document.querySelector('.font-face-live')).not.toBeNull();
   });

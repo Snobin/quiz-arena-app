@@ -54,7 +54,7 @@ development_status:
   2-1-sign-in-with-google: done
   2-2-refresh-token-rotation-and-session-continuity: done
   2-3-profile-setup-and-editing: done
-  2-4-guest-results-sign-in-prompt: backlog
+  2-4-guest-results-sign-in-prompt: review
   2-5-ratings-service-computes-elo: backlog
   2-6-rating-change-and-match-history: backlog
   2-7-leaderboards: backlog
