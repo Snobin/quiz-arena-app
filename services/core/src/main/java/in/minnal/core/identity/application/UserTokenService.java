@@ -40,10 +40,15 @@ public class UserTokenService {
         this.clock = clock;
     }
 
-    public GuestToken issue(Account account, String lang) {
+    /** Throws {@link UnsupportedLanguageException} unless {@code lang} is ml or en. Callers that rotate a token check first. */
+    public static void requireSupported(String lang) {
         if (lang == null || !LANGUAGES.contains(lang)) {
             throw new UnsupportedLanguageException();
         }
+    }
+
+    public GuestToken issue(Account account, String lang) {
+        requireSupported(lang);
         Instant issuedAt = clock.instant().truncatedTo(ChronoUnit.SECONDS);
         Instant expiresAt = issuedAt.plus(TTL);
         List<String> roles = settings.isAdminEmail(account.email())

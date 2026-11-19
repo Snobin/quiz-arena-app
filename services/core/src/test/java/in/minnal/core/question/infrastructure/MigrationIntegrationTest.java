@@ -29,8 +29,9 @@ class MigrationIntegrationTest extends PostgresIntegrationTest {
         assertThat(columns("user_identity")).containsExactlyInAnyOrderEntriesOf(Map.of(
                 "provider", "text", "provider_subject", "text", "user_id", "uuid", "created_at", "timestamp with time zone"));
         assertThat(columns("refresh_token")).containsExactlyInAnyOrderEntriesOf(Map.of(
-                "id", "uuid", "user_id", "uuid", "token_hash", "text",
-                "expires_at", "timestamp with time zone", "created_at", "timestamp with time zone"));
+                "id", "uuid", "user_id", "uuid", "family_id", "uuid", "token_hash", "text",
+                "expires_at", "timestamp with time zone", "created_at", "timestamp with time zone",
+                "rotated_at", "timestamp with time zone", "revoked_at", "timestamp with time zone"));
     }
 
     @Test

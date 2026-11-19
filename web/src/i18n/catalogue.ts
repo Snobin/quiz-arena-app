@@ -113,6 +113,7 @@ export const catalogue = {
     en: "Sign-in didn't work. Please try again.",
     signoff: ['ml', 'en'],
   },
+  'auth.signInAgain': { ml: 'വീണ്ടും സൈൻ ഇൻ ചെയ്യൂ', en: 'Please sign in again', signoff: ['ml', 'en'] },
   'auth.signingIn': { ml: 'സൈൻ ഇൻ ചെയ്യുന്നു…', en: 'Signing you in…', signoff: ['ml', 'en'] },
   'auth.signedInAs': {
     ml: 'സൈൻ ഇൻ ചെയ്തു: {{name}}',

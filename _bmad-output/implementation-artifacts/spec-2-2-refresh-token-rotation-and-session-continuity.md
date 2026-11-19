@@ -2,7 +2,8 @@
 title: 'Story 2.2: Refresh token rotation and session continuity'
 type: 'feature'
 created: '2026-11-19'
-status: 'ready-for-dev'
+status: 'done'
+baseline_commit: 'c2b6b3a5769ebf2a19a1031779b6dbfeea6d9cd2'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -59,11 +60,11 @@ core = `services/core/src/main/java/in/minnal/core/identity`.
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `core` Flyway `V3` + repository/service -- family, rotation in one locking transaction, family revoke
-- [ ] `core/identity/api` -- Origin and `X-Minnal-Auth` guard (403), rotation, reuse handling with `userId` log, `session_ended` 401, CORS header
-- [ ] `core` tests -- every I/O row; concurrent double use yields one success; update 2.1 refresh tests and schema assertions
-- [ ] `web` session -- header, Web Locks (with fallback), `session_ended` to guest plus note, i18n, tests including two simulated tabs and expired-token reconnect
-- [ ] `game` test -- live session survives token expiry
+- [x] `core` Flyway `V3` + repository/service -- family, rotation in one locking transaction, family revoke
+- [x] `core/identity/api` -- Origin and `X-Minnal-Auth` guard (403), rotation, reuse handling with `userId` log, `session_ended` 401, CORS header
+- [x] `core` tests -- every I/O row; concurrent double use yields one success; update 2.1 refresh tests and schema assertions
+- [x] `web` session -- header, Web Locks (with fallback), `session_ended` to guest plus note, i18n, tests including two simulated tabs and expired-token reconnect
+- [x] `game` test -- live session survives token expiry
 
 **Acceptance Criteria:**
 - Given the epics.md Story 2.2 criteria, when core and web run against the fake provider, then each passes.
@@ -71,9 +72,26 @@ core = `services/core/src/main/java/in/minnal/core/identity`.
 
 ## Implementation Notes
 
+- `RefreshTokenService.rotate` returns `Rotated | Reuse | Rejected`; the reuse revoke commits because the 401 is a normal return, not an exception.
+- The 401 for a presented cookie carries `reason: "session_ended"` (also for expired, revoked, unknown and DELETED), so the client can tell it from a no-cookie boot.
+- The Origin check uses `AuthSettings.corsOrigins()` (the PWA origin plus `CORS_ALLOWED_ORIGINS`).
+- Web: `signedOut` lives in the session store; Web Locks falls back to a direct call. The two-tab test includes a no-lock control that shows the replay.
+- The expired-token reconnect needed no change: `open` awaits `session.getAccessToken`, which refreshes first.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| Finding | Verdict | Route | Evidence |
+|---|---|---|---|
+| Unsupported `lang` returned 400 after the token was rotated, so the next refresh looked like reuse | high | patch (fixed) | `lang` validated before `rotate`; test shows a 400 leaves the token unrotated |
+| DELETED-account test passed through the reuse path | medium | patch (fixed) | follows from the fix above; test now asserts `session_ended`, cookie cleared and nothing revoked |
+| Present-but-blank cookie got a plain 401 with no clearing | low | patch (fixed) | only a missing cookie is plain now; blank is a dead session |
+| Browser Web Lock wiring untested | medium | patch (fixed) | tests stub `navigator.locks` (lock name asserted) and its absence |
+| Lost refresh response or concurrent loser revokes the family (no grace window) | medium | defer | the spec forbids a grace window; trade-off recorded in `deferred-work.md` |
+| Purge/index for refresh_token rows; migration backfill not tested on rows | low | defer | housekeeping and deploy-time risk |
+| No timeout on the lock-held fetch; 403 treated as transient | low | defer | recorded in `deferred-work.md` |
+| Concurrent test is probabilistic; reuse log not asserted; `Rotation.Reuse.userId` unused; thin note; game test sleeps 3 s | low | defer/false | smoke-level coverage is adequate; no user-visible harm |
 
 ## Verification
 

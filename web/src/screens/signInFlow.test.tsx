@@ -24,12 +24,12 @@ function renderApp(path: string) {
 }
 
 /** The refresh endpoint answers as a registered player named `name`, or 401 when `name` is null. */
-function stubRefresh(name: string | null) {
+function stubRefresh(name: string | null, reason?: string) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
     if (url === REFRESH_PATH) {
       return name === null
-        ? jsonResponse({ status: 401 }, 401, 'application/problem+json')
+        ? jsonResponse({ status: 401, ...(reason ? { reason } : {}) }, 401, 'application/problem+json')
         : jsonResponse({ accessToken: utf8Jwt({ name }), expiresAt: new Date(Date.now() + 3600_000).toISOString() });
     }
     if (url === GUEST_TOKEN_PATH) return jsonResponse(guestTokenBody('en'));
@@ -39,8 +39,8 @@ function stubRefresh(name: string | null) {
   return fetchMock;
 }
 
-async function boot(name: string | null) {
-  const fetchMock = stubRefresh(name);
+async function boot(name: string | null, reason?: string) {
+  const fetchMock = stubRefresh(name, reason);
   session.start();
   await session.ready();
   return fetchMock;
@@ -140,6 +140,22 @@ describe('boot with a stale cookie', () => {
     expect(within(screen.getByTestId('sign-in-nudge')).getByRole('button', { name: 'Continue with Google' })).not.toHaveAttribute(
       'aria-disabled',
     );
+  });
+});
+
+describe('session ended', () => {
+  it('asks her to sign in again when the server ended the session', async () => {
+    await boot(null, 'session_ended');
+    renderApp('/');
+    expect(await screen.findByTestId('session-ended')).toHaveTextContent('Please sign in again');
+    expect(screen.getByRole('heading', { level: 1, name: 'Playing as guest' })).toBeInTheDocument();
+  });
+
+  it('says nothing after an ordinary boot with no cookie', async () => {
+    await boot(null);
+    renderApp('/');
+    await screen.findByRole('heading', { level: 1, name: 'Playing as guest' });
+    expect(screen.queryByTestId('session-ended')).toBeNull();
   });
 });
 

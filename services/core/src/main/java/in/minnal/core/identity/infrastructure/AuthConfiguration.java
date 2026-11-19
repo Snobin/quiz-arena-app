@@ -61,7 +61,7 @@ public class AuthConfiguration {
                 registry.addMapping("/api/core/v1/auth/refresh")
                         .allowedOrigins(settings.corsOrigins().toArray(String[]::new))
                         .allowedMethods("POST")
-                        .allowedHeaders("Content-Type")
+                        .allowedHeaders("Content-Type", "X-Minnal-Auth")
                         .allowCredentials(true)
                         .maxAge(600);
             }

@@ -11,44 +11,91 @@ import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Refresh tokens (AD-9): 30 days, random, stored only as a SHA-256 hash. This story does not rotate:
- * a token is reused until it expires (Story 2.2 adds rotation and reuse detection).
+ * Refresh tokens (AD-9): 30 days, random, stored only as a SHA-256 hash, rotated on every use inside a
+ * family. Presenting a token that was already rotated is reuse (a copy was stolen, or replayed): the
+ * whole family is revoked. Rotation locks the presented row, so two concurrent uses cannot both win.
  */
 @Service
 public class RefreshTokenService {
 
     public static final Duration TTL = Duration.ofDays(30);
+    private static final Logger log = LoggerFactory.getLogger(RefreshTokenService.class);
+
+    /** The outcome of presenting a refresh token. */
+    public sealed interface Rotation {
+        /** Valid: {@code refreshToken} is the replacement to set as the cookie. */
+        record Rotated(Account account, String refreshToken) implements Rotation {
+        }
+
+        /** An already-rotated token was presented; its family is now revoked. */
+        record Reuse(UUID userId) implements Rotation {
+        }
+
+        /** Unknown, expired, revoked, or the account is gone. */
+        record Rejected() implements Rotation {
+        }
+    }
 
     private final RefreshTokenRepository tokens;
     private final AccountRepository accounts;
+    private final TransactionTemplate tx;
     private final Clock clock;
     private final SecureRandom random = new SecureRandom();
 
-    public RefreshTokenService(RefreshTokenRepository tokens, AccountRepository accounts, Clock clock) {
+    public RefreshTokenService(RefreshTokenRepository tokens, AccountRepository accounts, TransactionTemplate tx, Clock clock) {
         this.tokens = tokens;
         this.accounts = accounts;
+        this.tx = tx;
         this.clock = clock;
     }
 
-    /** A new refresh token for {@code userId}; the returned raw value is never stored. */
+    /** A first token for {@code userId}, starting a new family (a sign-in); the raw value is never stored. */
     public String issue(UUID userId) {
+        return create(userId, UUID.randomUUID(), clock.instant());
+    }
+
+    public Rotation rotate(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return new Rotation.Rejected();
+        }
+        return tx.execute(status -> {
+            Instant now = clock.instant();
+            Optional<RefreshTokenRepository.Stored> found = tokens.lockByHash(hash(raw));
+            if (found.isEmpty()) {
+                return new Rotation.Rejected();
+            }
+            RefreshTokenRepository.Stored stored = found.get();
+            if (stored.rotatedAt() != null) {
+                tokens.revokeFamily(stored.familyId(), now);
+                log.atWarn().addKeyValue("event", "refresh_reuse").addKeyValue("userId", stored.userId().toString())
+                        .log("refresh token reuse detected, family revoked");
+                return new Rotation.Reuse(stored.userId());
+            }
+            if (stored.revokedAt() != null || !stored.expiresAt().isAfter(now)) {
+                return new Rotation.Rejected();
+            }
+            Optional<Account> account = accounts.findActive(stored.userId());
+            if (account.isEmpty()) {
+                return new Rotation.Rejected();
+            }
+            String next = create(stored.userId(), stored.familyId(), now);
+            tokens.markRotated(stored.id(), now);
+            return new Rotation.Rotated(account.get(), next);
+        });
+    }
+
+    private String create(UUID userId, UUID familyId, Instant now) {
         byte[] bytes = new byte[32];
         random.nextBytes(bytes);
         String raw = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-        Instant now = clock.instant();
-        tokens.save(UUID.randomUUID(), userId, hash(raw), now.plus(TTL), now);
+        tokens.save(UUID.randomUUID(), userId, familyId, hash(raw), now.plus(TTL), now);
         return raw;
-    }
-
-    /** The ACTIVE account a valid, unexpired refresh token belongs to; empty for unknown/expired/deleted. */
-    public Optional<Account> resolve(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return Optional.empty();
-        }
-        return tokens.findUserId(hash(raw), clock.instant()).flatMap(accounts::findActive);
     }
 
     static String hash(String raw) {

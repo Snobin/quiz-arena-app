@@ -18,15 +18,34 @@ class JdbcRefreshTokenRepository implements RefreshTokenRepository {
     }
 
     @Override
-    public void save(UUID id, UUID userId, String tokenHash, Instant expiresAt, Instant createdAt) {
-        jdbc.sql("INSERT INTO refresh_token (id, user_id, token_hash, expires_at, created_at) VALUES (:id, :user, :hash, :exp, :at)")
-                .param("id", id).param("user", userId).param("hash", tokenHash)
+    public void save(UUID id, UUID userId, UUID familyId, String tokenHash, Instant expiresAt, Instant createdAt) {
+        jdbc.sql("INSERT INTO refresh_token (id, user_id, family_id, token_hash, expires_at, created_at) VALUES (:id, :user, :family, :hash, :exp, :at)")
+                .param("id", id).param("user", userId).param("family", familyId).param("hash", tokenHash)
                 .param("exp", Timestamp.from(expiresAt)).param("at", Timestamp.from(createdAt)).update();
     }
 
     @Override
-    public Optional<UUID> findUserId(String tokenHash, Instant now) {
-        return jdbc.sql("SELECT user_id FROM refresh_token WHERE token_hash = :hash AND expires_at > :now")
-                .param("hash", tokenHash).param("now", Timestamp.from(now)).query(UUID.class).optional();
+    public Optional<Stored> lockByHash(String tokenHash) {
+        return jdbc.sql("SELECT id, user_id, family_id, expires_at, rotated_at, revoked_at FROM refresh_token WHERE token_hash = :hash FOR UPDATE")
+                .param("hash", tokenHash)
+                .query((rs, n) -> new Stored(rs.getObject("id", UUID.class), rs.getObject("user_id", UUID.class),
+                        rs.getObject("family_id", UUID.class), instant(rs.getTimestamp("expires_at")),
+                        instant(rs.getTimestamp("rotated_at")), instant(rs.getTimestamp("revoked_at"))))
+                .optional();
+    }
+
+    @Override
+    public void markRotated(UUID id, Instant at) {
+        jdbc.sql("UPDATE refresh_token SET rotated_at = :at WHERE id = :id").param("at", Timestamp.from(at)).param("id", id).update();
+    }
+
+    @Override
+    public void revokeFamily(UUID familyId, Instant at) {
+        jdbc.sql("UPDATE refresh_token SET revoked_at = :at WHERE family_id = :family AND revoked_at IS NULL")
+                .param("at", Timestamp.from(at)).param("family", familyId).update();
+    }
+
+    private static Instant instant(Timestamp ts) {
+        return ts == null ? null : ts.toInstant();
     }
 }

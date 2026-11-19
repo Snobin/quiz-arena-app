@@ -107,7 +107,10 @@ Registered players sign in with Google by a full-page redirect (OpenID Connect a
 no popup, One Tap or iframe). core-service verifies the ID token, creates or resumes the account, sets a
 30-day refresh cookie (`httpOnly`, `Secure`, `SameSite=Strict`, `Path=/api/core/v1/auth`) and sends the
 browser to the PWA's `/auth/return`. The PWA trades the cookie for a 1 h access JWT held in memory only
-(`POST /api/core/v1/auth/refresh`); with no cookie, or a stale one, it carries on as a guest.
+(`POST /api/core/v1/auth/refresh`); with no cookie, or a stale one, it carries on as a guest. Every refresh
+rotates the cookie inside a token family; replaying an already-rotated token revokes the whole family
+(the player is asked to sign in again). Refresh needs the PWA `Origin` and an `X-Minnal-Auth: 1` header, and the
+web app takes a Web Lock so open tabs refresh one at a time.
 
 To create the credentials: in Google Cloud Console open APIs & Services, then Credentials, then Create
 credentials, then OAuth client ID, type **Web application**. Add the callback as an Authorized redirect URI:

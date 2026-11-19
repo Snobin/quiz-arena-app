@@ -104,12 +104,34 @@ class GoogleSignInIntegrationTest extends PostgresIntegrationTest {
         return jdbc.sql("SELECT count(*) FROM " + table).query(Long.class).single();
     }
 
-    SignedJWT refresh(String refreshCookie, String lang) throws Exception {
-        var request = post("/api/core/v1/auth/refresh").contentType("application/json")
+    /** A refresh request as the PWA sends it: its Origin and the custom guard header. */
+    static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder guarded(
+            org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request) {
+        return request.header("Origin", WEB).header("X-Minnal-Auth", "1");
+    }
+
+    record Refreshed(SignedJWT jwt, String cookie) {
+    }
+
+    /** One refresh with {@code refreshCookie}: the new access token and the rotated cookie. */
+    Refreshed rotate(String refreshCookie, String lang) throws Exception {
+        var request = guarded(post("/api/core/v1/auth/refresh")).contentType("application/json")
                 .content("{\"lang\":\"" + lang + "\"}").cookie(new Cookie("minnal_refresh", refreshCookie));
-        String body = mvc.perform(request).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        String token = com.jayway.jsonpath.JsonPath.read(body, "$.accessToken");
-        return SignedJWT.parse(token);
+        MockHttpServletResponse response = mvc.perform(request).andExpect(status().isOk()).andReturn().getResponse();
+        String token = com.jayway.jsonpath.JsonPath.read(response.getContentAsString(), "$.accessToken");
+        return new Refreshed(SignedJWT.parse(token), refreshCookieValue(response));
+    }
+
+    SignedJWT refresh(String refreshCookie, String lang) throws Exception {
+        return rotate(refreshCookie, lang).jwt();
+    }
+
+    MockHttpServletResponse refreshExpecting(String cookie, int expectedStatus) throws Exception {
+        var request = guarded(post("/api/core/v1/auth/refresh")).contentType("application/json").content("{\"lang\":\"en\"}");
+        if (cookie != null) {
+            request.cookie(new Cookie("minnal_refresh", cookie));
+        }
+        return mvc.perform(request).andExpect(status().is(expectedStatus)).andReturn().getResponse();
     }
 
     static String refreshCookieValue(MockHttpServletResponse response) {
@@ -262,33 +284,40 @@ class GoogleSignInIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     void refreshWithAnUnknownExpiredOrMissingCookieIs401() throws Exception {
-        mvc.perform(post("/api/core/v1/auth/refresh").contentType("application/json").content("{\"lang\":\"en\"}"))
+        mvc.perform(guarded(post("/api/core/v1/auth/refresh")).contentType("application/json").content("{\"lang\":\"en\"}"))
                 .andExpect(status().isUnauthorized());
-        mvc.perform(post("/api/core/v1/auth/refresh").contentType("application/json").content("{\"lang\":\"en\"}")
+        mvc.perform(guarded(post("/api/core/v1/auth/refresh")).contentType("application/json").content("{\"lang\":\"en\"}")
                 .cookie(new Cookie("minnal_refresh", "never-issued"))).andExpect(status().isUnauthorized());
 
         Started started = startAndPrepare("/", Map.of());
         String raw = refreshCookieValue(callback(started, started.param("state"), "auth-code"));
         jdbc.sql("UPDATE refresh_token SET expires_at = now() - interval '1 second'").update();
-        MockHttpServletResponse denied = mvc.perform(post("/api/core/v1/auth/refresh").contentType("application/json")
+        MockHttpServletResponse denied = mvc.perform(guarded(post("/api/core/v1/auth/refresh")).contentType("application/json")
                 .content("{\"lang\":\"en\"}").cookie(new Cookie("minnal_refresh", raw))).andExpect(status().isUnauthorized())
                 .andReturn().getResponse();
         // The dead cookie is cleared so the browser stops sending it.
         assertThat(denied.getHeader(HttpHeaders.SET_COOKIE)).contains("minnal_refresh=", "Max-Age=0", "Path=/api/core/v1/auth", "HttpOnly");
         assertThat(denied.getHeader(HttpHeaders.CACHE_CONTROL)).contains("no-store");
+        assertThat(denied.getContentAsString()).contains("\"reason\":\"session_ended\"");
         // No cookie sent, none to clear.
-        assertThat(mvc.perform(post("/api/core/v1/auth/refresh")).andReturn().getResponse().getHeader(HttpHeaders.SET_COOKIE)).isNull();
+        assertThat(mvc.perform(guarded(post("/api/core/v1/auth/refresh"))).andReturn().getResponse().getHeader(HttpHeaders.SET_COOKIE)).isNull();
     }
 
     @Test
     void refreshForADeletedAccountIs401AndAnUnsupportedLanguageIs400() throws Exception {
         Started started = startAndPrepare("/", Map.of());
         String raw = refreshCookieValue(callback(started, started.param("state"), "auth-code"));
-        mvc.perform(post("/api/core/v1/auth/refresh").contentType("application/json").content("{\"lang\":\"fr\"}")
+        mvc.perform(guarded(post("/api/core/v1/auth/refresh")).contentType("application/json").content("{\"lang\":\"fr\"}")
                 .cookie(new Cookie("minnal_refresh", raw))).andExpect(status().isBadRequest());
+        // The 400 consumed nothing: the token is not rotated and the family is intact.
+        assertThat(jdbc.sql("SELECT count(*) FROM refresh_token WHERE rotated_at IS NOT NULL OR revoked_at IS NOT NULL")
+                .query(Long.class).single()).isZero();
         jdbc.sql("UPDATE app_user SET status = 'DELETED'").update();
-        mvc.perform(post("/api/core/v1/auth/refresh").contentType("application/json").content("{\"lang\":\"en\"}")
-                .cookie(new Cookie("minnal_refresh", raw))).andExpect(status().isUnauthorized());
+        MockHttpServletResponse gone = refreshExpecting(raw, 401);
+        assertThat(gone.getContentAsString()).contains("session_ended");
+        assertThat(gone.getHeader(HttpHeaders.SET_COOKIE)).contains("Max-Age=0");
+        // A deleted account is a plain rejection, not a reuse: nothing was revoked.
+        assertThat(jdbc.sql("SELECT count(*) FROM refresh_token WHERE revoked_at IS NOT NULL").query(Long.class).single()).isZero();
     }
 
     @Test
@@ -314,19 +343,98 @@ class GoogleSignInIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void refreshIsNotRotatedAndAdminIsGrantedOnlyForAVerifiedListedEmail() throws Exception {
+    void adminIsGrantedOnlyForAVerifiedListedEmailAndRecomputedOnEveryRefresh() throws Exception {
         Started started = startAndPrepare("/", Map.of("email", "ADMIN@example.com"));
         String raw = refreshCookieValue(callback(started, started.param("state"), "auth-code"));
 
-        assertThat(refresh(raw, "en").getJWTClaimsSet().getStringListClaim(MinnalClaims.ROLES)).containsExactly("USER", "ADMIN");
-        assertThat(refresh(raw, "en").getJWTClaimsSet().getStringListClaim(MinnalClaims.ROLES)).containsExactly("USER", "ADMIN");
-        assertThat(count("refresh_token")).isEqualTo(1);
+        Refreshed first = rotate(raw, "en");
+        assertThat(first.jwt().getJWTClaimsSet().getStringListClaim(MinnalClaims.ROLES)).containsExactly("USER", "ADMIN");
+        assertThat(rotate(first.cookie(), "en").jwt().getJWTClaimsSet().getStringListClaim(MinnalClaims.ROLES)).containsExactly("USER", "ADMIN");
 
         // The same address, unverified, is no admin: signing in again drops the stored email.
         Started unverified = startAndPrepare("/", Map.of("email", "admin@example.com", "email_verified", false));
         String raw2 = refreshCookieValue(callback(unverified, unverified.param("state"), "auth-code"));
         assertThat(refresh(raw2, "en").getJWTClaimsSet().getStringListClaim(MinnalClaims.ROLES)).containsExactly("USER");
         assertThat(count("app_user")).isEqualTo(1);
+    }
+
+    @Test
+    void everyRefreshRotatesTheTokenWithinOneFamily() throws Exception {
+        Started started = startAndPrepare("/", Map.of());
+        String first = refreshCookieValue(callback(started, started.param("state"), "auth-code"));
+
+        MockHttpServletResponse ok = mvc.perform(guarded(post("/api/core/v1/auth/refresh")).contentType("application/json")
+                .content("{\"lang\":\"en\"}").cookie(new Cookie("minnal_refresh", first))).andExpect(status().isOk()).andReturn().getResponse();
+        String second = refreshCookieValue(ok);
+
+        assertThat(second).isNotBlank().isNotEqualTo(first);
+        assertThat(ok.getHeaders(HttpHeaders.SET_COOKIE).get(0)).contains("HttpOnly", "Secure", "SameSite=Strict", "Path=/api/core/v1/auth", "Max-Age=2592000");
+        assertThat(count("refresh_token")).isEqualTo(2);
+        assertThat(jdbc.sql("SELECT count(DISTINCT family_id) FROM refresh_token").query(Long.class).single()).isEqualTo(1);
+        assertThat(jdbc.sql("SELECT count(*) FROM refresh_token WHERE rotated_at IS NOT NULL").query(Long.class).single()).isEqualTo(1);
+        // The sign-in's token started its own family; a second sign-in starts another.
+        Started again = startAndPrepare("/", Map.of());
+        callback(again, again.param("state"), "c2");
+        assertThat(jdbc.sql("SELECT count(DISTINCT family_id) FROM refresh_token").query(Long.class).single()).isEqualTo(2);
+    }
+
+    @Test
+    void replayingARotatedTokenRevokesTheWholeFamilyAndClearsTheCookie() throws Exception {
+        Started started = startAndPrepare("/", Map.of());
+        String stolen = refreshCookieValue(callback(started, started.param("state"), "auth-code"));
+        Refreshed legit = rotate(stolen, "en");
+        UUID userId = jdbc.sql("SELECT id FROM app_user").query(UUID.class).single();
+
+        MockHttpServletResponse reuse = refreshExpecting(stolen, 401);
+
+        assertThat(reuse.getContentAsString()).contains("\"reason\":\"session_ended\"");
+        assertThat(reuse.getHeader(HttpHeaders.SET_COOKIE)).contains("minnal_refresh=", "Max-Age=0");
+        assertThat(jdbc.sql("SELECT count(*) FROM refresh_token WHERE revoked_at IS NULL").query(Long.class).single()).isZero();
+        // The legitimate player's current token died with the family.
+        assertThat(refreshExpecting(legit.cookie(), 401).getContentAsString()).contains("session_ended");
+        assertThat(userId).isNotNull();
+    }
+
+    @Test
+    void aRefreshWithoutTheGuardIs403AndRotatesNothing() throws Exception {
+        Started started = startAndPrepare("/", Map.of());
+        String raw = refreshCookieValue(callback(started, started.param("state"), "auth-code"));
+        Cookie cookie = new Cookie("minnal_refresh", raw);
+        var json = "{\"lang\":\"en\"}";
+
+        mvc.perform(post("/api/core/v1/auth/refresh").contentType("application/json").content(json).cookie(cookie)
+                .header("Origin", WEB)).andExpect(status().isForbidden());
+        mvc.perform(post("/api/core/v1/auth/refresh").contentType("application/json").content(json).cookie(cookie)
+                .header("X-Minnal-Auth", "1")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/core/v1/auth/refresh").contentType("application/json").content(json).cookie(cookie)
+                .header("Origin", "https://evil.example").header("X-Minnal-Auth", "1")).andExpect(status().isForbidden());
+        mvc.perform(post("/api/core/v1/auth/refresh").contentType("application/json").content(json).cookie(cookie)
+                .header("Origin", WEB).header("X-Minnal-Auth", "0")).andExpect(status().isForbidden());
+
+        assertThat(count("refresh_token")).isEqualTo(1);
+        assertThat(jdbc.sql("SELECT count(*) FROM refresh_token WHERE rotated_at IS NOT NULL").query(Long.class).single()).isZero();
+        refresh(raw, "en"); // still valid after the refused attempts
+    }
+
+    @Test
+    void twoConcurrentRefreshesOfOneTokenNeverBothSucceed() throws Exception {
+        Started started = startAndPrepare("/", Map.of());
+        String raw = refreshCookieValue(callback(started, started.param("state"), "auth-code"));
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+        var go = new java.util.concurrent.CountDownLatch(1);
+        List<java.util.concurrent.Future<Integer>> results = List.of(
+                pool.submit(() -> { go.await(); return refreshStatus(raw); }),
+                pool.submit(() -> { go.await(); return refreshStatus(raw); }));
+        go.countDown();
+        List<Integer> statuses = List.of(results.get(0).get(), results.get(1).get());
+        pool.shutdown();
+
+        assertThat(statuses).containsExactlyInAnyOrder(200, 401);
+    }
+
+    int refreshStatus(String cookie) throws Exception {
+        return mvc.perform(guarded(post("/api/core/v1/auth/refresh")).contentType("application/json").content("{\"lang\":\"en\"}")
+                .cookie(new Cookie("minnal_refresh", cookie))).andReturn().getResponse().getStatus();
     }
 
     @Test
@@ -342,7 +450,7 @@ class GoogleSignInIntegrationTest extends PostgresIntegrationTest {
     @Test
     void refreshAllowsCredentialsOnlyForThePwaOrigin() throws Exception {
         var allowed = options("/api/core/v1/auth/refresh").header("Origin", WEB)
-                .header("Access-Control-Request-Method", "POST").header("Access-Control-Request-Headers", "content-type");
+                .header("Access-Control-Request-Method", "POST").header("Access-Control-Request-Headers", "content-type,x-minnal-auth");
         MockHttpServletResponse ok = mvc.perform(allowed).andExpect(status().isOk()).andReturn().getResponse();
         assertThat(ok.getHeader("Access-Control-Allow-Origin")).isEqualTo(WEB);
         assertThat(ok.getHeader("Access-Control-Allow-Credentials")).isEqualTo("true");

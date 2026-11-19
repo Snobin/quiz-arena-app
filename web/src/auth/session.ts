@@ -8,7 +8,8 @@ import { tokenClaim } from './jwt.ts';
  * Who is using the app (AD-9, Story 2.1): a registered player or a guest.
  *
  * - On boot the client calls `POST /api/core/v1/auth/refresh` with the refresh cookie
- *   (`credentials: 'include'`). A 200 gives a 1 h access JWT that lives **in memory only**; a 401 (no
+ *   (`credentials: 'include'`) and the `X-Minnal-Auth: 1` guard, inside a Web Lock so tabs refresh one at a time
+ *   (core rotates the cookie on every call). A 200 gives a 1 h access JWT that lives **in memory only**; a 401 (no
  *   or stale cookie) or any failure falls back to the Story 1.5 guest flow.
  * - A registered token is refreshed about 5 minutes before it expires. If that fails transiently the
  *   still-valid token is kept and the refresh retried; a 401 means signed out, so she becomes a guest.
@@ -19,6 +20,10 @@ import { tokenClaim } from './jwt.ts';
  */
 
 export const REFRESH_PATH = '/api/core/v1/auth/refresh';
+/** The CSRF guard header core requires on refresh (Story 2.2), with the PWA's Origin. */
+export const GUARD_HEADER = 'X-Minnal-Auth';
+/** One refresh at a time across every tab of this origin, so a rotated cookie is never replayed by a sibling. */
+export const REFRESH_LOCK = 'minnal-refresh';
 /** A token is replaced this long before it expires. */
 export const REFRESH_BEFORE_EXPIRY_MS = 5 * 60 * 1000;
 /** After a failed background refresh, try again this much later. */
@@ -26,7 +31,8 @@ export const RETRY_AFTER_FAILURE_MS = 30 * 1000;
 const MAX_TIMER_MS = 2 ** 31 - 1;
 
 export type SessionStatus = 'booting' | 'guest' | 'registered';
-export type SessionState = { status: SessionStatus; name: string | null };
+/** `signedOut`: the server ended her session (reuse, expiry, revocation); Home says "Please sign in again". */
+export type SessionState = { status: SessionStatus; name: string | null; signedOut: boolean };
 
 type AccessToken = { accessToken: string; expiresAt: string };
 type Timer = ReturnType<typeof setTimeout>;
@@ -39,6 +45,8 @@ export type SessionEnv = {
   setTimer?: (callback: () => void, ms: number) => Timer;
   clearTimer?: (handle: Timer) => void;
   onWake?: (callback: () => void) => () => void;
+  /** Runs `task` while holding the cross-tab refresh lock (Web Locks); absent = run it directly. */
+  lock?: <T>(task: () => Promise<T>) => Promise<T>;
   guest?: GuestLike;
 };
 
@@ -57,6 +65,7 @@ function browserEnv(): SessionEnv {
   if (typeof window === 'undefined') return {};
   return {
     fetch: () => window.fetch.bind(window),
+    lock: (task) => (navigator.locks ? navigator.locks.request(REFRESH_LOCK, task) : task()),
     now: () => Date.now(),
     language: () => deviceLanguage(),
     setTimer: (callback, ms) => setTimeout(callback, ms),
@@ -79,6 +88,8 @@ function browserEnv(): SessionEnv {
 
 /** The result of one refresh call: a token, "no session" (401), or a transient failure. */
 type RefreshOutcome = 'ok' | 'none' | 'error';
+/** What the endpoint said: a token, "no session" (401), or "session ended" (401 session_ended). */
+type RefreshReply = AccessToken | 'none' | 'ended';
 
 export type Session = {
   store: UseBoundStore<StoreApi<SessionState>>;
@@ -100,7 +111,7 @@ export function createSession(env: SessionEnv = browserEnv()): Session {
   const guest = env.guest ?? appGuestSession;
 
   // Not booted yet (tests, or before main runs): behave as a guest, so nothing waits on a refresh.
-  const store = create<SessionState>(() => ({ status: 'guest', name: null }));
+  const store = create<SessionState>(() => ({ status: 'guest', name: null, signedOut: false }));
 
   let token: AccessToken | null = null;
   let inflight: Promise<RefreshOutcome> | null = null;
@@ -129,22 +140,25 @@ export function createSession(env: SessionEnv = browserEnv()): Session {
     }, Math.min(delay, MAX_TIMER_MS));
   }
 
-  function becomeGuest(): void {
+  function becomeGuest(signedOut = false): void {
     token = null;
     clearTimer();
-    store.setState({ status: 'guest', name: null });
+    store.setState({ status: 'guest', name: null, signedOut });
     guest.start();
   }
 
-  async function request(): Promise<AccessToken | null> {
+  async function request(): Promise<RefreshReply> {
     const fetchImpl = env.fetch?.() ?? fetch;
     const response = await fetchImpl(apiUrl(REFRESH_PATH), {
       method: 'POST',
       credentials: 'include',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', [GUARD_HEADER]: '1' },
       body: JSON.stringify({ lang: language() }),
     });
-    if (response.status === 401) return null;
+    if (response.status === 401) {
+      const problem: unknown = await response.json().catch(() => null);
+      return (problem as { reason?: unknown } | null)?.reason === 'session_ended' ? 'ended' : 'none';
+    }
     if (!response.ok) throw new Error(`refresh failed: ${response.status}`);
     const body: unknown = await response.json();
     if (!isAccessToken(body)) throw new Error('refresh response is malformed');
@@ -154,18 +168,18 @@ export function createSession(env: SessionEnv = browserEnv()): Session {
   /** One refresh call at a time (single-flight). */
   function refresh(): Promise<RefreshOutcome> {
     if (inflight) return inflight;
-    inflight = request()
+    inflight = (env.lock ? env.lock(request) : request())
       .then<RefreshOutcome>((next) => {
-        if (next === null) {
-          // No (or a stale) refresh cookie: signed out as far as this device is concerned.
+        if (next === 'none' || next === 'ended') {
+          // No refresh cookie, or the server ended the session: a guest from here, told why when it ended.
           retryOnWake = false;
-          becomeGuest();
+          becomeGuest(next === 'ended');
           return 'none';
         }
         token = next;
         retryOnWake = false;
         const rawName = tokenClaim(next.accessToken, 'name');
-        store.setState({ status: 'registered', name: typeof rawName === 'string' && rawName ? rawName : null });
+        store.setState({ status: 'registered', name: typeof rawName === 'string' && rawName ? rawName : null, signedOut: false });
         schedule(Math.max(expiresAtMs(next) - REFRESH_BEFORE_EXPIRY_MS - now(), RETRY_AFTER_FAILURE_MS));
         return 'ok';
       })
@@ -189,7 +203,7 @@ export function createSession(env: SessionEnv = browserEnv()): Session {
     store,
     start() {
       if (booted) return;
-      store.setState({ status: 'booting', name: null });
+      store.setState({ status: 'booting', name: null, signedOut: false });
       unsubscribeWake = env.onWake?.(() => {
         const { status } = store.getState();
         if (status === 'registered' && (!token || now() >= expiresAtMs(token) - REFRESH_BEFORE_EXPIRY_MS)) void refresh();
@@ -233,7 +247,7 @@ export function createSession(env: SessionEnv = browserEnv()): Session {
       inflight = null;
       booted = null;
       retryOnWake = false;
-      store.setState({ status: 'guest', name: null });
+      store.setState({ status: 'guest', name: null, signedOut: false });
     },
   };
 }
