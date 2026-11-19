@@ -2,7 +2,8 @@
 title: 'Story 2.5: Ratings service computes ELO (ratings-service)'
 type: 'feature'
 created: '2026-11-19'
-status: 'ready-for-dev'
+status: 'done'
+baseline_commit: '0714d7b1cfe13aa23b6c772cb9b1f6abcdceaaa5'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -58,11 +59,11 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `ratings` V1 migration, schema test, `Elo` with unit tests (1v1 win/loss/draw, 4-player tie, symmetric equal-rated, guest, bot, rounding)
-- [ ] `ratings` match-completed handler (transaction, idempotency, rated/unrated, results, outbox) with Postgres integration tests incl. no row for a guest id and a duplicate event
-- [ ] `ratings` profile-updated handler (last-write-wins, tombstone) and test with out-of-order delivery
-- [ ] `ratings` stream consumer (group, reclaim, ack after commit, dead letter at 5, counter) and outbox relay with tests (fake stream; real Valkey if available), config flag
-- [ ] `game` and `core` architecture tests; README note
+- [x] `ratings` V1 migration, schema test, `Elo` with unit tests (1v1 win/loss/draw, 4-player tie, symmetric equal-rated, guest, bot, rounding)
+- [x] `ratings` match-completed handler (transaction, idempotency, rated/unrated, results, outbox) with Postgres integration tests incl. no row for a guest id and a duplicate event
+- [x] `ratings` profile-updated handler (last-write-wins, tombstone) and test with out-of-order delivery
+- [x] `ratings` stream consumer (group, reclaim, ack after commit, dead letter at 5, counter) and outbox relay with tests (fake stream; real Valkey if available), config flag
+- [x] `game` and `core` architecture tests; README note
 
 **Acceptance Criteria:**
 - Given the epics.md Story 2.5 criteria except the game-service cache, when ratings-service runs against Postgres and the stream, then each passes.
@@ -70,9 +71,28 @@ context:
 
 ## Implementation Notes
 
+- `MatchCompletedHandler` locks rating rows in user-id order, treats an existing `match_record` for the match as a duplicate (also catching a unique-key race), and `ratedAt` is the match's `endedAt`.
+- The consumer reclaims with `XPENDING` plus `XCLAIM` (delivery count = pending count + 1); a failing entry is dead-lettered when its delivery count reaches 5. Group creation uses `MKSTREAM` from offset 0, so the first boot processes the whole stream.
+- `StreamClient` is an interface with a Valkey implementation and an in-memory fake for logic tests; `ValkeyStreamIntegrationTest` runs the real client, reclaim, dead letter and capped add against a Valkey container.
+- The Docker-free `test` profile now keeps the DataSource (lazy, like core) with the DB health check off; `it` and `test` both set `minnal.streams.enabled=false`.
+- Architecture tests in core and game are source scans for ELO terms and rating-table SQL (no ArchUnit in core); a planted `Elo` in core main fails the test.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| Finding | Verdict | Route | Evidence |
+|---|---|---|---|
+| A user listed twice in one rated event rolled back and was acknowledged as a duplicate, silently dropping the match | high | patch (fixed) | a repeated user id is now a malformed event (poison, dead-lettered); tests added |
+| Unrated replay could commit part of a match; any unique violation was reported as a duplicate | high | patch (fixed) | unrated path checks the match first; the catch re-checks `match_record` and rethrows otherwise; tests added |
+| A failed ack after a commit counted as a handler failure (dead-lettered at the 5th delivery); a failing dead-letter write or one failing stream starved the poll; a vanished group never recovered | high | patch (fixed) | ack, dead letter and each stream are guarded separately; NOGROUP re-creates the group; tests added |
+| The first poll after boot only reclaimed entries idle 30 s, so newer matches could be rated before an older pending one | medium | patch (fixed) | the first poll reclaims every pending entry; later polls use the idle time; README corrected |
+| Reclaim looked at only the 50 oldest pending entries | medium | patch (fixed) | looks at 500, claims up to 50 idle ones |
+| `rating.updated_at` could move backwards for a late older match; Elo rounding at exact halves | medium | patch (fixed) | `GREATEST`; nine-decimal pre-round; test added |
+| Relay failure in the scheduled loop unguarded; dead-letter `error` unbounded; architecture test scanned binaries and missed qualified or quoted table names | low | patch (fixed) | guarded, truncated to 500 chars, extension filter and a stronger pattern |
+| No tests for rollback, the scheduled wiring, unrated replay | medium | patch (fixed) | tests added, including a Spring context with the loop on |
+| Tombstone is only a SQL guard: nothing sets `tombstoned_at` yet | medium | defer | the deletion event is Story 2.8; the guard and its test are in place |
+| Relay is single-writer (no SKIP LOCKED), poison outbox head, no purge; `ratedAt` ordering for late matches; non-retryable errors wait the idle time; metrics and health; schema CHECKs and indexes later stories need | low | defer | recorded in `deferred-work.md` |
 
 ## Verification
 

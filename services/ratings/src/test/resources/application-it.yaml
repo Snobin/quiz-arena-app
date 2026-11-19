@@ -1,0 +1,12 @@
+# Integration tests (Testcontainers Postgres 18): real DataSource and Flyway; Redis and the stream loops are
+# switched on only by the tests that start Valkey.
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoConfiguration
+      - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
+
+minnal:
+  streams:
+    enabled: false

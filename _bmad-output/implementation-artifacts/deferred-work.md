@@ -137,3 +137,10 @@
 - source_spec: none
   summary: Story 2.5 part B: game-service rating cache replayed from `minnal.rating.updated` with plain XREAD (latest `ratedAt` wins, missing entry is 1200), feeding the matchmaking actor, with an end-to-end test that 1500 and 1250 are not paired before the 4 s widening.
   evidence: Split from Story 2.5 by the user's choice (2026-11-19) because the story spans two large pieces; ratings-service (part A) must publish the stream first.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-5-ratings-service-computes-elo.md`
+  summary: Make the ratings outbox relay safe for several instances (FOR UPDATE SKIP LOCKED), park poison outbox rows, purge published rows, and treat non-retryable errors (parse, validation) as dead letters on the first delivery.
+  evidence: One replica is assumed; a poison head row blocks later events; malformed events wait the reclaim idle time for each of five deliveries.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-5-ratings-service-computes-elo.md`
+  summary: Add stream and relay observability (consumer lag, pending count, applied and duplicate counters, outbox backlog age) and a ratings-service tombstone handler when account deletion (Story 2.8) defines the event.
+  evidence: Only the dead-letter counter exists; nothing sets `player_directory.tombstoned_at`.

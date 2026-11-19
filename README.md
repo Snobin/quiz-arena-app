@@ -135,6 +135,17 @@ same transaction; a relay in core publishes the rows in order to the Valkey stre
 (`XADD ... MAXLEN ~100000`), retrying with backoff, so a crash after commit still delivers the event. Set
 `MINNAL_OUTBOX_RELAY_ENABLED=false` to run core without Valkey.
 
+### Ratings
+
+ratings-service is the only place ELO is computed (core and game have a test that fails if ELO or rating writes
+appear there). It consumes `minnal.match.completed` and `minnal.user.profileUpdated` from Valkey through the
+`ratings-service` consumer group: every pending entry is reclaimed on the first poll after boot, and later ones once idle for 30 s, an entry is acknowledged
+only after its transaction commits, and one that fails five deliveries is copied to `minnal.deadletter` (with the
+source stream, entry id, event id and last error), counted by the Micrometer counter `minnal.stream.deadletter`.
+Ratings start at 1200, are per mode and integer, a guest opponent counts as 1200 and a bot as the player's own
+rating; nothing is ever stored for a guest or a bot. Rating changes are published to `minnal.rating.updated`
+from a transactional outbox. Set `MINNAL_STREAMS_ENABLED=false` to run it without Valkey.
+
 ### Seed the question bank
 
 The starter questions live in `services/core/src/main/resources/seed/kerala-psc-starter.csv` (columns:
