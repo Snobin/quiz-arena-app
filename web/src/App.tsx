@@ -1,6 +1,9 @@
 import { lazy, Suspense, type ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useEffect } from 'react';
 import { useSession } from './auth/session.ts';
+import { ensureProfileLoaded, resetProfile, useProfile } from './profile/profileStore.ts';
+import { ProfileSetup } from './screens/profile/ProfileSetup.tsx';
 import { PageColumn } from './design/PageColumn.tsx';
 import { AuthReturn } from './screens/AuthReturn.tsx';
 import { MeScreen } from './screens/MeScreen.tsx';
@@ -13,7 +16,8 @@ import { ResultsScreen } from './screens/results/ResultsScreen.tsx';
 import { RoomsScreen } from './screens/RoomsScreen.tsx';
 import { SignInPrompt } from './screens/SignInPrompt.tsx';
 import { AppShell } from './shell/AppShell.tsx';
-import { usePathname, useRouterSync } from './shell/router.ts';
+import { navigate, usePathname, useRouterSync } from './shell/router.ts';
+import { safeReturnPath } from './screens/home/signInPath.ts';
 
 /**
  * Home for whoever is using the app: guest Home, or the registered player's. While the boot refresh is
@@ -65,6 +69,25 @@ const FIXTURES: Record<string, ComponentType> = import.meta.env.DEV
 export function App() {
   useRouterSync();
   const pathname = usePathname();
+  const status = useSession((s) => s.status);
+  const profileStatus = useProfile((s) => s.status);
+  const profileReady = profileStatus === 'ready';
+  const profileComplete = useProfile((s) => s.profile?.profileComplete ?? false);
+  useEffect(() => {
+    if (status === 'registered') void ensureProfileLoaded();
+    else if (status === 'guest') resetProfile();
+  }, [status]);
+
+  // Registered, profile not known yet: hold the screen (setup may be next) rather than flash the requested one.
+  const profileLoading = status === 'registered' && (profileStatus === 'idle' || profileStatus === 'loading') && pathname !== '/auth/return';
+  // /profile/setup is for a registered player who has not finished it; anyone else is sent on.
+  const setupNotNeeded = pathname === '/profile/setup' && (status === 'guest' || (profileReady && profileComplete));
+  useEffect(() => {
+    if (setupNotNeeded) navigate(safeReturnPath(new URLSearchParams(window.location.search).get('to')), { replace: true });
+  }, [setupNotNeeded]);
+
+  // A registered player who has not finished setup sees it before any other surface (not mid-sign-in).
+  const needsSetup = status === 'registered' && profileReady && !profileComplete && pathname !== '/auth/return';
 
   const Fixture = FIXTURES[pathname];
   if (Fixture) {
@@ -76,9 +99,19 @@ export function App() {
   }
 
   const Screen = ROUTES[pathname] ?? Home;
+  // One element for every way of reaching setup, so the form is never remounted (and typed input never lost)
+  // when the profile finishes loading.
+  const screen =
+    profileLoading ? (
+      <HomePending />
+    ) : needsSetup || (pathname === '/profile/setup' && !setupNotNeeded) ? (
+      <ProfileSetup to={pathname === '/profile/setup' ? (new URLSearchParams(window.location.search).get('to') ?? '/') : `${pathname}${window.location.search}`} />
+    ) : (
+      <Screen />
+    );
   return (
     <AppShell>
-      <Screen />
+      {screen}
     </AppShell>
   );
 }

@@ -47,6 +47,15 @@ public class UserTokenService {
         }
     }
 
+    private static String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return DEFAULT_NAME;
+    }
+
     public GuestToken issue(Account account, String lang) {
         requireSupported(lang);
         Instant issuedAt = clock.instant().truncatedTo(ChronoUnit.SECONDS);
@@ -54,7 +63,9 @@ public class UserTokenService {
         List<String> roles = settings.isAdminEmail(account.email())
                 ? List.of(Role.USER.name(), Role.ADMIN.name())
                 : List.of(Role.USER.name());
-        String name = account.givenName() == null || account.givenName().isBlank() ? DEFAULT_NAME : account.givenName().trim();
+        String name = firstNonBlank(account.displayName(), account.givenName(), DEFAULT_NAME);
+        // Once a profile exists, its language is the one the player chose.
+        String tokenLang = account.language() != null && LANGUAGES.contains(account.language()) ? account.language() : lang;
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer(MinnalClaims.ISSUER)
                 .subject(account.id().toString())
@@ -62,7 +73,7 @@ public class UserTokenService {
                 .expiresAt(expiresAt)
                 .claim(MinnalClaims.ROLES, roles)
                 .claim(MinnalClaims.NAME, name)
-                .claim(MinnalClaims.LANG, lang)
+                .claim(MinnalClaims.LANG, tokenLang)
                 .build();
         JwsHeader header = JwsHeader.with(SignatureAlgorithm.RS256).keyId(keys.activeKeyId()).build();
         return new GuestToken(encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue(), expiresAt);

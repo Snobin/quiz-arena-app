@@ -275,7 +275,7 @@ class GoogleSignInIntegrationTest extends PostgresIntegrationTest {
             String location = done.getHeader(HttpHeaders.LOCATION);
             assertThat(location).as(evil).startsWith(WEB + "/");
             assertThat(location).as(evil).doesNotContain("evil.com");
-            jdbc.sql("TRUNCATE refresh_token, user_identity, app_user").update();
+            jdbc.sql("TRUNCATE refresh_token, user_identity, user_profile, app_user").update();
             if (!evil.contains("%0d")) {
                 assertThat(location).as(evil).isEqualTo(WEB + "/auth/return?to=/");
             }
@@ -435,6 +435,23 @@ class GoogleSignInIntegrationTest extends PostgresIntegrationTest {
     int refreshStatus(String cookie) throws Exception {
         return mvc.perform(guarded(post("/api/core/v1/auth/refresh")).contentType("application/json").content("{\"lang\":\"en\"}")
                 .cookie(new Cookie("minnal_refresh", cookie))).andReturn().getResponse().getStatus();
+    }
+
+    @Test
+    void afterAProfileIsSavedTheRefreshedTokenCarriesItsNameAndLanguage() throws Exception {
+        Started started = startAndPrepare("/", Map.of());
+        String raw = refreshCookieValue(callback(started, started.param("state"), "auth-code"));
+        Refreshed first = rotate(raw, "en");
+        assertThat(first.jwt().getJWTClaimsSet().getStringClaim(MinnalClaims.NAME)).isEqualTo("Anju");
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/core/v1/me/profile")
+                .header("Authorization", "Bearer " + first.jwt().serialize()).contentType("application/json")
+                .content("{\"displayName\":\"അഞ്ജു\",\"district\":\"thrissur\",\"examLevel\":\"DEGREE\",\"language\":\"ml\"}"))
+                .andExpect(status().isOk());
+
+        var claims = rotate(first.cookie(), "en").jwt().getJWTClaimsSet(); // the client's lang is only a fallback
+        assertThat(claims.getStringClaim(MinnalClaims.NAME)).isEqualTo("അഞ്ജു");
+        assertThat(claims.getStringClaim(MinnalClaims.LANG)).isEqualTo("ml");
     }
 
     @Test

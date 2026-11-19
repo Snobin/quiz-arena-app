@@ -127,6 +127,14 @@ that custom domain. When the API is on another origin, build the web app with `V
 (e.g. `https://api.minnal.in`) and list the PWA origin in `CORS_ALLOWED_ORIGINS`; only the refresh
 endpoint allows credentialed cross-origin calls. Tests use a fake OIDC provider and never call Google.
 
+### Profile and the outbox
+
+`GET|PUT /api/core/v1/me/profile` (USER or ADMIN bearer token; a guest gets 403) stores the display name,
+district, exam level and language. A save writes a `minnal.user.profileUpdated` row to `event_outbox` in the
+same transaction; a relay in core publishes the rows in order to the Valkey stream of the same name
+(`XADD ... MAXLEN ~100000`), retrying with backoff, so a crash after commit still delivers the event. Set
+`MINNAL_OUTBOX_RELAY_ENABLED=false` to run core without Valkey.
+
 ### Seed the question bank
 
 The starter questions live in `services/core/src/main/resources/seed/kerala-psc-starter.csv` (columns:
