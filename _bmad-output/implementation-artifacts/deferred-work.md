@@ -152,3 +152,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-6-rating-change-and-match-history.md`
   summary: Offer a later retry or refresh when the rating delta stays on "updating", and avoid the 10 s placeholder for a rated-source match with no human opponent rated.
   evidence: After the window the client stops asking; a BANK match against only a bot or guest still rates the human, so this is rare, but a slow ratings consumer leaves "updating" until she reopens the results.
+
+- source_spec: none
+  summary: Story 2.7 part B: the Ranks tab (mode switcher, period tabs, rows with rank, name, district and value, the pinned own row, empty state, one nudge for guests, scroll and selection memory) and the Home rank snippet, on top of the leaderboard API built in part A.
+  evidence: Split from Story 2.7 by the user's choice (2026-11-19) because the story spans the backend and a large web surface; part A must serve the API first.
