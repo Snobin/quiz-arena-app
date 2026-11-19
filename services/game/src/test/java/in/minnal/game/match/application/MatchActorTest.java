@@ -435,7 +435,8 @@ class MatchActorTest {
 
     @Test
     void theGraceForfeitsAfterItRunsOutReleasesHerAndRejectsHerLaterAnswers() throws Exception {
-        MatchSetup setup = MatchTestKit.setup(2, 0, 2);
+        // A Battle Room: the match goes on for the others.
+        MatchSetup setup = MatchTestKit.room(MatchTestKit.setup(3, 0, 2));
         UUID h0 = setup.humans().get("h0");
         MatchActor actor = actor(setup, graced(Duration.ofSeconds(5), Duration.ofMillis(150)), silentBots());
         actor.tell(new MatchEvent.Begin());
@@ -451,10 +452,54 @@ class MatchActorTest {
         await().atMost(Duration.ofSeconds(2)).until(() -> !channel.to("h0").isEmpty());
         assertThat(((ErrorPayload) channel.to("h0").getFirst().message().payload()).code().name())
                 .isEqualTo("ANSWER_REJECTED");
-        // The other plays on, and now closes the question early on her own answer.
+        // The others play on, and the question closes early once both have answered.
         actor.tell(new MatchEvent.Answer(setup.humans().get("h1"), 0, 0, Instant.now(), new MatchEvent.ReplyTo("h1", "s1")));
+        actor.tell(new MatchEvent.Answer(setup.humans().get("h2"), 0, 0, Instant.now(), new MatchEvent.ReplyTo("h2", "s2")));
         broadcaster.next(MessageType.QUESTION_REVEALED, Duration.ofSeconds(1));
         assertThat(actor.isEnded()).isFalse();
+    }
+
+    @Test
+    void aHumanVsHumanOneVsOneGraceForfeitEndsTheMatchAtOnceAsCompletedWithTheForfeiterLast() throws Exception {
+        MatchSetup setup = MatchTestKit.setup(2, 0, 2);
+        UUID h0 = setup.humans().get("h0");
+        MatchActor actor = actor(setup, graced(Duration.ofSeconds(5), Duration.ofMillis(150)), silentBots());
+        actor.tell(new MatchEvent.Begin());
+        QuestionStartedPayload started = (QuestionStartedPayload) broadcaster
+                .next(MessageType.QUESTION_STARTED, Duration.ofSeconds(2)).payload();
+        // h0 leads on score, then drops; the grace runs out before the Q1 reveal.
+        actor.tell(new MatchEvent.Answer(h0, 0, setup.questions().getFirst().answerIndex(),
+                started.startedAt().plusMillis(100), new MatchEvent.ReplyTo("h0", "s0")));
+        actor.tell(new MatchEvent.Disconnect("h0"));
+        broadcaster.next(MessageType.PARTICIPANT_FORFEITED, Duration.ofSeconds(2));
+        await().atMost(Duration.ofSeconds(2)).until(() -> endedWith.get() == actor);
+        assertThat(actor.isCompleted()).isTrue();
+        assertThat(actor.isAborted()).isFalse();
+        assertThat(broadcaster.ofType(MessageType.QUESTION_REVEALED)).as("the open question is revealed").hasSize(1);
+        assertThat(broadcaster.ofType(MessageType.QUESTION_STARTED)).as("no further question").hasSize(1);
+        await().atMost(Duration.ofSeconds(1)).until(() -> published.size() == 1);
+        assertThat(published.getFirst().participants()).extracting(CompletedParticipant::placement)
+                .containsExactly(2, 1);
+        assertThat(published.getFirst().participants()).extracting(CompletedParticipant::forfeited)
+                .containsExactly(true, false);
+    }
+
+    @Test
+    void aHumanVsHumanOneVsOneLeaveBeforeTheFirstRevealCompletesInsteadOfAborting() throws Exception {
+        MatchSetup setup = MatchTestKit.setup(2, 0, 3);
+        MatchActor actor = actor(setup, graced(Duration.ofSeconds(5), Duration.ofSeconds(10)), silentBots(), sub -> true);
+        actor.tell(new MatchEvent.Begin());
+        broadcaster.next(MessageType.QUESTION_STARTED, Duration.ofSeconds(2));
+        actor.tell(new MatchEvent.Leave("h0"));
+        actor.tell(new MatchEvent.Leave("h0")); // idempotent
+        await().atMost(Duration.ofSeconds(2)).until(() -> endedWith.get() == actor);
+        assertThat(actor.isCompleted()).isTrue();
+        assertThat(broadcaster.ofType(MessageType.MATCH_ABORTED)).isEmpty();
+        assertThat(matchEnded()).hasSize(2);
+        Thread.sleep(100);
+        assertThat(published).hasSize(1);
+        assertThat(published.getFirst().startedAt()).isNotNull();
+        assertThat(published.getFirst().endedAt()).isAfterOrEqualTo(published.getFirst().startedAt());
     }
 
     @Test
@@ -523,7 +568,7 @@ class MatchActorTest {
 
     @Test
     void inAFiveWayMatchAForfeitClosesTheQuestionOnceTheRestHaveAnswered() throws Exception {
-        MatchSetup setup = MatchTestKit.setup(5, 0, 2);
+        MatchSetup setup = MatchTestKit.room(MatchTestKit.setup(5, 0, 2));
         MatchActor actor = actor(setup, graced(Duration.ofSeconds(5), Duration.ofSeconds(10)), silentBots());
         actor.tell(new MatchEvent.Begin());
         QuestionStartedPayload started = (QuestionStartedPayload) broadcaster
@@ -641,9 +686,9 @@ class MatchActorTest {
         assertThat(left.forfeited()).isTrue();
         assertThat(left.correctCount()).isEqualTo(1);
         assertThat(left.score()).isPositive();
-        assertThat(left.placement()).isEqualTo(2);
+        assertThat(left.placement()).as("a 1v1 forfeiter always places last").isEqualTo(3);
         assertThat(bot.score()).isZero();
-        assertThat(bot.placement()).isEqualTo(3);
+        assertThat(bot.placement()).isEqualTo(2);
         assertThat(bot.kind()).isEqualTo(ParticipantKind.BOT);
         List<BreakdownAnswer> anjuAnswers = payload.breakdown().get(0).answers();
         assertThat(anjuAnswers).hasSize(3).allSatisfy(a -> {
@@ -664,7 +709,7 @@ class MatchActorTest {
         assertThat(event.queueWaitMs()).isEqualTo(5_000L);
         assertThat(event.roomId()).isNull();
         assertThat(event.participants()).extracting(CompletedParticipant::userId).containsExactly("h0", null, null);
-        assertThat(event.participants()).extracting(CompletedParticipant::placement).containsExactly(1, 2, 3);
+        assertThat(event.participants()).extracting(CompletedParticipant::placement).containsExactly(1, 3, 2);
         assertThat(event.participants()).extracting(CompletedParticipant::forfeited).containsExactly(false, true, false);
         Thread.sleep(100);
         assertThat(published).hasSize(1);

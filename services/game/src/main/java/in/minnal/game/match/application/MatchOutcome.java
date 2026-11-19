@@ -5,6 +5,7 @@ import in.minnal.contracts.events.MatchCompletedEvent;
 import in.minnal.contracts.internal.InternalQuestion;
 import in.minnal.contracts.realtime.BreakdownAnswer;
 import in.minnal.contracts.realtime.MatchEndedPayload;
+import in.minnal.contracts.realtime.MatchMode;
 import in.minnal.contracts.realtime.ParticipantBreakdown;
 import in.minnal.contracts.realtime.ParticipantKind;
 import in.minnal.contracts.realtime.ResultParticipant;
@@ -33,7 +34,7 @@ final class MatchOutcome {
         this.setup = setup;
         this.results = results;
         this.placements = Ranking.placements(results.entries(), MatchResults.Entry::score,
-                MatchResults.Entry::correctCount);
+                MatchResults.Entry::correctCount, MatchResults.Entry::forfeited, setup.mode() != MatchMode.BATTLE_ROOM);
     }
 
     MatchEndedPayload matchEnded() {
@@ -67,7 +68,7 @@ final class MatchOutcome {
         }
         Long queueWaitMs = setup.queueWaitMs().values().stream().max(Long::compare).orElse(null);
         return MatchCompletedEvent.of(setup.matchId(), setup.mode(), null, setup.questionSource(),
-                results.q1StartedAt(), endedAt, queueWaitMs, participants);
+                results.q1StartedAt() != null ? results.q1StartedAt() : endedAt, endedAt, queueWaitMs, participants);
     }
 
     private static BreakdownAnswer answerOf(RecordedAnswer answer, int answerIndex) {

@@ -325,6 +325,7 @@ export function matchEnded(
     count?: number;
     questions?: { textMl?: string; textEn?: string; options?: string[]; answerIndex?: number; explanation?: string; attribution?: string | null }[];
     serverTime?: string;
+    mode?: 'QUICK' | 'TOPIC_DUEL' | 'BATTLE_ROOM';
   },
 ) {
   const count = o.count ?? Object.values(o.breakdown)[0]?.length ?? 10;
@@ -348,7 +349,7 @@ export function matchEnded(
     serverTime: o.serverTime ?? SERVER_TIME,
     payload: {
       matchId,
-      mode: 'QUICK',
+      mode: o.mode ?? 'QUICK',
       questionSource: 'BANK',
       participants: o.participants.map((p) => ({ ...p, forfeited: p.forfeited ?? false })),
       questions,

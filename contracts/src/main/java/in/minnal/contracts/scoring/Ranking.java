@@ -2,12 +2,14 @@ package in.minnal.contracts.scoring;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.function.ToIntFunction;
 
 /**
  * The one placement rule of every mode (AD-8): score descending, then correct count descending,
  * else a shared placement. Shared placements use competition ranking: two players tied for first
- * are both 1st and the next is 3rd (1, 1, 3). A forfeiter is ranked on the score she earned.
+ * are both 1st and the next is 3rd (1, 1, 3). In a Battle Room a forfeiter is
+ * ranked on the score she earned; in a 1v1 a forfeiter always places behind everyone who stayed.
  * {@code MATCH_ENDED} and {@code minnal.match.completed} both place participants with this.
  */
 public final class Ranking {
@@ -16,10 +18,17 @@ public final class Ranking {
     }
 
     /** One participant's totals at the end of a match. */
-    public record Standing(int score, int correctCount) {
+    public record Standing(int score, int correctCount, boolean lastPlace) {
+
+        public Standing(int score, int correctCount) {
+            this(score, correctCount, false);
+        }
 
         /** Whether this standing ranks strictly ahead of {@code other}. */
         boolean beats(Standing other) {
+            if (lastPlace != other.lastPlace) {
+                return other.lastPlace;
+            }
             return score != other.score ? score > other.score : correctCount > other.correctCount;
         }
     }
@@ -45,6 +54,18 @@ public final class Ranking {
     public static <T> List<Integer> placements(List<T> items, ToIntFunction<T> score, ToIntFunction<T> correctCount) {
         return placements(items.stream()
                 .map(item -> new Standing(score.applyAsInt(item), correctCount.applyAsInt(item)))
+                .toList());
+    }
+
+    /**
+     * Placements where, when {@code oneVsOne}, a forfeiter always places behind everyone who did
+     * not forfeit, whatever her score; otherwise (a Battle Room) a forfeiter is ranked on score.
+     */
+    public static <T> List<Integer> placements(List<T> items, ToIntFunction<T> score, ToIntFunction<T> correctCount,
+            Predicate<T> forfeited, boolean oneVsOne) {
+        return placements(items.stream()
+                .map(item -> new Standing(score.applyAsInt(item), correctCount.applyAsInt(item),
+                        oneVsOne && forfeited.test(item)))
                 .toList());
     }
 }

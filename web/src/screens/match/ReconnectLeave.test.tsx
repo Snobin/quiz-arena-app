@@ -182,7 +182,7 @@ describe('reconnect banner', () => {
       await act(() => vi.advanceTimersByTimeAsync(500));
       if (!socket().connected && screen.queryByTestId('reconnect-banner')) act(() => socket().drop());
     }
-    expect(screen.getByTestId('notice-forfeited')).toHaveTextContent('You missed the remaining questions; the match goes on');
+    expect(screen.getByTestId('notice-forfeited')).toHaveTextContent('You left · Vishnu R wins');
     expect(screen.queryByTestId('reconnect-banner')).toBeNull();
     await act(() => vi.advanceTimersByTimeAsync(FORFEIT_NOTICE_MS));
     expect(window.location.pathname).toBe('/results');
@@ -256,20 +256,43 @@ describe('leave', () => {
 });
 
 describe('notices', () => {
-  it('an opponent who left: the strip says "left", a one-line notice, announced once; play goes on', async () => {
+  it('a 1v1 opponent who left: the strip says "left", a one-line "you win" notice, announced once', async () => {
     const m = await inMatch();
     start(m, 0);
     broadcast(m, (seq) => participantForfeited(m.matchId, seq, m.opponent, 0));
     expect(screen.getByTestId('opponent-status')).toHaveTextContent('left');
-    expect(screen.getByTestId('notice-opponent-left')).toHaveTextContent('Vishnu R left the match');
+    expect(screen.getByTestId('notice-opponent-left')).toHaveTextContent('Vishnu R left · you win');
     await flushAnnouncements();
-    expect(politeText()).toContain('Vishnu R left the match');
+    expect(politeText()).toContain('Vishnu R left · you win');
     const seq = useAnnouncements.getState().polite.seq;
     start(m, 1);
     await flushAnnouncements();
     expect(useAnnouncements.getState().polite.seq).toBe(seq);
     expect(screen.getByTestId('leave-button')).toBeInTheDocument();
     expect(content()).not.toHaveAttribute('inert');
+  });
+
+  it('a 1v1 opponent who left ends the match: MATCH_ENDED opens the results after the reveal hold', async () => {
+    const m = await inMatch();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    start(m, 2);
+    broadcast(m, (seq) => participantForfeited(m.matchId, seq, m.opponent, 2));
+    revealQ(m, 2, 900, 0);
+    const answers = Array.from({ length: 3 }, () => ({ pickedIndex: 0, correct: true, responseMs: 3000, points: 300 }));
+    act(() =>
+      socket().deliver(
+        matchEnded(m.matchId, {
+          participants: [
+            { participantId: m.self, displayName: 'Guest 4821', kind: 'GUEST', score: 900, correctCount: 3, placement: 1 },
+            { participantId: m.opponent, displayName: 'Vishnu R', kind: 'GUEST', score: 1200, correctCount: 4, forfeited: true, placement: 2 },
+          ],
+          breakdown: { [m.self]: answers, [m.opponent]: answers },
+        }),
+      ),
+    );
+    expect(window.location.pathname).toBe('/match');
+    await act(() => vi.advanceTimersByTimeAsync(RESULTS_HOLD_MS + 100));
+    expect(window.location.pathname).toBe('/results');
   });
 
   it('a handler error abort sends her Home with the notice', async () => {

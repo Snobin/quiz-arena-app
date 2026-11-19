@@ -115,4 +115,10 @@ final class MatchTestKit {
     static MatchSettings fast(Duration window, Duration grace) {
         return new MatchSettings(Duration.ofMillis(10), window, Duration.ofMillis(50), Duration.ofMillis(10), grace);
     }
+
+    /** The same setup as a Battle Room (a forfeit there never ends the match). */
+    static MatchSetup room(MatchSetup base) {
+        return new MatchSetup(base.matchId(), MatchMode.BATTLE_ROOM, base.participants(), base.humans(),
+                base.questions(), base.queueWaitMs(), base.ratings(), base.createdAt(), base.questionSource());
+    }
 }

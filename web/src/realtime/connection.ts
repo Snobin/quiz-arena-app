@@ -606,6 +606,11 @@ export function createRealtime(env: RealtimeEnv): Realtime {
         if (current && payload.matchId === current.matchId && (incoming.message.matchId ?? payload.matchId) === current.matchId) {
           set({ clockOffsetMs, live: { ...current, ended: payload } });
           lastResult.save({ matchId: payload.matchId, selfId: current.selfParticipantId, payload });
+          // A 1v1 forfeit ends the match before its last question: MATCH_ENDED is then the end
+          // of the match for her too (the screen holds on the reveal, then opens the results).
+          if (current.outcome === null && current.participants.length === 2 && current.forfeited.length > 0) {
+            finish('completed');
+          }
         } else {
           set({ clockOffsetMs });
         }

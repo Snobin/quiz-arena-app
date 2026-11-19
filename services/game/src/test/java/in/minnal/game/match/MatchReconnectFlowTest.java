@@ -179,7 +179,7 @@ class MatchReconnectFlowTest extends GameIntegrationTest {
     }
 
     @Test
-    void whenTheGraceRunsOutSheForfeitsIsReleasedAndHerLaterAnswersAreRejected() {
+    void whenTheGraceRunsOutSheForfeitsIsReleasedAndTheMatchEndsAtOnce() {
         String anjuSub = newSub();
         String vishnuSub = newSub();
         StompTestClient anju = client(anjuSub);
@@ -189,6 +189,7 @@ class MatchReconnectFlowTest extends GameIntegrationTest {
         vishnu.subscribe(Destinations.matchTopic(match.matchId()));
         anju.nextBroadcast("QUESTION_STARTED");
         vishnu.nextBroadcast("QUESTION_STARTED");
+        double completed = counter(MatchMetrics.ENDED);
         anju.close();
 
         JsonNode forfeited = vishnu.nextBroadcast("PARTICIPANT_FORFEITED");
@@ -196,26 +197,11 @@ class MatchReconnectFlowTest extends GameIntegrationTest {
         assertThat(forfeited.get("payload").get("questionIndex").asInt()).isZero();
         await().atMost(Duration.ofSeconds(2)).until(() -> participation.activityOf(anjuSub).isEmpty());
 
-        // Her later reconnect: a snapshot that says she forfeited, and her answers are rejected.
-        StompTestClient back = client(anjuSub);
-        back.send(to(match.matchId(), "resync"));
-        JsonNode snapshot = back.next("SNAPSHOT").get("payload");
-        assertThat(snapshot.get("youForfeited").asBoolean()).isTrue();
-        assertThat(snapshot.get("selfParticipantId").asString()).isEqualTo(match.ids().get(0).toString());
-        assertThat(snapshot.get("scores").get(0).get("forfeited").asBoolean()).isTrue();
-        back.send(to(match.matchId(), "answer"), body(0, 0));
-        back.error("ANSWER_REJECTED");
-
-        // Vishnu plays on, and the question closes as soon as he answers.
-        long before = System.nanoTime();
-        vishnu.send(to(match.matchId(), "answer"), body(0, 0));
-        vishnu.next("ANSWER_ACCEPTED");
-        vishnu.nextBroadcast("SCOREBOARD");
+        // A 1v1: the forfeit ends the match at once. The open question is revealed, Vishnu wins.
         vishnu.nextBroadcast("QUESTION_REVEALED");
-        assertThat(Duration.ofNanos(System.nanoTime() - before)).isLessThan(Duration.ofMillis(1_500));
-        double completed = counter(MatchMetrics.ENDED);
-        vishnu.send(to(match.matchId(), "leave"));
-        vishnu.nextBroadcast("PARTICIPANT_FORFEITED");
+        JsonNode ended = vishnu.next("MATCH_ENDED").get("payload");
+        assertThat(participant(ended, match.ids().get(0)).get("placement").asInt()).isEqualTo(2);
+        assertThat(participant(ended, match.ids().get(1)).get("placement").asInt()).isEqualTo(1);
         awaitIdle(vishnuSub);
         assertThat(counter(MatchMetrics.ENDED)).isEqualTo(completed + 1);
     }
@@ -304,5 +290,14 @@ class MatchReconnectFlowTest extends GameIntegrationTest {
             }
         }
         throw new AssertionError("no " + type);
+    }
+
+    private static JsonNode participant(JsonNode payload, java.util.UUID id) {
+        for (JsonNode p : payload.get("participants")) {
+            if (p.get("participantId").asString().equals(id.toString())) {
+                return p;
+            }
+        }
+        throw new AssertionError("no participant " + id);
     }
 }

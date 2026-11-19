@@ -143,7 +143,7 @@ describe('Story 1.6 strings', () => {
 
   it('drafts every Story 1.8 string in both languages, flagged for sign-off', () => {
     const keys = Object.keys(catalogue).filter(
-      (key) => /^match\./.test(key) && !/^match\.(foundVs|none|firstTapHint|locked|wrong|overtake|reconnecting|forfeited|leaveConfirm)$/.test(key),
+      (key) => /^match\./.test(key) && !/^match\.(foundVs|none|firstTapHint|locked|wrong|overtake|reconnecting|forfeited|forfeitedOneVsOne|opponentLeftWin|leaveConfirm)$/.test(key),
     ) as CatalogueKey[];
     expect([...keys, 'title.question']).toEqual(expect.arrayContaining(['match.lockTag', 'match.revealCorrect', 'match.over']));
     for (const key of [...keys, 'title.question' as const]) {

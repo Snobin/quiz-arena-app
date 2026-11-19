@@ -4,6 +4,7 @@ import in.minnal.contracts.internal.InternalQuestion;
 import in.minnal.contracts.realtime.AbortReason;
 import in.minnal.contracts.realtime.ErrorCode;
 import in.minnal.contracts.realtime.MatchEndedPayload;
+import in.minnal.contracts.realtime.MatchMode;
 import in.minnal.contracts.realtime.MessageType;
 import in.minnal.contracts.realtime.ParticipantForfeitedPayload;
 import in.minnal.contracts.realtime.ParticipantKind;
@@ -88,6 +89,8 @@ public final class MatchActor implements AutoCloseable {
     private volatile boolean failed;
     private volatile boolean aborted;
     private volatile boolean ended;
+    /** Set when a human-vs-human 1v1 forfeit ends the match: it completes even before the Q1 reveal. */
+    private volatile boolean forcedComplete;
     /** The last broadcast {@code seq}, readable from any thread (for replies after the end). */
     private volatile long lastSeq;
 
@@ -151,9 +154,9 @@ public final class MatchActor implements AutoCloseable {
         return ended;
     }
 
-    /** Whether the match counts as completed: Q1 was revealed (Story 1.9). Actor thread only. */
+    /** Whether the match counts as completed: Q1 was revealed (Story 1.9), or a 1v1 forfeit ended it (Story 1.12). */
     public boolean isCompleted() {
-        return state.q1Revealed();
+        return forcedComplete || state.q1Revealed();
     }
 
     /** Whether every human left before Q1 was revealed, so the match was aborted. */
@@ -286,9 +289,19 @@ public final class MatchActor implements AutoCloseable {
             } else {
                 finishNow();
             }
+        } else if (isHumanVsHumanOneVsOne()) {
+            // A 1v1 forfeit ends the match at once as completed, even before the Q1 reveal.
+            forcedComplete = true;
+            finishNow();
         } else if (state.allAnswered()) {
             closeEarly();
         }
+    }
+
+    /** A QUICK or TOPIC_DUEL match whose every participant is a human (has a sub). */
+    private boolean isHumanVsHumanOneVsOne() {
+        return state.mode() != MatchMode.BATTLE_ROOM
+                && state.participants().stream().allMatch(p -> p.sub().isPresent());
     }
 
     /**
@@ -417,7 +430,7 @@ public final class MatchActor implements AutoCloseable {
         }
         ended = true;
         try {
-            if (!failed && !aborted && state.q1Revealed()) {
+            if (!failed && !aborted && isCompleted()) {
                 completed();
             }
         } catch (RuntimeException e) {

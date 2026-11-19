@@ -235,7 +235,7 @@ class MatchRegistryTest {
     @Test
     void aGraceForfeitReleasesHerAtOnceWhileTheMatchGoesOnForTheOther() {
         registry = registry(MatchTestKit.fast(Duration.ofSeconds(5), Duration.ofMillis(150)), broadcaster);
-        MatchSetup setup = claimed(MatchTestKit.setup(2, 0, 2));
+        MatchSetup setup = claimed(MatchTestKit.room(MatchTestKit.setup(3, 0, 2)));
         MatchActor match = registry.start(setup).orElseThrow();
         sessions.disconnected("h0", "s-h0");
         registry.onLastSessionClosed(new LastSessionClosed("h0"));

@@ -93,3 +93,13 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-10-rematch.md`
   summary: Amend AD-10 in the architecture spine for the rematch wire: `/app/match/{id}/rematch/cancel`, the private `REMATCH_REQUESTED`/`REMATCH_DECLINED {CANCELLED|UNAVAILABLE}`/`REMATCH_EXPIRED`, and `REMATCH_ACCEPTED` left unused (the new match arrives as `MATCH_FOUND`). Do the same for the Story 1.9 types (`PARTICIPANT_FORFEITED`, `MATCH_ABORTED`) if they are not already listed.
   evidence: The spec says the wire amends AD-10, but the diff touches no architecture doc (blind review of the rematch build).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-12-a-1v1-forfeit-ends-the-match.md`
+  summary: Guard Epic 2 ratings against rated wins from a 1v1 left before any question was asked.
+  evidence: A human-vs-human 1v1 forfeited in the lead-in completes with zero questions and `rated` true (owner decision 3); colluding accounts could farm wins.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-12-a-1v1-forfeit-ends-the-match.md`
+  summary: Derive 1v1 from `mode` on the web (not participant count) before Epic 5, and test a TOPIC_DUEL forfeit in Epic 4.
+  evidence: Rooms allow 2 humans (FR34), so a 2-player Battle Room would show 1v1 forfeit copy; TOPIC_DUEL forfeit has no test.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-12-a-1v1-forfeit-ends-the-match.md`
+  summary: Add a test for a player who reconnects after her grace forfeit ended a 1v1 (unverified connection.ts edge).
+  evidence: connection.ts finishes 'completed' on MATCH_ENDED when forfeited.length > 0; whether a reconnecting leaver can hit this with no outcome set is unconfirmed.

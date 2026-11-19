@@ -138,7 +138,11 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
             <ResultsBand view={view} />
             {view.self.forfeited ? (
               <p data-testid="notice-forfeited" className="text-body text-muted">
-                {t('match.forfeited')}
+                {full.payload.mode === 'BATTLE_ROOM'
+                  ? t('match.forfeited')
+                  : t('match.forfeitedOneVsOne', {
+                      name: full.payload.participants.find((p) => p.participantId !== full.selfId)?.displayName ?? '',
+                    })}
               </p>
             ) : null}
             <DotStrip answers={answers} />
@@ -305,7 +309,11 @@ function MinimalResults({ live }: { live: LiveMatch }) {
         </h1>
         {outcome.kind === 'forfeited' ? (
           <p data-testid="notice-forfeited" className="text-body text-muted">
-            {t('match.forfeited')}
+            {live.participants.length === 2
+              ? t('match.forfeitedOneVsOne', {
+                  name: live.participants.find((p) => p.participantId !== live.selfParticipantId)?.displayName ?? '',
+                })
+              : t('match.forfeited')}
           </p>
         ) : null}
         {stillGoing ? (
