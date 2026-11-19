@@ -381,6 +381,67 @@ export const catalogue = {
     en: 'Play again',
     signoff: ['ml', 'en'],
   },
+  // Rating change and match history (Story 2.6)
+  'results.ratingUpdating': {
+    ml: 'അപ്ഡേറ്റ് ചെയ്യുന്നു…',
+    en: 'updating',
+    signoff: ['ml', 'en'],
+  },
+  'results.rating.sr': {
+    ml: 'റേറ്റിംഗ് {{delta, signed}}',
+    en: 'rating {{delta, signed}}',
+    signoff: ['ml', 'en'],
+  },
+  'ratings.title': {
+    ml: 'റേറ്റിംഗുകൾ',
+    en: 'Ratings',
+    signoff: ['ml', 'en'],
+  },
+  'ratings.error.network': {
+    ml: 'ലോഡ് ചെയ്യാനായില്ല: ഇന്റർനെറ്റ് ഇല്ല.',
+    en: "Couldn't load this: you're offline.",
+    signoff: ['ml', 'en'],
+  },
+  'ratings.error.server': {
+    ml: 'ലോഡ് ചെയ്യാനായില്ല: സെർവർ പ്രശ്നം.',
+    en: "Couldn't load this: the server had a problem.",
+    signoff: ['ml', 'en'],
+  },
+  'history.title': {
+    ml: 'കഴിഞ്ഞ മാച്ചുകൾ',
+    en: 'Recent matches',
+    signoff: ['ml', 'en'],
+  },
+  'history.result.WIN': {
+    ml: 'ജയിച്ചു',
+    en: 'Won',
+    signoff: ['ml', 'en'],
+  },
+  'history.result.LOSS': {
+    ml: 'തോറ്റു',
+    en: 'Lost',
+    signoff: ['ml', 'en'],
+  },
+  'history.result.DRAW': {
+    ml: 'സമനില',
+    en: 'Draw',
+    signoff: ['ml', 'en'],
+  },
+  'history.unrated': {
+    ml: 'റേറ്റിംഗ് ഇല്ല',
+    en: 'unrated',
+    signoff: ['ml', 'en'],
+  },
+  'history.empty': {
+    ml: 'ഇതുവരെ മാച്ചുകളില്ല. ആദ്യത്തേത് കളിക്കാം.',
+    en: 'No matches yet. Play your first one.',
+    signoff: ['ml', 'en'],
+  },
+  'history.playNow': {
+    ml: 'ക്വിക്ക് മാച്ച് കളിക്കാം',
+    en: 'Play a Quick Match',
+    signoff: ['ml', 'en'],
+  },
   'results.continue': { ml: 'തുടരുക', en: 'Continue', signoff: ['ml', 'en'] },
   'results.heading.win': {
     ml: 'നിങ്ങൾ ജയിച്ചു, {{you, number}} – {{them, number}}',

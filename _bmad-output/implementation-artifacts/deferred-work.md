@@ -148,3 +148,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-5b-game-service-rating-cache.md`
   summary: Add a "caught up" signal (readiness or metric) for the game-service rating cache, a sanity bound on `ratedAt`, and replay progress and lag metrics.
   evidence: Players queueing during the initial replay match as 1200 and nothing shows when replay finished; a future `ratedAt` from a bad producer would pin a rating.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-6-rating-change-and-match-history.md`
+  summary: Offer a later retry or refresh when the rating delta stays on "updating", and avoid the 10 s placeholder for a rated-source match with no human opponent rated.
+  evidence: After the window the client stops asking; a BANK match against only a bot or guest still rates the human, so this is rare, but a slow ratings consumer leaves "updating" until she reopens the results.

@@ -5,6 +5,7 @@ import { BotBadge } from '../../design/BotBadge.tsx';
 import { Button } from '../../design/Button.tsx';
 import { PageColumn } from '../../design/PageColumn.tsx';
 import { motion } from '../../design/tokens.ts';
+import { useMatchDelta } from '../../ratings/useMatchDelta.ts';
 import { formatNumber } from '../../i18n/format.ts';
 import { Lang } from '../../i18n/Lang.tsx';
 import { useDocumentTitle } from '../../i18n/useDocumentTitle.ts';
@@ -134,9 +135,21 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
   const showPrompt = playedAsGuest && status === 'guest' && full.payload.mode === 'QUICK';
   const signedInAfterGuest = playedAsGuest && status === 'registered';
 
+  // Her rating change (Story 2.6): only for a registered player's own rated match; a guest's results and an
+  // unrated match show nothing at all.
+  const ratedForHer = status === 'registered' && !playedAsGuest && full.payload.questionSource === 'BANK';
+  const delta = useMatchDelta(matchId, ratedForHer);
+  // The heading's name already carries the rating, but a changed name is not announced: say it once, politely.
+  const deltaValue = delta.status === 'ready' ? delta.delta : null;
+  useEffect(() => {
+    if (deltaValue !== null) announce(t('results.rating.sr', { delta: deltaValue }));
+  }, [deltaValue]);
+
   const you = view.self.score;
   const them = view.rival?.score ?? 0;
-  const heading = t(`results.heading.${view.kind}`, { you, them });
+  const baseHeading = t(`results.heading.${view.kind}`, { you, them });
+  // The accessible name gains the rating once it is known ("You won, 3,140 to 2,980, rating +24").
+  const heading = delta.status === 'ready' ? `${baseHeading}, ${t('results.rating.sr', { delta: delta.delta })}` : baseHeading;
   const answers = full.payload.breakdown.find((b) => b.participantId === full.selfId)?.answers ?? [];
 
   return (
@@ -154,7 +167,7 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
               <span aria-hidden="true">{t('results.title')}</span>
               <span className="sr-only">{heading}</span>
             </h1>
-            <ResultsBand view={view} />
+            <ResultsBand view={view} delta={ratedForHer ? delta : undefined} />
             {showPrompt ? <GuestResultsPrompt view={view} /> : null}
             {signedInAfterGuest ? (
               <p data-testid="guest-match-note" className="text-caption text-muted">
@@ -190,6 +203,7 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
           selfScore={you}
           opponent={view.rival ? { name: view.rival.displayName, score: view.rival.score } : null}
           reduced={reduced}
+          delta={delta.status === 'ready' ? delta.delta : null}
           onDone={onTakeoverDone}
         />
       ) : null}

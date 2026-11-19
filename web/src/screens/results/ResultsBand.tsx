@@ -3,15 +3,17 @@ import { BotBadge } from '../../design/BotBadge.tsx';
 import { PeakBandSurface, VoltText } from '../../design/peak/volt.tsx';
 import { formatNumber } from '../../i18n/format.ts';
 import { Lang } from '../../i18n/Lang.tsx';
+import type { DeltaState } from '../../ratings/useMatchDelta.ts';
 import type { ResultView } from './outcome.ts';
+import { RatingDelta } from './RatingDelta.tsx';
 
 /**
  * The compact results band (DESIGN.md › Results band / Draw band). Win: "You won!", her score in
  * volt, the opponent muted, a volt edge in dark mode. Loss: the ink band with no volt and the loss
- * line naming the winner unchanged. Draw: "Draw", both scores in white, no volt. No rating delta
- * in Epic 1. A forfeited opponent carries the "left" tag; a bot always carries the BOT badge.
+ * line naming the winner unchanged. Draw: "Draw", both scores in white, no volt. A registered player's own
+ * rated match adds the rating-change slot (Story 2.6). A forfeited opponent carries the "left" tag; a bot always carries the BOT badge.
  */
-export function ResultsBand({ view }: { view: ResultView }) {
+export function ResultsBand({ view, delta }: { view: ResultView; delta?: DeltaState }) {
   const { t } = useTranslation();
   const { kind, self, rival, winner } = view;
   const line =
@@ -55,6 +57,7 @@ export function ResultsBand({ view }: { view: ResultView }) {
           </span>
         ) : null}
       </div>
+      {delta ? <RatingDelta state={delta} kind={kind} /> : null}
     </PeakBandSurface>
   );
 }

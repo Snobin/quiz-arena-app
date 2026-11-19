@@ -29,7 +29,7 @@ import java.util.function.UnaryOperator;
  * A stand-in for core-service's JWKS: a JDK HTTP server on a random loopback port serving one RSA
  * public key, plus helpers that mint tokens the way core does (and ways it never would).
  */
-final class TestJwks implements AutoCloseable {
+public final class TestJwks implements AutoCloseable {
 
     static final String PATH = "/api/core/v1/auth/jwks";
 
@@ -56,7 +56,7 @@ final class TestJwks implements AutoCloseable {
         server.start();
     }
 
-    static TestJwks start() {
+    public static TestJwks start() {
         try {
             return new TestJwks();
         } catch (IOException | JOSEException e) {
@@ -64,7 +64,7 @@ final class TestJwks implements AutoCloseable {
         }
     }
 
-    String uri() {
+    public String uri() {
         return "http://" + server.getAddress().getHostString() + ":" + server.getAddress().getPort() + PATH;
     }
 
@@ -86,7 +86,7 @@ final class TestJwks implements AutoCloseable {
         return key.getKeyID();
     }
 
-    static JWTClaimsSet.Builder guestClaims() {
+    public static JWTClaimsSet.Builder guestClaims() {
         Instant now = Instant.now();
         return new JWTClaimsSet.Builder()
                 .issuer(MinnalClaims.ISSUER)
@@ -98,11 +98,11 @@ final class TestJwks implements AutoCloseable {
                 .claim(MinnalClaims.LANG, "ml");
     }
 
-    String token(UnaryOperator<JWTClaimsSet.Builder> claims) {
+    public String token(UnaryOperator<JWTClaimsSet.Builder> claims) {
         return sign(key, claims.apply(guestClaims()).build());
     }
 
-    String validToken() {
+    public String validToken() {
         return token(c -> c);
     }
 
