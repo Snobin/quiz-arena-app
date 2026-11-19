@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-11-2026 09:40
-last_updated: '2026-11-19'
+last_updated: '11-19-2026 17:16'
 project: quiz-arena
 project_key: NOKEY
 tracking_system: file-system
@@ -59,7 +59,7 @@ development_status:
   2-6-rating-change-and-match-history: done
   2-7-leaderboards: done
   2-8-settings-and-account-deletion: done
-  epic-2-retrospective: optional
+  epic-2-retrospective: done
 
   epic-3: backlog
   3-1-admin-console-access-and-layout: backlog
@@ -100,3 +100,58 @@ development_status:
   7-3-launch-metrics: backlog
   7-4-launch-readiness: backlog
   epic-7-retrospective: optional
+action_items:
+  - id: "epic-2-retro-item-1-a1-answer-the-dpdp-erasure-question-and"
+    epic: 2
+    action: "A1 Answer the DPDP erasure question and reconcile the delete-account
+      copy; launch blocked until then (Story 7.4)"
+    owner: "owner"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-19.md"
+  - id: "epic-2-retro-item-2-a2-decide-and-implement-how-a-failed-log"
+    epic: 2
+    action: "A2 Decide and implement how a failed logout is handled (retry on boot
+      or surface the failure)"
+    owner: "owner and dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-19.md"
+  - id: "epic-2-retro-item-3-a3-sign-off-malayalam-copy-display-name"
+    epic: 2
+    action: "A3 Sign off Malayalam copy, display-name rule, no rating floor, top-100
+      limit and tie ranking"
+    owner: "owner"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-19.md"
+  - id: "epic-2-retro-item-4-a4-harden-game-service-deletion-durable"
+    epic: 2
+    action: "A4 Harden game-service deletion: durable deleted-user set, guard rematch,
+      rooms and other ratings reads, add metrics"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-19.md"
+  - id: "epic-2-retro-item-5-a5-story-template-check-new-streams-feed"
+    epic: 2
+    action: "A5 Story-template check: new streams, feeders and runners need a test
+      through the real stream name"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-19.md"
+  - id: "epic-2-retro-item-6-a6-add-a-real-two-context-test-for-the-s"
+    epic: 2
+    action: "A6 Add a real two-context test for the Story 2.2 reuse-detection criterion"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-19.md"
+  - id: "epic-2-retro-item-7-a7-show-the-sign-in-cancelled-note-on-ev"
+    epic: 2
+    action: "A7 Show the sign-in cancelled note on every originating surface (Story
+      2.1)"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-19.md"
+  - id: "epic-2-retro-item-8-a8-choose-one-error-and-status-code-conv"
+    epic: 2
+    action: "A8 Choose one error and status-code convention and apply it in ratings"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-19.md"
