@@ -8,6 +8,8 @@ import { uiLanguage } from '../i18n/index.ts';
 import { useDocumentTitle } from '../i18n/useDocumentTitle.ts';
 import { districtKey, examLevelKey, type DistrictCode, type ExamLevel } from '../profile/districts.ts';
 import { ensureProfileLoaded, useProfile } from '../profile/profileStore.ts';
+import { MatchHistory } from '../ratings/MatchHistory.tsx';
+import { RatingTrio } from '../ratings/RatingTrio.tsx';
 import { SignInNudge } from './home/SignInNudge.tsx';
 import { ProfileForm } from './profile/ProfileForm.tsx';
 
@@ -53,6 +55,8 @@ export function MeScreen() {
             onCancel={() => setEditing(false)}
           />
         ) : (
+          <>
+          <RatingTrio />
           <section aria-labelledby="profile-heading" data-testid="profile-section" className="flex flex-col gap-2 rounded-lg border border-hairline bg-card p-4">
             <h2 id="profile-heading" className="text-body font-bold">
               {t('profile.section')}
@@ -69,6 +73,8 @@ export function MeScreen() {
               {t('profile.edit')}
             </Button>
           </section>
+          <MatchHistory />
+          </>
         )}
       </main>
     </PageColumn>

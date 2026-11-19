@@ -1,5 +1,6 @@
 import { lazy, Suspense, type ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useSession } from './auth/session.ts';
 import { ensureProfileLoaded, resetProfile, useProfile } from './profile/profileStore.ts';
@@ -73,7 +74,13 @@ export function App() {
   const profileStatus = useProfile((s) => s.status);
   const profileReady = profileStatus === 'ready';
   const profileComplete = useProfile((s) => s.profile?.profileComplete ?? false);
+  const queryClient = useQueryClient();
   useEffect(() => {
+    // Her ratings and history belong to her: nothing is kept for the next account on this tab.
+    if (status !== 'registered') {
+      queryClient.removeQueries({ queryKey: ['ratings'] });
+      queryClient.removeQueries({ queryKey: ['matches'] });
+    }
     if (status === 'registered') void ensureProfileLoaded();
     else if (status === 'guest') resetProfile();
   }, [status]);

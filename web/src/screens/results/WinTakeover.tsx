@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { animatePeak } from '../../design/peak/animate.ts';
 import { TAKEOVER_SURFACE, TakeoverBolt, VoltText } from '../../design/peak/volt.tsx';
 import { motion } from '../../design/tokens.ts';
-import { formatNumber } from '../../i18n/format.ts';
+import { formatNumber, formatSigned } from '../../i18n/format.ts';
 import { Lang } from '../../i18n/Lang.tsx';
 import { requestFlash } from '../../motion/flashScheduler.ts';
 
@@ -12,6 +12,8 @@ export type WinTakeoverProps = {
   /** The best opponent, muted under her score; null when there is none. */
   opponent: { name: string; score: number } | null;
   reduced: boolean;
+  /** Her rating change, shown only when it has already arrived (the takeover opens before the fetch can finish). */
+  delta?: number | null;
   /** Called once the collapse has finished: the caller unmounts it. */
   onDone: () => void;
 };
@@ -29,7 +31,7 @@ export type WinTakeoverProps = {
  *   A screen reader cannot be detected, so it still auto-advances there; focus then lands on the
  *   results heading, which carries the result (a known limitation against UX-DR38).
  */
-export function WinTakeover({ selfScore, opponent, reduced, onDone }: WinTakeoverProps) {
+export function WinTakeover({ selfScore, opponent, reduced, delta, onDone }: WinTakeoverProps) {
   const { t } = useTranslation();
   const titleId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -118,6 +120,11 @@ export function WinTakeover({ selfScore, opponent, reduced, onDone }: WinTakeove
           <span data-testid="takeover-opponent" className="text-body tabular-nums text-on-band-muted">
             <Lang>{opponent.name}</Lang> {formatNumber(opponent.score)}
           </span>
+        ) : null}
+        {delta !== undefined && delta !== null ? (
+          <VoltText testId="takeover-delta" className="rounded-full bg-band-raised px-3 py-1 text-body font-bold tabular-nums">
+            {formatSigned(delta)}
+          </VoltText>
         ) : null}
       </p>
       <button

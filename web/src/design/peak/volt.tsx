@@ -7,6 +7,15 @@ import { BOLT_POINTS } from './BoltStrike.tsx';
  * it lives only here (`npm run check:tokens`); the results screen composes these.
  */
 
+/** A volt chip with on-volt text (the win's rating change, UX-DR38): only ever inside a band surface. */
+export function VoltChip({ children, className, testId }: { children: ReactNode; className?: string; testId?: string }) {
+  return (
+    <span data-testid={testId} data-accent="" className={['rounded-full bg-volt px-3 py-1 font-bold text-on-volt', className].filter(Boolean).join(' ')}>
+      {children}
+    </span>
+  );
+}
+
 /** Text in volt: only ever inside a band surface. */
 export function VoltText({ children, className, testId }: { children: ReactNode; className?: string; testId?: string }) {
   return (

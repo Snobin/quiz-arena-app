@@ -2,7 +2,8 @@
 title: 'Story 2.6: Rating change and match history'
 type: 'feature'
 created: '2026-11-19'
-status: 'ready-for-dev'
+status: 'done'
+baseline_commit: 'c58b708fbbee4c2d435564264eb182a197def341'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -54,9 +55,9 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `ratings` read repository, the three endpoints, auth rules, Problem Details; integration tests for every matrix row
-- [ ] `web` ratings API client and `useMatchDelta` (backoff, 10 s limit, 404 vs other errors); delta slot in the results band, takeover pass-through, heading name; tests incl. guest, unrated, CUSTOM, retry then "updating"
-- [ ] `web` rating trio (Me and Home) and match history with empty state and independent retries; i18n; tests
+- [x] `ratings` read repository, the three endpoints, auth rules, Problem Details; integration tests for every matrix row
+- [x] `web` ratings API client and `useMatchDelta` (backoff, 10 s limit, 404 vs other errors); delta slot in the results band, takeover pass-through, heading name; tests incl. guest, unrated, CUSTOM, retry then "updating"
+- [x] `web` rating trio (Me and Home) and match history with empty state and independent retries; i18n; tests
 
 **Acceptance Criteria:**
 - Given the epics.md Story 2.6 criteria, when ratings-service and the web app run against fixtures, then each passes.
@@ -64,9 +65,26 @@ context:
 
 ## Implementation Notes
 
+- ratings: `RatingsController` reads the caller from `@AuthenticationPrincipal MinnalPrincipal` and keys every query by its `sub`; `GET /matches/{id}` joins `match_record` to `rating_event` (so before and after come from the event, the delta from it too); a record for another player is the same 404 as an unprocessed match. `TestJwks` in the ratings tests was made public so the API test can mint tokens.
+- web: `useMatchDelta` retries 404, offline and 5xx alike (0.5 s, 1 s, then 2 s) until 10 s have passed, then settles on "updating". The delta slot is mounted only for a registered player's own BANK-sourced match; the slot keeps one element from the first paint (min height) so nothing shifts. The volt chip lives in `design/peak/volt.tsx` (`VoltChip`) because volt may appear only there. The takeover shows the delta only if it has already arrived.
+- The trio and history use react-query with `retry: false`; each has its own inline retry, so one failing never hides the other. Match dates use `Intl.DateTimeFormat` in `Asia/Kolkata` with Latin digits (`ml-IN-u-nu-latn`).
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| Finding | Verdict | Route | Evidence |
+|---|---|---|---|
+| A rated record with no rating event read as "unrated" and removed the slot | medium | patch (fixed) | server answers 404 for it; the client keeps asking while a rated reply has no delta; tests added |
+| The 10 s window was an elapsed-time estimate (a hung request, or a last attempt near 10 s, broke it) | medium | patch (fixed) | a clock timer ends the window; a hung request test added |
+| A permanent 4xx (401, 403, 400) was retried for 10 s | low | patch (fixed) | settles on "updating" at once; test added |
+| A 404 on `/me/ratings` or `/me/matches` became an empty list; a non-JSON 2xx escaped as a raw error | medium | patch (fixed) | those routes treat 404 as an error with a retry; JSON errors become `RatingsError`; tests added |
+| Ratings and history stayed cached across sign-out or an account switch | medium | patch (fixed) | the queries are removed when she is no longer signed in; test added |
+| The reserved delta slot collapsed on "unrated" (layout shift) | low | patch (fixed) | the empty slot stays; test updated |
+| The rating was only in the heading's name (a changed name is not announced); the Malayalam error text said "rating" for history too; the trio had a blank loading state | low | patch (fixed) | polite announcement when the delta arrives; generic ml text; a dash placeholder |
+| No tests for the takeover chip, a draw, "updating", `limit=20`, no-store | medium | patch (fixed) | tests added |
+| Stuck on "updating" with no later retry; duplicated mode mapping; unknown mode or result values; `ratedForHer` is client-side only (a bot-only BANK match shows the placeholder up to 10 s) | low | defer/false | DB CHECKs constrain the values; the placeholder window is bounded; a refresh affordance is a follow-up |
+| `(user_id, ended_at)` index missing | low | false | `match_record_user_ended_idx` exists in V1 |
 
 ## Verification
 
