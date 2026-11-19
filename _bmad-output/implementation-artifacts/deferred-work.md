@@ -133,3 +133,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-3-profile-setup-and-editing.md`
   summary: Product decisions on display names: uniqueness, homoglyph and mixed-script policy, and a grapheme-count parity test across JDK and browser segmenters.
   evidence: The name rule is an [ASSUMPTION] pending sign-off; Java BreakIterator and Intl.Segmenter may differ at the 24/25 boundary for some conjuncts.
+
+- source_spec: none
+  summary: Story 2.5 part B: game-service rating cache replayed from `minnal.rating.updated` with plain XREAD (latest `ratedAt` wins, missing entry is 1200), feeding the matchmaking actor, with an end-to-end test that 1500 and 1250 are not paired before the 4 s widening.
+  evidence: Split from Story 2.5 by the user's choice (2026-11-19) because the story spans two large pieces; ratings-service (part A) must publish the stream first.
