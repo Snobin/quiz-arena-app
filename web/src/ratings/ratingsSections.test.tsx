@@ -161,22 +161,25 @@ describe('Me: rating trio and match history', () => {
     expect(screen.queryByTestId('rating-trio')).toBeNull();
   });
 
-  it('forgets her ratings and history when she is no longer signed in', async () => {
+  it('forgets her ratings, history and positions when she stops being signed in (not on first render)', async () => {
     core({});
     await boot();
-    const { unmount } = renderApp('/me');
-    await screen.findAllByTestId('history-row');
-    unmount();
-    // A new account on the same tab: nothing of the previous one is shown while its own data loads.
-    session.reset();
-    const client = new QueryClient();
-    client.setQueryData(['ratings', 'me'], []);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    window.history.pushState(null, '', '/me');
+    syncFromLocation();
     render(
       <QueryClientProvider client={client}>
         <App />
       </QueryClientProvider>,
     );
+    await screen.findAllByTestId('history-row');
+    expect(client.getQueryData(['ratings', 'me'])).toBeDefined();
+    expect(client.getQueryData(['matches', 'me'])).toBeDefined();
+
+    // She signs out (or her session ends): nothing of hers stays for the next account on this tab.
+    act(() => session.store.setState({ status: 'guest', name: null, signedOut: true }));
     await waitFor(() => expect(client.getQueryData(['ratings', 'me'])).toBeUndefined());
+    expect(client.getQueryData(['matches', 'me'])).toBeUndefined();
   });
 
   it('guests never see the trio or the history, and ask the ratings API nothing', async () => {

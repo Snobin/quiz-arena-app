@@ -163,3 +163,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-7-leaderboards.md`
   summary: Remove a deleted player from every live leaderboard (ZREM) when account deletion (Story 2.8) tombstones her.
   evidence: The projector skips tombstoned players and the API hides them, but entries written before the tombstone stay in Valkey (holding positions) until a rebuild.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-7b-ranks-tab.md`
+  summary: Tie the pinned-row spacer to its measured height, take the pinned row's name and district from the board's own entry, point the empty card at a board known to have rows, and validate the leaderboard response shape.
+  evidence: The spacer (96 px) and pinned min height (56 px) are fixed numbers that can mismatch large text or a wrapped name; the all-time link can lead to another empty board.

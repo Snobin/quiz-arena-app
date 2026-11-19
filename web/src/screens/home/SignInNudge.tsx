@@ -12,7 +12,7 @@ export const NUDGE_BUTTON_ID = 'homeNudgeSignIn';
  * so the Quick Match card stays the only filled ink element. It starts the Google sign-in directly
  * and brings her back to Home.
  */
-export function SignInNudge() {
+export function SignInNudge({ returnTo = '/' }: { returnTo?: string } = {}) {
   const { t } = useTranslation();
   const titleId = useId();
   return (
@@ -26,7 +26,7 @@ export function SignInNudge() {
       </h2>
       <p className="text-caption text-muted">{t('nudge.body')}</p>
       <SignInOutcomeNote />
-      <Button id={NUDGE_BUTTON_ID} variant="secondary" className="mt-2 w-full" onClick={() => startGoogleSignIn('/')}>
+      <Button id={NUDGE_BUTTON_ID} variant="secondary" className="mt-2 w-full" onClick={() => startGoogleSignIn(returnTo)}>
         {t('signIn.google')}
       </Button>
     </section>
