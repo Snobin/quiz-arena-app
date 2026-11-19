@@ -55,7 +55,7 @@ development_status:
   2-2-refresh-token-rotation-and-session-continuity: done
   2-3-profile-setup-and-editing: done
   2-4-guest-results-sign-in-prompt: done
-  2-5-ratings-service-computes-elo: review
+  2-5-ratings-service-computes-elo: done
   2-6-rating-change-and-match-history: backlog
   2-7-leaderboards: backlog
   2-8-settings-and-account-deletion: backlog
