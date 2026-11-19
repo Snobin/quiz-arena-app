@@ -101,6 +101,29 @@ and kid, and redeploy core. Drop the old entry after 24 h, when its last guest t
 printf '%s' "$OLD_MINNAL_JWT_SIGNING_KEY" | base64 -d | openssl pkey -pubout | base64 | tr -d '\n'
 ```
 
+### Sign in with Google
+
+Registered players sign in with Google by a full-page redirect (OpenID Connect authorization code + PKCE;
+no popup, One Tap or iframe). core-service verifies the ID token, creates or resumes the account, sets a
+30-day refresh cookie (`httpOnly`, `Secure`, `SameSite=Strict`, `Path=/api/core/v1/auth`) and sends the
+browser to the PWA's `/auth/return`. The PWA trades the cookie for a 1 h access JWT held in memory only
+(`POST /api/core/v1/auth/refresh`); with no cookie, or a stale one, it carries on as a guest.
+
+To create the credentials: in Google Cloud Console open APIs & Services, then Credentials, then Create
+credentials, then OAuth client ID, type **Web application**. Add the callback as an Authorized redirect URI:
+`<GOOGLE_REDIRECT_URI>`, e.g. `https://api.minnal.in/api/core/v1/auth/google/callback` (locally,
+`http://localhost:5173/api/core/v1/auth/google/callback`, which the Vite proxy forwards to core). Put the
+client id and secret in `deploy/.env` (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`; never commit them), set
+`WEB_URL` to the PWA's public URL and `ADMIN_EMAILS` to a comma-separated list of admin addresses (granted
+`ADMIN` only while Google reports the email verified; re-checked on every refresh). With the client id or
+secret empty, core starts and `GET /api/core/v1/auth/google/start` answers 503.
+
+**Shared-domain assumption:** the refresh cookie is `SameSite=Strict`, so it is only sent when the PWA and
+the API share a registrable domain (e.g. `minnal.in` and `api.minnal.in`); the Cloudflare Pages site needs
+that custom domain. When the API is on another origin, build the web app with `VITE_API_BASE_URL`
+(e.g. `https://api.minnal.in`) and list the PWA origin in `CORS_ALLOWED_ORIGINS`; only the refresh
+endpoint allows credentialed cross-origin calls. Tests use a fake OIDC provider and never call Google.
+
 ### Seed the question bank
 
 The starter questions live in `services/core/src/main/resources/seed/kerala-psc-starter.csv` (columns:

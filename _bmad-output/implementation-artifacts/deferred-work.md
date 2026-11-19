@@ -103,3 +103,13 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-12-a-1v1-forfeit-ends-the-match.md`
   summary: Add a test for a player who reconnects after her grace forfeit ended a 1v1 (unverified connection.ts edge).
   evidence: connection.ts finishes 'completed' on MATCH_ENDED when forfeited.length > 0; whether a reconnecting leaver can hit this with no outcome set is unconfirmed.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-sign-in-with-google.md`
+  summary: Refresh tokens have no revocation, logout or expired-row cleanup, and refresh has no Origin/CSRF guard.
+  evidence: Story 2.1 reuses one non-rotating token per sign-in; 2.2 adds rotation and the CSRF guard, 2.8 adds logout and deletion.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-sign-in-with-google.md`
+  summary: Validate WEB_URL at startup and restrict credentialed CORS on refresh to the PWA origin only.
+  evidence: Extra CORS_ALLOWED_ORIGINS entries also receive credentials; a bad WEB_URL fails only at the first sign-in.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-sign-in-with-google.md`
+  summary: Show the sign-in outcome note on any returnTo surface and strip a stale `?signin=` on registered Home.
+  evidence: Only guest Home and the Sign-in prompt mount SignInOutcomeNote.

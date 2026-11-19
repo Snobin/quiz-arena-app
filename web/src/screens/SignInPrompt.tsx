@@ -2,14 +2,17 @@ import type { MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../design/Button.tsx';
 import { PageColumn } from '../design/PageColumn.tsx';
+import { startGoogleSignIn } from '../auth/googleSignIn.ts';
 import { useDocumentTitle } from '../i18n/useDocumentTitle.ts';
 import { isPlainLeftClick, Link } from '../shell/Link.tsx';
 import { cameFromApp, searchParam } from '../shell/router.ts';
+import { SignInOutcomeNote } from './home/SignInOutcomeNote.tsx';
 import { safeReturnPath } from './home/signInPath.ts';
 
 /**
  * The Sign-in prompt (`/sign-in?returnTo=<path>`): an inline surface in the shell, never a modal.
- * Google sign-in arrives in Epic 2, so its button is aria-disabled with a coming-soon caption.
+ * "Continue with Google" starts the redirect sign-in (a full-page navigation, no popup), coming back
+ * to `returnTo` through /auth/return.
  * Back is a link to `returnTo`; when the app pushed this entry it calls history.back() instead (so
  * browser Back and the link agree). AppShell then returns focus to the row or button that opened it.
  */
@@ -43,7 +46,8 @@ export function SignInPrompt() {
         </h1>
         <p>{t('nudge.body')}</p>
         <div className="flex w-full flex-col gap-1">
-          <Button disabled disabledReason={t('signIn.comingSoon')} className="w-full">
+          <SignInOutcomeNote />
+          <Button className="w-full" onClick={() => startGoogleSignIn(returnTo)}>
             {t('signIn.google')}
           </Button>
         </div>

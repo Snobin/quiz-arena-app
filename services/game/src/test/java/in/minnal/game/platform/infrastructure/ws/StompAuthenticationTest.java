@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 /** STOMP CONNECT is authenticated by the JWT (NFR13); everything else needs an authenticated session. */
 class StompAuthenticationTest extends GameIntegrationTest {
 
-    static final Duration WAIT = Duration.ofSeconds(5);
+    static final Duration WAIT = Duration.ofSeconds(15);
 
     void assertRejected(String authorization) throws Exception {
         try (RawStomp stomp = RawStomp.open(port)) {

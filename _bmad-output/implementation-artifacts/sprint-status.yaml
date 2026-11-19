@@ -50,8 +50,8 @@ development_status:
   1-12-a-1v1-forfeit-ends-the-match: done
   epic-1-retrospective: optional
 
-  epic-2: backlog
-  2-1-sign-in-with-google: backlog
+  epic-2: in-progress
+  2-1-sign-in-with-google: review
   2-2-refresh-token-rotation-and-session-continuity: backlog
   2-3-profile-setup-and-editing: backlog
   2-4-guest-results-sign-in-prompt: backlog

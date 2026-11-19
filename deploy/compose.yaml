@@ -72,6 +72,17 @@ services:
       MINNAL_JWT_KEY_ID: ${MINNAL_JWT_KEY_ID:-}
       # Rotation: kid=base64(SPKI PEM),... published in the JWKS, never used to sign.
       MINNAL_JWT_EXTRA_PUBLIC_KEYS: ${MINNAL_JWT_EXTRA_PUBLIC_KEYS:-}
+      # Sign in with Google (Story 2.1). Secrets come from deploy/.env only. Empty client id/secret =
+      # core boots and answers /auth/google/start with 503.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      # Public URL of core's callback (must match the Authorized redirect URI in Google Cloud).
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:5173/api/core/v1/auth/google/callback}
+      # Public URL of the PWA: where the browser lands after sign-in; also the one CORS origin that
+      # may call refresh with cookies.
+      WEB_URL: ${WEB_URL:-http://localhost:5173}
+      # Comma-separated emails that get the ADMIN role (matched against a verified Google email).
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
     depends_on:
       postgres:
         condition: service_healthy

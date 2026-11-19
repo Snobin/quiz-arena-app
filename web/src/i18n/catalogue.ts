@@ -107,10 +107,32 @@ export const catalogue = {
   },
   'signIn.title': { ml: 'മിന്നലിൽ സൈൻ ഇൻ ചെയ്യൂ', en: 'Sign in to Minnal', signoff: ['ml', 'en'] },
   'signIn.google': { ml: 'Google ഉപയോഗിച്ച് തുടരുക', en: 'Continue with Google', signoff: ['ml', 'en'] },
-  'signIn.comingSoon': {
-    ml: 'Google സൈൻ ഇൻ ഉടൻ വരുന്നു',
-    en: 'Google sign-in is coming soon',
+  'signIn.cancelled': { ml: 'സൈൻ ഇൻ റദ്ദാക്കി', en: 'Sign-in cancelled', signoff: ['ml', 'en'] },
+  'signIn.failed': {
+    ml: 'സൈൻ ഇൻ നടന്നില്ല. വീണ്ടും ശ്രമിക്കൂ.',
+    en: "Sign-in didn't work. Please try again.",
     signoff: ['ml', 'en'],
+  },
+  'auth.signingIn': { ml: 'സൈൻ ഇൻ ചെയ്യുന്നു…', en: 'Signing you in…', signoff: ['ml', 'en'] },
+  'auth.signedInAs': {
+    ml: 'സൈൻ ഇൻ ചെയ്തു: {{name}}',
+    en: 'Signed in as {{name}}',
+    signoff: ['ml', 'en'],
+    params: { ml: { name: 'അഞ്ജു' }, en: { name: 'Anju' } },
+  },
+  'home.registeredHeader': {
+    ml: 'ഹായ്, {{name}}',
+    en: 'Hi, {{name}}',
+    signoff: ['ml', 'en'],
+    params: { ml: { name: 'അഞ്ജു' }, en: { name: 'Anju' } },
+  },
+  'home.registeredHeaderNoName': { ml: 'ഹായ്', en: 'Hi', signoff: ['ml', 'en'] },
+  'mode.comingSoon': { ml: 'ഉടൻ വരുന്നു', en: 'Coming soon', signoff: ['ml', 'en'] },
+  'mode.comingSoon.a11y': {
+    ml: '{{mode}}, ഉടൻ വരുന്നു',
+    en: '{{mode}}, coming soon',
+    signoff: ['ml', 'en'],
+    params: { ml: { mode: 'ടോപ്പിക് ഡ്യുവൽ' }, en: { mode: 'Topic Duel' } },
   },
   // Matchmaking and the live-match stub (Story 1.6)
   'title.match': { ml: 'മാച്ച്', en: 'Match', signoff: ['ml', 'en'] },

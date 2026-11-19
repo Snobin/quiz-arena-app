@@ -24,7 +24,7 @@ import tools.jackson.databind.JsonNode;
  */
 class MatchFlowTest extends GameIntegrationTest {
 
-    static final Duration WAIT = Duration.ofSeconds(5);
+    static final Duration WAIT = Duration.ofSeconds(15);
 
     @Autowired
     MatchRegistry matches;

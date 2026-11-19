@@ -46,3 +46,13 @@ export function restartGuestSession(): void {
   }
   guestSession.start();
 }
+
+/** A JWT-shaped token with UTF-8 claims (a Malayalam display name survives the round trip). */
+export function utf8Jwt(claims: Record<string, unknown>): string {
+  const encode = (value: unknown) => {
+    const bytes = new TextEncoder().encode(JSON.stringify(value));
+    const binary = Array.from(bytes, (b) => String.fromCharCode(b)).join('');
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  };
+  return `${encode({ alg: 'RS256', kid: 'test' })}.${encode({ sub: crypto.randomUUID(), roles: ['USER'], lang: 'en', ...claims })}.c2ln`;
+}
