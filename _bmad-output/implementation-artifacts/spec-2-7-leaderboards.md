@@ -2,7 +2,8 @@
 title: 'Story 2.7: Leaderboards (ratings-service backend and API)'
 type: 'feature'
 created: '2026-11-19'
-status: 'ready-for-dev'
+status: 'done'
+baseline_commit: 'd224dc6dfdbdb4a13423adcf93f7c0acb25013ae'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -57,10 +58,10 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `ratings` `PeriodKeys` (IST day, Monday-start ISO week, `all`) with boundary tests on a controllable clock; `LeaderboardStore` (Valkey and fake)
-- [ ] `ratings` projector from Postgres plus the relay hook; tests: absolute values, retry and duplicate, day and week boundaries, zero and negative, unrated, guest, tombstoned
-- [ ] `ratings` rebuild service, command-line option and boot-if-missing runner; real-Valkey test: flush, rebuild, identical boards
-- [ ] `ratings` leaderboard endpoint with ranking, paging, `me`, names, 400s, guest access; integration tests for every matrix row; README note
+- [x] `ratings` `PeriodKeys` (IST day, Monday-start ISO week, `all`) with boundary tests on a controllable clock; `LeaderboardStore` (Valkey and fake)
+- [x] `ratings` projector from Postgres plus the relay hook; tests: absolute values, retry and duplicate, day and week boundaries, zero and negative, unrated, guest, tombstoned
+- [x] `ratings` rebuild service, command-line option and boot-if-missing runner; real-Valkey test: flush, rebuild, identical boards
+- [x] `ratings` leaderboard endpoint with ranking, paging, `me`, names, 400s, guest access; integration tests for every matrix row; README note
 
 **Acceptance Criteria:**
 - Given the epics.md Story 2.7 criteria except the Ranks tab and Home snippet, when ratings-service runs against Postgres and Valkey, then each passes.
@@ -68,9 +69,26 @@ context:
 
 ## Implementation Notes
 
+- The projector hooks into `OutboxRelay` through a `BeforePublish` callback: it runs for each `minnal.rating.updated` row just before `addCapped`, and a failure takes the relay's existing backoff path, so a row is never published without its board. The reference instant is the row's `ratedAt` (the match's end), so each match lands on its own IST day and week.
+- `LeaderboardStore` has a Valkey implementation and an in-memory `FakeLeaderboardStore`; rank is computed as one plus `ZCOUNT` of strictly higher scores (scores are integers, so the lower bound is `score + 0.5`).
+- The rebuild only touches current boards (today, this week, all-time); an older day's board that is still within retention is not recreated after a flush. This follows the criteria ("every current board").
+- `Clock` moved to `ClockConfiguration` (always present) because the API needs it without the stream loops. `LeaderboardRunner` runs only with `minnal.streams.enabled`; the `--rebuild-leaderboards` option rebuilds, then exits through `SpringApplication.exit`.
+- Test infrastructure: one shared Valkey container (`SharedValkey`) for all ratings tests, a `TestClock`, and the scheduled-loop test gets a fake store.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| Finding | Verdict | Route | Evidence |
+|---|---|---|---|
+| `--rebuild-leaderboards` was ignored when the stream loops were off, the one-off process also ran the consumer and relay, a non-`RuntimeException` skipped the exit, and the branch was untested | high | patch (fixed) | the option works whatever the stream setting, the loops stand down in that process, any failure exits 1; exit injectable; tests added |
+| A malformed `rating.updated` outbox row threw on every retry and blocked all rows behind it | high | patch (fixed) | unparseable rows are logged and published as is; wired-relay tests (board written, malformed row and other streams not blocked) |
+| Tombstoned or unparseable members on a board produced a blank, user-id-exposing entry or a 500; one Valkey call per row for ranks; Valkey errors were 500 | medium | patch (fixed) | tombstoned and bad members are skipped, ranks come from the page plus one count, store failures are 503 Problem Details; tests added |
+| A backlogged row older than the retention window recreated an expired board with a fresh TTL | medium | patch (fixed) | skipped when the period's end plus retention has passed; test added |
+| The caller's `sub` in another case missed her position; `period` accepted any case while `mode` did not | low | patch (fixed) | `sub` normalised; both case-sensitive; tests added |
+| Rank, `countHigher` and the store were only tested through a fake; temp key without a TTL; weak boundary assertions; unclosed test connection | medium | patch (fixed) | real-Valkey store test, 1 h TTL on the temp key, exact assertions, try-with-resources |
+| Rebuild races with live projections; tombstoned players already on a live board stay until a rebuild; per-key set and expire not atomic; one-shot in-memory rebuild; no cluster hash tag; no metrics | medium | defer | recorded in `deferred-work.md` (tombstone removal belongs to Story 2.8) |
+| Controller embeds SQL, untyped map bodies, README contract detail | low | defer/false | follows the existing controller pattern; the contract is in the spec and README |
 
 ## Verification
 

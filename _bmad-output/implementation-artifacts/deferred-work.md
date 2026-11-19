@@ -156,3 +156,10 @@
 - source_spec: none
   summary: Story 2.7 part B: the Ranks tab (mode switcher, period tabs, rows with rank, name, district and value, the pinned own row, empty state, one nudge for guests, scroll and selection memory) and the Home rank snippet, on top of the leaderboard API built in part A.
   evidence: Split from Story 2.7 by the user's choice (2026-11-19) because the story spans the backend and a large web surface; part A must serve the API first.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-7-leaderboards.md`
+  summary: Make the leaderboard rebuild safe against concurrent live projections (pause the relay or re-project pending rows), make set and expire atomic, stream large rebuilds in batches, and add metrics for projection failures, board sizes and rebuild duration.
+  evidence: A projection between the rebuild's read and its rename is overwritten until that player's next match; set and expire are separate commands; a rebuild loads all rows in memory.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-7-leaderboards.md`
+  summary: Remove a deleted player from every live leaderboard (ZREM) when account deletion (Story 2.8) tombstones her.
+  evidence: The projector skips tombstoned players and the API hides them, but entries written before the tombstone stay in Valkey (holding positions) until a rebuild.

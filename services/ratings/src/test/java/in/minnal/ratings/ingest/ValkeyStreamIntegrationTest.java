@@ -27,7 +27,7 @@ import tools.jackson.databind.json.JsonMapper;
 /** The consumer, reclaim, dead letter and relay against a real Valkey (Testcontainers; needs Docker). */
 class ValkeyStreamIntegrationTest extends PostgresIntegrationTest {
 
-    static final GenericContainer<?> VALKEY = new GenericContainer<>("valkey/valkey:8-alpine").withExposedPorts(6379);
+    static final GenericContainer<?> VALKEY = in.minnal.ratings.support.SharedValkey.VALKEY;
     static LettuceConnectionFactory factory;
     static StringRedisTemplate redis;
     static ValkeyStreamClient client;
@@ -46,7 +46,6 @@ class ValkeyStreamIntegrationTest extends PostgresIntegrationTest {
 
     @BeforeAll
     static void startValkey() {
-        VALKEY.start();
         factory = new LettuceConnectionFactory(new RedisStandaloneConfiguration(VALKEY.getHost(), VALKEY.getMappedPort(6379)));
         factory.afterPropertiesSet();
         redis = new StringRedisTemplate(factory);
@@ -58,8 +57,9 @@ class ValkeyStreamIntegrationTest extends PostgresIntegrationTest {
 
     @AfterAll
     static void stopValkey() {
-        factory.destroy();
-        VALKEY.stop();
+        if (factory != null) {
+            factory.destroy();
+        }
     }
 
     StreamConsumer consumer(String name) {

@@ -21,12 +21,25 @@ public class OutboxRelay {
     private final OutboxRepository outbox;
     private final StreamClient streams;
     private final Clock clock;
+    private final BeforePublish beforePublish;
     private Instant notBefore = Instant.MIN;
 
+    /** Runs for each row just before it is published; if it throws, the row is not published and is retried. */
+    @FunctionalInterface
+    public interface BeforePublish {
+        void run(OutboxRepository.Entry entry);
+    }
+
     public OutboxRelay(OutboxRepository outbox, StreamClient streams, Clock clock) {
+        this(outbox, streams, clock, entry -> {
+        });
+    }
+
+    public OutboxRelay(OutboxRepository outbox, StreamClient streams, Clock clock, BeforePublish beforePublish) {
         this.outbox = outbox;
         this.streams = streams;
         this.clock = clock;
+        this.beforePublish = beforePublish;
     }
 
     /** Publishes what is due; returns how many events were delivered. */
@@ -39,6 +52,7 @@ public class OutboxRelay {
             }
             OutboxRepository.Entry entry = next.get();
             try {
+                beforePublish.run(entry);
                 streams.addCapped(entry.stream(), entry.payload());
                 outbox.markPublished(entry.id(), clock.instant());
                 delivered++;
