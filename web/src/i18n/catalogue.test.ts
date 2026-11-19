@@ -236,3 +236,24 @@ describe('display names inside Malayalam strings (Story 2.3)', () => {
     }
   });
 });
+
+describe('guest results prompt copy (Story 2.4)', () => {
+  const keys = ['results.prompt.title', 'results.prompt.win', 'results.prompt.loss', 'results.prompt.draw', 'results.prompt.bot'] as const;
+
+  it('has all four variants in both languages, flagged for sign-off', () => {
+    for (const key of keys) {
+      const entry = catalogue[key];
+      expect(entry.ml, key).toBeTruthy();
+      expect(entry.en, key).toBeTruthy();
+      expect(entry.signoff, key).toEqual(['ml', 'en']);
+    }
+  });
+
+  it('never promises this match will be saved, rated or added to history', () => {
+    for (const key of keys) {
+      const { ml, en } = catalogue[key];
+      expect(en as string, key).not.toMatch(/\b(saved?|history|recorded?|added|counts?)\b/i);
+      expect(ml as string, key).not.toMatch(/സേവ്|ഹിസ്റ്ററി|രേഖ|റെക്കോർഡ്/);
+    }
+  });
+});

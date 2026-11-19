@@ -20,9 +20,16 @@ afterEach(() => vi.restoreAllMocks());
 describe('lastResult', () => {
   it('saves, loads and clears {matchId, selfId, payload} under minnal.lastResult', () => {
     expect(load()).toBeNull();
-    save({ matchId: 'm-1', selfId: 'me', payload: payload() });
+    save({ matchId: 'm-1', selfId: 'me', payload: payload(), guest: false });
     expect(JSON.parse(window.sessionStorage.getItem(LAST_RESULT_KEY)!)).toMatchObject({ matchId: 'm-1', selfId: 'me' });
-    expect(load()).toEqual({ matchId: 'm-1', selfId: 'me', payload: payload() });
+    expect(load()).toEqual({ matchId: 'm-1', selfId: 'me', payload: payload(), guest: false });
+    save({ matchId: 'm-1', selfId: 'me', payload: payload(), guest: true });
+    expect(load()?.guest).toBe(true);
+    // An entry from before the flag existed is unknown (null), not silently a registered match.
+    const legacy = JSON.parse(window.sessionStorage.getItem(LAST_RESULT_KEY)!) as Record<string, unknown>;
+    delete legacy.guest;
+    window.sessionStorage.setItem(LAST_RESULT_KEY, JSON.stringify(legacy));
+    expect(load()?.guest).toBeNull();
     clear();
     expect(load()).toBeNull();
   });
@@ -48,7 +55,7 @@ describe('lastResult', () => {
     vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
       throw new Error('blocked');
     });
-    expect(() => save({ matchId: 'm-1', selfId: 'me', payload: payload() })).not.toThrow();
+    expect(() => save({ matchId: 'm-1', selfId: 'me', payload: payload(), guest: false })).not.toThrow();
     expect(load()).toBeNull();
     expect(() => clear()).not.toThrow();
   });

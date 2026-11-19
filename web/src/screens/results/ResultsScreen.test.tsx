@@ -3,16 +3,19 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../App.tsx';
 import { guestSession } from '../../auth/guestSession.ts';
+import { PROFILE_PATH, resetProfile } from '../../profile/profileStore.ts';
+import { REFRESH_PATH, session } from '../../auth/session.ts';
 import { motion } from '../../design/tokens.ts';
 import i18n from '../../i18n.ts';
 import { useReduceEffectsStore } from '../../motion/reduceEffects.ts';
 import { joinQuickMatch, leaveMatch, resetRealtime } from '../../realtime/connection.ts';
+import * as lastResult from '../../realtime/lastResult.ts';
 import { LAST_RESULT_KEY } from '../../realtime/lastResult.ts';
 import { resetAnnouncements, useAnnouncements } from '../../shell/announce.ts';
 import { clearReturnFocus } from '../../shell/returnFocus.ts';
 import { navigate, syncFromLocation } from '../../shell/router.ts';
 import { clearScrollMemory } from '../../shell/scrollMemory.ts';
-import { restartGuestSession, stubFetch } from '../../test-utils/guest.ts';
+import { jsonResponse, restartGuestSession, stubFetch, utf8Jwt } from '../../test-utils/guest.ts';
 import {
   matchEnded,
   matchFound,
@@ -174,6 +177,8 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.useRealTimers();
   resetRealtime();
+  session.reset();
+  resetProfile();
   guestSession.reset();
   clearReturnFocus();
   vi.restoreAllMocks();
@@ -185,6 +190,46 @@ afterEach(async () => {
   useReduceEffectsStore.setState({ setting: 'follow-phone', osReduced: false, fallback: null });
   delete (Element.prototype as { animate?: unknown }).animate;
   await act(() => i18n.changeLanguage('ml'));
+});
+
+describe('the guest prompt on a live arrival (Story 2.4)', () => {
+  it('a guest sees the prompt right after her match, with that match as its hook', async () => {
+    await liveResults({ self: { score: 2980, placement: 2 }, opponent: { score: 3140, placement: 1 } });
+    expect(screen.getByTestId('results-sign-in-prompt')).toHaveTextContent(
+      'Vishnu R won this one. You scored 2,980. Sign in and your next match can move your Quick Match rating.',
+    );
+    expect(lastResult.load()?.guest).toBe(true);
+  });
+
+  it('a Battle Room result gets no Quick Match prompt', async () => {
+    await liveResults({ mode: 'BATTLE_ROOM' });
+    expect(screen.queryByTestId('results-sign-in-prompt')).toBeNull();
+  });
+
+  it('a registered player’s own match never shows it, even if her session later drops to guest', async () => {
+    // A registered session whose refresh works, so joining a match keeps her registered.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input) === REFRESH_PATH
+          ? jsonResponse({ accessToken: utf8Jwt({ name: 'Anju' }), expiresAt: new Date(Date.now() + 3600_000).toISOString() })
+          : String(input) === PROFILE_PATH
+            ? jsonResponse({ displayName: 'Anju', district: 'thrissur', examLevel: 'DEGREE', language: 'en', profileComplete: true })
+            : jsonResponse({ status: 404 }, 404, 'application/problem+json'),
+      ),
+    );
+    session.start();
+    await session.ready();
+    expect(session.store.getState().status).toBe('registered');
+    await liveResults();
+    // The profile loads first (a registered player's screens wait for it), then the results show.
+    expect(await screen.findByTestId('rematch-button')).toBeInTheDocument();
+    expect(screen.queryByTestId('results-sign-in-prompt')).toBeNull();
+    expect(lastResult.load()?.guest).toBe(false);
+    act(() => session.store.setState({ status: 'guest', name: null, signedOut: true }));
+    expect(screen.queryByTestId('results-sign-in-prompt')).toBeNull();
+    expect(screen.queryByTestId('guest-match-note')).toBeNull();
+  });
 });
 
 describe('the win takeover', () => {
@@ -348,7 +393,8 @@ describe('loss and draw', () => {
     const rival = screen.getByTestId('results-rival');
     expect(within(rival).getByTestId('bot-badge')).toBeInTheDocument();
     expect(within(rival).getByTestId('rival-left')).toHaveTextContent('left');
-    expect(screen.queryByText(/rating/i)).toBeNull();
+    // No rating-delta area anywhere (the guest prompt may mention a rating; it is not a delta).
+    expect(screen.queryAllByText(/rating/i).filter((el) => !el.closest('[data-testid="results-sign-in-prompt"]'))).toEqual([]);
     expect(screen.queryByText(/updating/i)).toBeNull();
   });
 });

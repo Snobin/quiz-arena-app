@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import { session, useSession } from '../../auth/session.ts';
 import { BotBadge } from '../../design/BotBadge.tsx';
 import { Button } from '../../design/Button.tsx';
 import { PageColumn } from '../../design/PageColumn.tsx';
@@ -16,6 +17,7 @@ import { navigate } from '../../shell/router.ts';
 import { useHideTabBar } from '../../shell/useHideTabBar.ts';
 import { BreakdownRow } from './BreakdownRow.tsx';
 import { DotStrip } from './DotStrip.tsx';
+import { GuestResultsPrompt } from './GuestResultsPrompt.tsx';
 import { resultView, type ResultView } from './outcome.ts';
 import { RematchCard } from './RematchCard.tsx';
 import { ResultsBand } from './ResultsBand.tsx';
@@ -24,7 +26,8 @@ import { WinTakeover } from './WinTakeover.tsx';
 /** Matches whose takeover has played in this page session: it never replays (Back, re-render). */
 const takeoverPlayed = new Set<string>();
 
-type FullResult = { payload: MatchEndedPayload; selfId: string; liveArrival: boolean };
+/** `guest`: she was not signed in when the match ended; null for a live arrival (her session now says). */
+type FullResult = { payload: MatchEndedPayload; selfId: string; liveArrival: boolean; guest: boolean | null };
 
 /**
  * `/results` (Story 1.10). The full screen comes from MATCH_ENDED: in the store when it arrived
@@ -49,9 +52,9 @@ export function ResultsScreen() {
 
   let full: FullResult | null = null;
   if (live?.ended && live.ended.matchId === live.matchId) {
-    full = { payload: live.ended, selfId: live.selfParticipantId, liveArrival: true };
+    full = { payload: live.ended, selfId: live.selfParticipantId, liveArrival: true, guest: null };
   } else if (stored && (live === null || stored.matchId === live.matchId)) {
-    full = { payload: stored.payload, selfId: stored.selfId, liveArrival: false };
+    full = { payload: stored.payload, selfId: stored.selfId, liveArrival: false, guest: stored.guest };
   }
   // The match these results are about, fixed at mount: a different live match later is a new one.
   const [shownMatchId] = useState(() => live?.matchId ?? stored?.matchId ?? null);
@@ -115,6 +118,22 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
     }
   };
 
+  // Guest or registered (Story 2.4): decided from what the session says now for a live arrival, from the
+  // stored flag after a reload. While the session is booting nothing is shown, so nothing flashes.
+  const status = useSession((s) => s.status);
+  // Fixed when the results open: a later change of session (expiry, sign-out) must not turn her own match
+  // into a guest one. A live arrival reads the flag the connection stored at MATCH_ENDED; an entry with no
+  // flag falls back to the session at that moment.
+  const [playedAsGuest] = useState(() => {
+    if (full.guest !== null) return full.guest;
+    const kept = lastResult.load();
+    if (kept && kept.matchId === matchId && kept.guest !== null) return kept.guest;
+    return session.store.getState().status !== 'registered';
+  });
+  // Quick Match only: the copy talks about a Quick Match rating, so no other mode gets it.
+  const showPrompt = playedAsGuest && status === 'guest' && full.payload.mode === 'QUICK';
+  const signedInAfterGuest = playedAsGuest && status === 'registered';
+
   const you = view.self.score;
   const them = view.rival?.score ?? 0;
   const heading = t(`results.heading.${view.kind}`, { you, them });
@@ -136,6 +155,12 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
               <span className="sr-only">{heading}</span>
             </h1>
             <ResultsBand view={view} />
+            {showPrompt ? <GuestResultsPrompt view={view} /> : null}
+            {signedInAfterGuest ? (
+              <p data-testid="guest-match-note" className="text-caption text-muted">
+                {t('results.guestNote')}
+              </p>
+            ) : null}
             {view.self.forfeited ? (
               <p data-testid="notice-forfeited" className="text-body text-muted">
                 {full.payload.mode === 'BATTLE_ROOM'
@@ -153,7 +178,11 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
               })}
             </ol>
           </main>
-          <RematchActions matchId={matchId} rivalName={view.rival?.displayName ?? ''} />
+          {signedInAfterGuest ? (
+            <PlayAgainActions />
+          ) : (
+            <RematchActions matchId={matchId} rivalName={view.rival?.displayName ?? ''} />
+          )}
         </PageColumn>
       </div>
       {takeover ? (
@@ -165,6 +194,25 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
         />
       ) : null}
     </>
+  );
+}
+
+/**
+ * The results bar for a player who signed in after a guest match (Story 2.4): the guest's post-match
+ * window ended with the guest session, so there is no Rematch. "Play again" starts a new Quick Match as
+ * her registered self; Home stays.
+ */
+function PlayAgainActions() {
+  const { t } = useTranslation();
+  return (
+    <ActionBar>
+      <Button data-testid="play-again-button" onClick={() => navigate('/matchmaking')}>
+        {t('results.playAgain')}
+      </Button>
+      <Button variant="secondary" onClick={() => navigate('/')}>
+        {t('common.home')}
+      </Button>
+    </ActionBar>
   );
 }
 

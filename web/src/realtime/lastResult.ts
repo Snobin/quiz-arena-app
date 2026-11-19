@@ -8,7 +8,11 @@ import { parseMatchEnded, type MatchEndedPayload } from './protocol.ts';
  */
 export const LAST_RESULT_KEY = 'minnal.lastResult';
 
-export type LastResult = { matchId: string; selfId: string; payload: MatchEndedPayload };
+/**
+ * `guest`: she was not signed in when the match ended (Story 2.4). An entry written before this existed has
+ * none, which reads as null (unknown): the results then decide from her session, never silently as registered.
+ */
+export type LastResult = { matchId: string; selfId: string; payload: MatchEndedPayload; guest: boolean | null };
 
 function storage(): Storage | null {
   try {
@@ -30,7 +34,7 @@ export function load(): LastResult | null {
   try {
     const value: unknown = JSON.parse(text);
     if (typeof value === 'object' && value !== null) {
-      const { matchId, selfId, payload } = value as Record<string, unknown>;
+      const { matchId, selfId, payload, guest } = value as Record<string, unknown>;
       const parsed = parseMatchEnded(payload);
       if (
         typeof matchId === 'string' &&
@@ -39,7 +43,7 @@ export function load(): LastResult | null {
         parsed.matchId === matchId &&
         parsed.participants.some((p) => p.participantId === selfId)
       ) {
-        return { matchId, selfId, payload: parsed };
+        return { matchId, selfId, payload: parsed, guest: typeof guest === 'boolean' ? guest : null };
       }
     }
   } catch {
@@ -49,7 +53,7 @@ export function load(): LastResult | null {
   return null;
 }
 
-export function save(result: LastResult): void {
+export function save(result: Omit<LastResult, 'guest'> & { guest: boolean }): void {
   try {
     // Stored in its wire shape: absent optional fields are left out, as the server sends them.
     storage()?.setItem(LAST_RESULT_KEY, JSON.stringify(result, (_, value: unknown) => (value === null ? undefined : value)));

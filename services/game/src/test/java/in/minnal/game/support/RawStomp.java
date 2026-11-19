@@ -63,12 +63,21 @@ public final class RawStomp implements AutoCloseable {
     }
 
     /** The next frame (heartbeat newlines skipped), or null after {@code within}. */
+    /**
+     * The next non-blank frame, or null when none comes within {@code within}. It returns null at once when
+     * the socket has closed with nothing left to read, so a refused connection that is closed without an
+     * ERROR frame does not eat the whole wait (long waits also let a participant's reconnect grace expire).
+     */
     public String nextFrame(Duration within) throws InterruptedException {
         long deadline = System.nanoTime() + within.toNanos();
         while (System.nanoTime() < deadline) {
-            String frame = frames.poll(Math.max(1, (deadline - System.nanoTime()) / 1_000_000), TimeUnit.MILLISECONDS);
+            long leftMs = Math.max(1, (deadline - System.nanoTime()) / 1_000_000);
+            String frame = frames.poll(Math.min(leftMs, 100), TimeUnit.MILLISECONDS);
             if (frame != null && !frame.isBlank()) {
                 return frame;
+            }
+            if (frame == null && closed.getCount() == 0 && frames.isEmpty()) {
+                return null;
             }
         }
         return null;

@@ -341,6 +341,46 @@ export const catalogue = {
   'results.title': { ml: 'ഫലം', en: 'Results', signoff: ['ml', 'en'] },
   // Story 1.10: the results screen. Drafted in both languages; every entry awaits native review.
   'result.winTitle': { ml: 'ജയിച്ചു!', en: 'You won!', signoff: ['ml', 'en'] },
+  // Guest results prompt (Story 2.4): copy flagged for sign-off in both languages
+  'results.prompt.title': {
+    ml: 'ക്വിക്ക് മാച്ച് റേറ്റിംഗ് നേടൂ',
+    en: 'Get a Quick Match rating',
+    signoff: ['ml', 'en'],
+  },
+  'results.prompt.win': {
+    ml: 'നിങ്ങൾ {{you, number}} സ്കോർ ചെയ്തു. സൈൻ ഇൻ ചെയ്താൽ അടുത്ത ജയം നിങ്ങളുടെ ക്വിക്ക് മാച്ച് റേറ്റിംഗ് ഉയർത്തും.',
+    en: 'You scored {{you, number}}. Sign in and your next win moves your Quick Match rating.',
+    signoff: ['ml', 'en'],
+    params: { ml: { you: 7840 }, en: { you: 7840 } },
+  },
+  'results.prompt.loss': {
+    ml: '{{name}} ജയിച്ചു. നിങ്ങൾ {{you, number}} നേടി. സൈൻ ഇൻ ചെയ്താൽ അടുത്ത കളി നിങ്ങളുടെ ക്വിക്ക് മാച്ച് റേറ്റിംഗ് മാറ്റും.',
+    en: '{{name}} won this one. You scored {{you, number}}. Sign in and your next match can move your Quick Match rating.',
+    signoff: ['ml', 'en'],
+    params: { ml: { you: 6200, name: 'Anju' }, en: { you: 6200, name: 'Anju' } },
+  },
+  'results.prompt.draw': {
+    ml: '{{you, number}} സ്കോറിൽ സമനില. സൈൻ ഇൻ ചെയ്താൽ അടുത്ത ജയം നിങ്ങളുടെ ക്വിക്ക് മാച്ച് റേറ്റിംഗ് ഉയർത്തും.',
+    en: 'A draw at {{you, number}}. Sign in and your next win moves your Quick Match rating.',
+    signoff: ['ml', 'en'],
+    params: { ml: { you: 5400 }, en: { you: 5400 } },
+  },
+  'results.prompt.bot': {
+    ml: 'പരിശീലന ബോട്ടിനെതിരെ നിങ്ങൾ {{you, number}} നേടി. സൈൻ ഇൻ ചെയ്താൽ അടുത്ത കളി നിങ്ങളുടെ ക്വിക്ക് മാച്ച് റേറ്റിംഗ് മാറ്റും.',
+    en: 'You scored {{you, number}} against a practice bot. Sign in and your next match can move your Quick Match rating.',
+    signoff: ['ml', 'en'],
+    params: { ml: { you: 7100 }, en: { you: 7100 } },
+  },
+  'results.guestNote': {
+    ml: 'ഈ മാച്ച് അതിഥിയായി കളിച്ചതാണ്, നിങ്ങളുടെ റെക്കോർഡിൽ ഇല്ല.',
+    en: 'You played this match as a guest, so it is not on your record.',
+    signoff: ['ml', 'en'],
+  },
+  'results.playAgain': {
+    ml: 'വീണ്ടും കളിക്കാം',
+    en: 'Play again',
+    signoff: ['ml', 'en'],
+  },
   'results.continue': { ml: 'തുടരുക', en: 'Continue', signoff: ['ml', 'en'] },
   'results.heading.win': {
     ml: 'നിങ്ങൾ ജയിച്ചു, {{you, number}} – {{them, number}}',

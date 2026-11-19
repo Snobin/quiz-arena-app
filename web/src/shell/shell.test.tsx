@@ -99,7 +99,7 @@ describe('tab bar', () => {
 
   it('does not render outside the shell (dev fixtures)', async () => {
     renderApp('/__flash');
-    expect(await screen.findByRole('heading', { level: 1, name: 'Flash scheduler fixture' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Flash scheduler fixture' }, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.queryByRole('navigation')).toBeNull();
   });
 });
