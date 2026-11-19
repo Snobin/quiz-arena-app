@@ -1,6 +1,11 @@
 import { lazy, Suspense, type ComponentType } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useSession } from './auth/session.ts';
+import { PageColumn } from './design/PageColumn.tsx';
+import { AuthReturn } from './screens/AuthReturn.tsx';
 import { MeScreen } from './screens/MeScreen.tsx';
 import { GuestHome } from './screens/home/GuestHome.tsx';
+import { RegisteredHome } from './screens/home/RegisteredHome.tsx';
 import { LiveMatchScreen } from './screens/match/LiveMatchScreen.tsx';
 import { MatchmakingScreen } from './screens/matchmaking/MatchmakingScreen.tsx';
 import { RanksScreen } from './screens/RanksScreen.tsx';
@@ -10,9 +15,34 @@ import { SignInPrompt } from './screens/SignInPrompt.tsx';
 import { AppShell } from './shell/AppShell.tsx';
 import { usePathname, useRouterSync } from './shell/router.ts';
 
-/** Shell routes: static paths only. Unknown paths render Play (guest Home). */
+/**
+ * Home for whoever is using the app: guest Home, or the registered player's. While the boot refresh is
+ * in flight it shows only the heading, so a returning player never sees the guest Home flash by.
+ */
+function Home() {
+  const status = useSession((s) => s.status);
+  if (status === 'registered') return <RegisteredHome />;
+  if (status === 'booting') return <HomePending />;
+  return <GuestHome />;
+}
+
+function HomePending() {
+  const { t } = useTranslation();
+  return (
+    <PageColumn className="py-4">
+      <main className="flex flex-col gap-3">
+        <h1 tabIndex={-1} className="sr-only">
+          {t('common.loading')}
+        </h1>
+      </main>
+    </PageColumn>
+  );
+}
+
+/** Shell routes: static paths only. Unknown paths render Play (Home). */
 const ROUTES: Record<string, ComponentType> = {
-  '/': GuestHome,
+  '/': Home,
+  '/auth/return': AuthReturn,
   '/rooms': RoomsScreen,
   '/ranks': RanksScreen,
   '/me': MeScreen,
@@ -45,7 +75,7 @@ export function App() {
     );
   }
 
-  const Screen = ROUTES[pathname] ?? GuestHome;
+  const Screen = ROUTES[pathname] ?? Home;
   return (
     <AppShell>
       <Screen />

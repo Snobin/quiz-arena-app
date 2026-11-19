@@ -1,5 +1,5 @@
 import { Client, type IFrame, type IMessage, type StompConfig, type StompSubscription } from '@stomp/stompjs';
-import { guestSession } from '../auth/guestSession.ts';
+import { session } from '../auth/session.ts';
 import {
   INITIAL_LIVE_GAME,
   liveGameStore,
@@ -121,8 +121,8 @@ export const defaultFactory: ClientFactory = (config) => new Client(config);
 function defaultEnv(): RealtimeEnv {
   return {
     factory: defaultFactory,
-    getAccessToken: () => guestSession.getAccessToken(),
-    invalidate: (token) => guestSession.invalidate(token),
+    getAccessToken: () => session.getAccessToken(),
+    invalidate: (token) => session.invalidate(token),
     url: () => sameOriginUrl(),
     now: () => Date.now(),
   };

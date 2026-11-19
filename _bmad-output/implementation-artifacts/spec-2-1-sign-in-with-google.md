@@ -2,7 +2,8 @@
 title: 'Story 2.1: Sign in with Google'
 type: 'feature'
 created: '2026-11-19'
-status: 'ready-for-dev'
+status: 'done'
+baseline_commit: '9bd7f70cb0037c97b6c12f0af4d16c24eca1e1d1'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -62,11 +63,11 @@ core = `services/core/src/main/java/in/minnal/core`.
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `core` Flyway `V2` + domain/repository -- the three tables, unique `(provider, provider_subject)`, hashed refresh tokens
-- [ ] `core/identity` -- `LoginMethod`, `GoogleLoginMethod`, start/callback with state, nonce, PKCE and `returnTo` guard, account create/resume, refresh endpoint, role recompute, CORS with credentials for the PWA origin
-- [ ] `core` tests -- fake OIDC provider; cover every I/O matrix row; clear new tables in the base class
-- [ ] `web` -- registered session (in-memory token, boot refresh, 5-min-early refresh, guest fallback), `/auth/return` route with focus and announcement, real Google button on SignInPrompt/nudge/locked rows, registered Home, i18n keys, tests
-- [ ] `deploy` -- compose env, `.env.example`, check script and tests; README note on creating Google credentials and the shared-domain assumption
+- [x] `core` Flyway `V2` + domain/repository -- the three tables, unique `(provider, provider_subject)`, hashed refresh tokens
+- [x] `core/identity` -- `LoginMethod`, `GoogleLoginMethod`, start/callback with state, nonce, PKCE and `returnTo` guard, account create/resume, refresh endpoint, role recompute, CORS with credentials for the PWA origin
+- [x] `core` tests -- fake OIDC provider; cover every I/O matrix row; clear new tables in the base class
+- [x] `web` -- registered session (in-memory token, boot refresh, 5-min-early refresh, guest fallback), `/auth/return` route with focus and announcement, real Google button on SignInPrompt/nudge/locked rows, registered Home, i18n keys, tests
+- [x] `deploy` -- compose env, `.env.example`, check script and tests; README note on creating Google credentials and the shared-domain assumption
 
 **Acceptance Criteria:**
 - Given the epics.md Story 2.1 criteria, when core and web run against the fake provider, then each passes, with no token in a URL or web storage.
@@ -74,8 +75,33 @@ core = `services/core/src/main/java/in/minnal/core`.
 
 ## Implementation Notes
 
+- `app_user` also stores `given_name` (feeds the `name` claim until Story 2.3) and keeps `email` only while Google reports it verified, so the ADMIN check on every refresh can trust it.
+- The refresh body carries `{lang}` (the device language), because the callback issues no JWT; core defaults to `en`.
+- Failure and cancel redirect to the originating surface with `?signin=failed|cancelled`; `SignInOutcomeNote` reads it once and strips it.
+- The nudge button starts sign-in directly; locked rows still open the Sign-in prompt, whose Google button now works.
+- `GOOGLE_REDIRECT_URI`, `WEB_URL`, `ADMIN_EMAILS`, `GOOGLE_CLIENT_*` are the new env vars; `AUTH_COOKIE_SECURE` (default true) exists for plain-http setups.
+- Local verification needs `DOCKER_HOST=unix:///run/user/<uid>/podman/podman.sock TESTCONTAINERS_RYUK_DISABLED=true` on this machine. The docker-compose based `deploy/check-compose` CLI tests fail here (podman shim), as they did before this change.
+
 ## Verification
 
 **Commands:**
 - `./mvnw -B -pl contracts,services/core -am test` -- expected: green (JDK 25; this machine needs `JAVA_HOME` set to the 25 JDK and `MAVEN_SKIP_RC=1`)
 - `cd web && npm run typecheck && npm test && npm run check:i18n && npm run check:tokens && npm run build:check` -- expected: green
+
+## Review Triage Log
+
+| Finding | Verdict | Route | Evidence |
+|---|---|---|---|
+| ID token without `exp` accepted | medium | patch (fixed) | `JwtTimestampValidator` passes a null exp; validator now rejects it; test added |
+| Multi-audience token without `azp` = client | low | patch (fixed) | validator rejects; test added |
+| Returning sign-in overwrote `given_name` with null | medium | patch (fixed) | `COALESCE`; test added |
+| `returnTo=/auth/return` loops on the handled ref | medium | patch (fixed) | server `ReturnPath` and web `AuthReturn` map it to `/`; tests added |
+| `email_verified` as string "true" | low | patch (fixed) | tolerated in `GoogleLoginMethod` |
+| Wrong comment on insert order | low | patch (fixed) | comment corrected |
+| 401 cookie-clearing, bad-lang 400, DELETED refresh, 503 unconfigured, exported `apiFetch` binding untested | medium | patch (fixed) | tests added |
+| No CSRF/Origin check on refresh; no revocation, logout, or cleanup of refresh tokens | medium | defer | Story 2.2 (rotation, CSRF guard) and 2.8 (logout, deletion) own these |
+| DELETED identity gets generic `signin=failed` | low | defer | account deletion is Story 2.8 |
+| Sign-in note not shown on surfaces other than Home/prompt; stale `?signin=` on registered Home | low | defer | only Home and the prompt start sign-in today |
+| Account committed if refresh-token insert then fails | low | defer | needs one transaction across both services; failure is a DB outage |
+| `CORS_ALLOWED_ORIGINS` extra origins also get credentials; `WEB_URL` not validated at startup | low | defer | prod config hardening; defaults documented |
+| Unsigned state cookie, no rate limits, client-secret as env, bad-lang treated as transient by client, TS/Java guard vector duplication, account-linking policy | low | false/defer | cookie is httpOnly, single-use and state-bound; the rest is not a defect in this change |

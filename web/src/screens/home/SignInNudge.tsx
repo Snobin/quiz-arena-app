@@ -1,16 +1,16 @@
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../../design/Button.tsx';
-import { navigate } from '../../shell/router.ts';
-import { setReturnFocus } from '../../shell/returnFocus.ts';
-import { signInPath } from './signInPath.ts';
+import { startGoogleSignIn } from '../../auth/googleSignIn.ts';
+import { SignInOutcomeNote } from './SignInOutcomeNote.tsx';
 
 export const NUDGE_BUTTON_ID = 'homeNudgeSignIn';
 
 /**
  * The one Sign-in nudge on guest Home (UX-DR18): a card with a 1.5px ink outline, benefit text and
  * "Continue with Google". Decision (2026-11-12): the button is the secondary Button, not ink fill,
- * so the Quick Match card stays the only filled ink element. It opens the Sign-in prompt.
+ * so the Quick Match card stays the only filled ink element. It starts the Google sign-in directly
+ * and brings her back to Home.
  */
 export function SignInNudge() {
   const { t } = useTranslation();
@@ -25,15 +25,8 @@ export function SignInNudge() {
         {t('nudge.title')}
       </h2>
       <p className="text-caption text-muted">{t('nudge.body')}</p>
-      <Button
-        id={NUDGE_BUTTON_ID}
-        variant="secondary"
-        className="mt-2 w-full"
-        onClick={() => {
-          setReturnFocus(NUDGE_BUTTON_ID, '/');
-          navigate(signInPath('/'));
-        }}
-      >
+      <SignInOutcomeNote />
+      <Button id={NUDGE_BUTTON_ID} variant="secondary" className="mt-2 w-full" onClick={() => startGoogleSignIn('/')}>
         {t('signIn.google')}
       </Button>
     </section>

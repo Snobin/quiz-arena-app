@@ -18,7 +18,7 @@ class GuestTokenPersistenceIntegrationTest extends PostgresIntegrationTest {
     MockMvc mvc;
 
     @Test
-    void issuingGuestTokensAddsNoTableMigrationOrRow() throws Exception {
+    void issuingGuestTokensAddsNoTableOrRow() throws Exception {
         List<String> tablesBefore = tables();
         long rowsBefore = totalRows(tablesBefore);
 
@@ -28,9 +28,9 @@ class GuestTokenPersistenceIntegrationTest extends PostgresIntegrationTest {
         }
 
         assertThat(tables()).isEqualTo(tablesBefore)
-                .containsExactly("flyway_schema_history", "question", "question_version", "subject", "topic");
+                .containsExactly("app_user", "flyway_schema_history", "question", "question_version", "refresh_token", "subject", "topic", "user_identity");
         assertThat(jdbc.sql("SELECT version FROM flyway_schema_history WHERE version IS NOT NULL ORDER BY installed_rank")
-                .query(String.class).list()).containsExactly("1");
+                .query(String.class).list()).containsExactly("1", "2");
         assertThat(totalRows(tables())).isEqualTo(rowsBefore);
     }
 

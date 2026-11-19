@@ -13,7 +13,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 /**
  * Base for integration tests against a real Postgres 18 (Testcontainers; needs Docker). One
  * container is shared by every test class so the Spring context is cached; each test starts from
- * empty question tables. The {@code core} schema and search path mirror {@code deploy/postgres/init}.
+ * empty question and account tables. The {@code core} schema and search path mirror {@code deploy/postgres/init}.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -38,7 +38,7 @@ public abstract class PostgresIntegrationTest {
     protected JdbcClient jdbc;
 
     @BeforeEach
-    void emptyQuestionTables() {
-        jdbc.sql("TRUNCATE question_version, question, topic, subject").update();
+    void emptyTables() {
+        jdbc.sql("TRUNCATE question_version, question, topic, subject, refresh_token, user_identity, app_user").update();
     }
 }

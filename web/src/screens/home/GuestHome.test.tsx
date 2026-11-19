@@ -3,6 +3,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../App.tsx';
+import { pageNavigation } from '../../auth/googleSignIn.ts';
 import { guestSession } from '../../auth/guestSession.ts';
 import i18n from '../../i18n.ts';
 import { jsonResponse, restartGuestSession, stubFetch } from '../../test-utils/guest.ts';
@@ -218,7 +219,7 @@ describe('wake re-check', () => {
 });
 
 describe('Sign-in prompt', () => {
-  it('locked row → /sign-in?returnTo=/ (not a modal); Google aria-disabled with caption; Back → Home, focus on the row', async () => {
+  it('locked row → /sign-in?returnTo=/ (not a modal); Google starts the redirect sign-in; Back → Home, focus on the row', async () => {
     const user = userEvent.setup();
     await homeReady();
     await user.click(screen.getByRole('link', { name: ROW_NAMES[0] }));
@@ -230,8 +231,12 @@ describe('Sign-in prompt', () => {
     expect(document.title).toBe('Sign in · Minnal');
     expect(screen.getByText(/need a free account/)).toBeInTheDocument();
     const google = screen.getByRole('button', { name: 'Continue with Google' });
-    expect(google).toHaveAttribute('aria-disabled', 'true');
-    expect(google).toHaveAccessibleDescription('Google sign-in is coming soon');
+    expect(google).not.toHaveAttribute('aria-disabled');
+    expect(screen.queryByText(/coming soon/i)).toBeNull();
+    const assign = vi.spyOn(pageNavigation, 'assign').mockImplementation(() => undefined);
+    await user.click(google);
+    expect(assign).toHaveBeenCalledExactlyOnceWith('/api/core/v1/auth/google/start?returnTo=%2F');
+    assign.mockRestore();
     // The tab bar stays (inside the shell), with Play active.
     expect(screen.getByRole('link', { name: 'Play' })).toHaveAttribute('aria-current', 'page');
 
@@ -240,14 +245,15 @@ describe('Sign-in prompt', () => {
     await waitFor(() => expect(screen.getByRole('link', { name: ROW_NAMES[0] })).toHaveFocus());
   });
 
-  it("the nudge's button opens the prompt; browser Back returns focus to it", async () => {
+  it("the nudge's button starts the Google sign-in for the whole page (no popup) and returns to Home", async () => {
     const user = userEvent.setup();
     await homeReady();
+    const assign = vi.spyOn(pageNavigation, 'assign').mockImplementation(() => undefined);
+    const open = vi.spyOn(window, 'open');
     await user.click(screen.getByRole('button', { name: 'Continue with Google' }));
-    expect(window.location.pathname).toBe('/sign-in');
-    act(() => window.history.back());
-    await waitFor(() => expect(window.location.pathname).toBe('/'));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Continue with Google' })).toHaveFocus());
+    expect(assign).toHaveBeenCalledExactlyOnceWith('/api/core/v1/auth/google/start?returnTo=%2F');
+    expect(open).not.toHaveBeenCalled();
+    expect(window.location.pathname).toBe('/');
   });
 
   it('a return target is dropped after a detour elsewhere', async () => {

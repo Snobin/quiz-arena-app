@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /** A guest request with an unsupported {@code lang} is a 400 RFC 9457 Problem Details. */
-@RestControllerAdvice(assignableTypes = GuestTokenController.class)
+@RestControllerAdvice(assignableTypes = {GuestTokenController.class, RefreshController.class})
 class AuthExceptionHandler {
 
     @ExceptionHandler(UnsupportedLanguageException.class)

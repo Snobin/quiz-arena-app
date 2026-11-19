@@ -14,10 +14,23 @@ import org.springframework.dao.DataIntegrityViolationException;
 class MigrationIntegrationTest extends PostgresIntegrationTest {
 
     @Test
-    void createsOnlyTheFourQuestionBankTables() {
+    void createsTheQuestionBankAndAccountTables() {
         List<String> tables = jdbc.sql("SELECT table_name FROM information_schema.tables WHERE table_schema = 'core' ORDER BY 1")
                 .query(String.class).list();
-        assertThat(tables).containsExactly("flyway_schema_history", "question", "question_version", "subject", "topic");
+        assertThat(tables).containsExactly("app_user", "flyway_schema_history", "question", "question_version",
+                "refresh_token", "subject", "topic", "user_identity");
+    }
+
+    @Test
+    void accountTablesHoldOnlyTheirStoryColumnsAndHashedRefreshTokens() {
+        assertThat(columns("app_user")).containsExactlyInAnyOrderEntriesOf(Map.of(
+                "id", "uuid", "status", "text", "email", "text", "given_name", "text",
+                "created_at", "timestamp with time zone", "last_sign_in_at", "timestamp with time zone"));
+        assertThat(columns("user_identity")).containsExactlyInAnyOrderEntriesOf(Map.of(
+                "provider", "text", "provider_subject", "text", "user_id", "uuid", "created_at", "timestamp with time zone"));
+        assertThat(columns("refresh_token")).containsExactlyInAnyOrderEntriesOf(Map.of(
+                "id", "uuid", "user_id", "uuid", "token_hash", "text",
+                "expires_at", "timestamp with time zone", "created_at", "timestamp with time zone"));
     }
 
     @Test

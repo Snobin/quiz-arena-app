@@ -63,3 +63,18 @@ minnal:
     key-id: ${MINNAL_JWT_KEY_ID:}
     # Rotation: comma-separated kid=base64(SPKI PEM) pairs, published in the JWKS, never used to sign.
     extra-public-keys: ${MINNAL_JWT_EXTRA_PUBLIC_KEYS:}
+  auth:
+    # Sign-in (AD-9, Story 2.1). Secrets come from the environment only.
+    web-url: ${WEB_URL:http://localhost:5173}
+    # Secure cookies; browsers still accept them on http://localhost.
+    cookie-secure: ${AUTH_COOKIE_SECURE:true}
+    # Comma-separated; matched case-insensitively against a verified Google email at every token issue.
+    admin-emails: ${ADMIN_EMAILS:}
+    google:
+      client-id: ${GOOGLE_CLIENT_ID:}
+      client-secret: ${GOOGLE_CLIENT_SECRET:}
+      redirect-uri: ${GOOGLE_REDIRECT_URI:http://localhost:5173/api/core/v1/auth/google/callback}
+      authorization-uri: https://accounts.google.com/o/oauth2/v2/auth
+      token-uri: https://oauth2.googleapis.com/token
+      jwks-uri: https://www.googleapis.com/oauth2/v3/certs
+      issuer: https://accounts.google.com

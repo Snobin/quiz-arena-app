@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 
+import { readFileSync } from 'node:fs';
 import { checkConfig, heapCap, parseBytes, requiredVariables } from './check-compose.mjs';
 
 const script = fileURLToPath(new URL('./check-compose.mjs', import.meta.url));
@@ -138,5 +139,26 @@ describe('check-compose helpers', () => {
       },
     });
     assert.deepEqual(violations, ['game-service: no healthcheck']);
+  });
+});
+
+describe('core-service sign-in settings (Story 2.1)', () => {
+  const names = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REDIRECT_URI', 'WEB_URL', 'ADMIN_EMAILS'];
+
+  it('passes every sign-in variable to core-service from the environment', () => {
+    // Raw text, not `docker compose config`, so this runs without Docker.
+    const compose = readFileSync(fileURLToPath(new URL('./compose.yaml', import.meta.url)), 'utf8');
+    const core = compose.slice(compose.indexOf('\n  core-service:'), compose.indexOf('\n  game-service:'));
+    for (const name of names) assert.match(core, new RegExp(`^\\s+${name}: \\$\\{${name}:-`, 'm'), `${name} is missing from core-service`);
+    // Secrets never get a default value in the Compose file itself.
+    assert.match(core, /GOOGLE_CLIENT_ID: \$\{GOOGLE_CLIENT_ID:-\}/);
+    assert.match(core, /GOOGLE_CLIENT_SECRET: \$\{GOOGLE_CLIENT_SECRET:-\}/);
+  });
+
+  it('documents each variable in .env.example and commits no secret', () => {
+    const example = readFileSync(fileURLToPath(new URL('./.env.example', import.meta.url)), 'utf8');
+    for (const name of names) assert.match(example, new RegExp(`^${name}=`, 'm'));
+    assert.match(example, /^GOOGLE_CLIENT_ID=$/m);
+    assert.match(example, /^GOOGLE_CLIENT_SECRET=$/m);
   });
 });

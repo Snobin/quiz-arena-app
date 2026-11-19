@@ -1,12 +1,12 @@
-import { guestSession, type GuestSession } from './guestSession.ts';
+import { session, type Session } from './session.ts';
 
 /**
- * fetch() for the Minnal REST APIs: adds `Authorization: Bearer <guest token>`. On a 401 it drops
+ * fetch() for the Minnal REST APIs: adds `Authorization: Bearer <access token>` (the registered player's, else the guest's). On a 401 it drops
  * that token, fetches a new one and retries once (core restarts with an ephemeral key invalidate
  * every token); a second 401 is returned to the caller. Rejects with a GuestSessionError when no
  * token can be obtained.
  */
-export function createApiFetch(session: GuestSession, fetchImpl: () => typeof fetch = () => fetch) {
+export function createApiFetch(session: Pick<Session, 'getAccessToken' | 'invalidate'>, fetchImpl: () => typeof fetch = () => fetch) {
   const send = (input: RequestInfo | URL, init: RequestInit | undefined, token: string) => {
     const headers = new Headers(init?.headers);
     headers.set('Authorization', `Bearer ${token}`);
@@ -23,5 +23,5 @@ export function createApiFetch(session: GuestSession, fetchImpl: () => typeof fe
   };
 }
 
-/** The app-wide apiFetch, bound to the app's guest session. */
-export const apiFetch = createApiFetch(guestSession);
+/** The app-wide apiFetch, bound to the app's session (registered token, else guest token). */
+export const apiFetch = createApiFetch(session);
