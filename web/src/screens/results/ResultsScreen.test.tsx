@@ -109,11 +109,13 @@ function ended(
   o: {
     self?: { score: number; placement: number; forfeited?: boolean };
     opponent?: { score: number; placement: number; forfeited?: boolean; name?: string; kind?: string };
+    mode?: 'QUICK' | 'BATTLE_ROOM';
   } = {},
 ) {
   const self = o.self ?? { score: 3140, placement: 1 };
   const opponent = o.opponent ?? { score: 2980, placement: 2 };
   return matchEnded(m.matchId, {
+    ...(o.mode ? { mode: o.mode } : {}),
     participants: [
       { participantId: m.self, displayName: 'Guest 4821', kind: 'GUEST', correctCount: 1, ...self },
       {
@@ -299,6 +301,16 @@ describe('the win takeover', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.getByTestId('results-band')).toHaveAttribute('data-result', 'win');
     expect(screen.getByTestId('notice-forfeited')).toBeInTheDocument();
+  });
+
+  it('a 1v1 forfeiter is told the opponent wins', async () => {
+    await liveResults({ self: { score: 3140, placement: 2, forfeited: true }, opponent: { score: 2980, placement: 1 } });
+    expect(screen.getByTestId('notice-forfeited')).toHaveTextContent('You left · Vishnu R wins');
+  });
+
+  it('a Battle Room forfeiter keeps the "match goes on" notice', async () => {
+    await liveResults({ mode: 'BATTLE_ROOM', self: { score: 3140, placement: 1, forfeited: true } });
+    expect(screen.getByTestId('notice-forfeited')).toHaveTextContent('the match goes on');
   });
 });
 

@@ -158,6 +158,9 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
   const index = started?.questionIndex ?? -1;
   const reveal = live.reveal && live.reveal.questionIndex === index ? live.reveal : null;
   const opponents = opponentsOf(live);
+  // A 1v1 (Quick Match, Topic Duel) has one opponent; a Battle Room has several.
+  const oneVsOne = opponents.length === 1;
+  const opponentLeftKey = oneVsOne ? 'match.opponentLeftWin' : 'match.opponentLeft';
 
   // A new question: focus its heading (whose name is the text, then the position).
   useEffect(() => {
@@ -260,7 +263,7 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
     for (const opponent of leftOpponents) {
       if (leftAnnounced.current.has(opponent.participantId)) continue;
       leftAnnounced.current.add(opponent.participantId);
-      announce(t('match.opponentLeft', { name: opponent.displayName }));
+      announce(t(opponentLeftKey, { name: opponent.displayName }));
     }
   }, [leftOpponents.length]);
 
@@ -268,6 +271,9 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
   // (results), aborted (Home, which shows the notice). One she already had when the screen
   // opened (Back from the results) does not navigate again. After a rejoin the match has just
   // arrived, so an outcome its SNAPSHOT carried (a forfeit after a slow reload) still navigates.
+  const forfeitedNotice = oneVsOne
+    ? t('match.forfeitedOneVsOne', { name: opponents[0]?.displayName ?? '' })
+    : t('match.forfeited');
   const initialOutcome = useRef(arrived ? null : outcome);
   useEffect(() => {
     if (!outcome || outcome === initialOutcome.current) return undefined;
@@ -281,7 +287,7 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
       return undefined;
     }
     if (outcome.kind === 'forfeited') {
-      announce(t('match.forfeited'));
+      announce(forfeitedNotice);
       const timer = setTimeout(() => navigate('/results', { replace: true }), FORFEIT_NOTICE_MS);
       return () => clearTimeout(timer);
     }
@@ -395,13 +401,13 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
 
         {leftOpponents.map((opponent) => (
           <p key={opponent.participantId} data-testid="notice-opponent-left" className="mt-2 text-label text-muted">
-            {t('match.opponentLeft', { name: opponent.displayName })}
+            {t(opponentLeftKey, { name: opponent.displayName })}
           </p>
         ))}
         {outcome?.kind === 'forfeited' ? (
           <div className="mt-2 flex flex-col items-start gap-2">
             <p data-testid="notice-forfeited" className="text-body font-bold text-ink">
-              {t('match.forfeited')}
+              {forfeitedNotice}
             </p>
             {outcome === initialOutcome.current ? (
               <Link to="/results" className={HOME_LINK}>

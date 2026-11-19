@@ -188,7 +188,7 @@ class MatchEndFlowTest extends GameIntegrationTest {
     }
 
     @Test
-    void aForfeiterStillConnectedGetsMatchEndedAtTheEndRankedOnHerEarnedScore() {
+    void aOneVsOneForfeiterStillConnectedGetsMatchEndedAtOnceAndPlacesLastWhateverHerScore() {
         String anjuSub = newSub();
         String vishnuSub = newSub();
         StompTestClient anju = client(anjuSub);
@@ -206,13 +206,7 @@ class MatchEndFlowTest extends GameIntegrationTest {
         topicOf(vishnu, "QUESTION_STARTED"); // Q3
         anju.send(to(match.matchId(), "leave"));
         topicOf(vishnu, "PARTICIPANT_FORFEITED");
-        for (int q = 2; q < 10; q++) {
-            if (q > 2) {
-                topicOf(vishnu, "QUESTION_STARTED");
-            }
-            vishnu.send(to(match.matchId(), "answer"), body(q, q == 9 ? q % 4 : (q + 1) % 4));
-            topicOf(vishnu, "QUESTION_REVEALED");
-        }
+        topicOf(vishnu, "QUESTION_REVEALED"); // Q3 closed at once; the match ends
 
         JsonNode payload = privateOf(anju, "MATCH_ENDED").get("payload");
         JsonNode her = participant(payload, match.ids().get(0));
@@ -220,11 +214,11 @@ class MatchEndFlowTest extends GameIntegrationTest {
         assertThat(her.get("forfeited").asBoolean()).isTrue();
         assertThat(her.get("correctCount").asInt()).isEqualTo(2);
         assertThat(her.get("score").asInt()).isEqualTo(1_200);
-        assertThat(her.get("placement").asInt()).as("ranked on her earned score").isEqualTo(1);
-        assertThat(him.get("correctCount").asInt()).isEqualTo(1);
-        assertThat(him.get("placement").asInt()).isEqualTo(2);
-        assertThat(payload.get("questions")).hasSize(10);
-        assertThat(payload.get("breakdown").get(0).get("answers").get(5).has("pickedIndex")).isFalse();
+        assertThat(her.get("placement").asInt()).as("a 1v1 forfeiter places last whatever her score").isEqualTo(2);
+        assertThat(him.get("correctCount").asInt()).isZero();
+        assertThat(him.get("placement").asInt()).isEqualTo(1);
+        assertThat(payload.get("questions")).as("only the asked questions").hasSize(3);
+        assertThat(payload.get("breakdown").get(0).get("answers").get(2).has("pickedIndex")).isFalse();
         assertThat(privateOf(vishnu, "MATCH_ENDED").get("payload")).isEqualTo(payload);
 
         MatchCompletedEvent event = onlyEventOf(match.matchId());

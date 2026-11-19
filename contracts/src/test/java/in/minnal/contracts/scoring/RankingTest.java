@@ -38,6 +38,17 @@ class RankingTest {
                 new Player("left at Q3", 2400, 3, true),
                 new Player("played on", 1800, 4, false));
         assertThat(Ranking.placements(players, Player::score, Player::correct)).containsExactly(1, 2);
+        assertThat(Ranking.placements(players, Player::score, Player::correct, Player::forfeited, false))
+                .containsExactly(1, 2);
+    }
+
+    @Test
+    void aOneVsOneForfeiterWhoLedStillPlacesLast() {
+        record Player(int score, int correct, boolean forfeited) {
+        }
+        List<Player> players = List.of(new Player(2400, 3, true), new Player(1800, 4, false));
+        assertThat(Ranking.placements(players, Player::score, Player::correct, Player::forfeited, true))
+                .containsExactly(2, 1);
     }
 
     @Test

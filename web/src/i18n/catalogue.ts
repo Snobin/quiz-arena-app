@@ -260,6 +260,13 @@ export const catalogue = {
     signoff: ['ml', 'en'],
     params: { ml: { name: 'Vishnu R' }, en: { name: 'Vishnu R' } },
   },
+  'match.opponentLeftWin': {
+    moment: 'Opponent left (1v1)',
+    ml: '{{name}} പോയി · നിങ്ങൾ ജയിച്ചു',
+    en: '{{name}} left · you win',
+    signoff: ['ml'],
+    params: { ml: { name: '{name}' }, en: { name: '{name}' } },
+  },
   'match.leftStatus': { ml: 'പോയി', en: 'left', signoff: ['ml', 'en'] },
   'match.aborted': {
     ml: 'മാച്ച് പൂർത്തിയായില്ല, ഇത് കണക്കാക്കില്ല',
@@ -431,10 +438,17 @@ export const catalogue = {
     params: { ml: { seconds: 8 }, en: { seconds: 8 } },
   },
   'match.forfeited': {
-    moment: 'Forfeited',
+    moment: 'Forfeited (Battle Room)',
     ml: 'ബാക്കി ചോദ്യങ്ങൾ നഷ്ടമായി, മാച്ച് തുടരുന്നു',
     en: 'You missed the remaining questions; the match goes on',
     signoff: ['en'],
+  },
+  'match.forfeitedOneVsOne': {
+    moment: 'Forfeited (1v1)',
+    ml: 'നിങ്ങൾ പോയി · {{name}} ജയിച്ചു',
+    en: 'You left · {{name}} wins',
+    signoff: ['ml'],
+    params: { ml: { name: '{name}' }, en: { name: '{name}' } },
   },
   'match.leaveConfirm': {
     moment: 'Leave confirm',
