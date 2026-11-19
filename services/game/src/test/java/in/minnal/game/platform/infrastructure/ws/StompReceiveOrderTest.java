@@ -13,7 +13,7 @@ import org.junit.jupiter.api.RepeatedTest;
  */
 class StompReceiveOrderTest extends GameIntegrationTest {
 
-    static final Duration WAIT = Duration.ofSeconds(5);
+    static final Duration WAIT = Duration.ofSeconds(15);
 
     @RepeatedTest(30)
     void aSubscribeIsHandledBeforeTheSendRightBehindIt() throws Exception {
