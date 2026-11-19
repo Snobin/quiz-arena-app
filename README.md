@@ -151,6 +151,22 @@ start of the stream with a plain `XREAD` (no consumer group) and then follows it
 and a missing entry is 1200. The stream is capped at about 100,000 entries, so a long-inactive player whose last update
 was trimmed reads as 1200 after a game-service restart (a known limitation, logged at start).
 
+### Leaderboards
+
+ratings-service keeps the leaderboards in Valkey sorted sets `ratings:lb:{QUICK|TOPIC_DUEL|BATTLE_ROOM}:{daily|weekly|alltime}:{periodKey}`
+(IST date, ISO week with Monday start such as `2026-W46`, or `all`; daily keys expire after 8 days, weekly after 5 weeks).
+Only ratings-service writes them: before a `minnal.rating.updated` outbox row is published, the player's boards are
+recomputed from Postgres and written as absolute values (`ZADD`, never `ZINCRBY`), so a retry gives the same board. If
+Valkey loses the keys, or on demand, rebuild every current board from Postgres alone:
+
+```sh
+docker compose run --rm ratings-service --rebuild-leaderboards
+```
+
+On boot the same rebuild runs automatically when the marker key `ratings:lb:meta:builtAt` is missing.
+`GET /api/ratings/v1/leaderboards/{mode}/{daily|weekly|alltime}?offset=0&limit=50` serves a board (top 100, at most 50 per
+request) to any valid token; a registered caller also gets `me`.
+
 ### Seed the question bank
 
 The starter questions live in `services/core/src/main/resources/seed/kerala-psc-starter.csv` (columns:
