@@ -58,7 +58,7 @@ development_status:
   2-5-ratings-service-computes-elo: done
   2-6-rating-change-and-match-history: done
   2-7-leaderboards: done
-  2-8-settings-and-account-deletion: review
+  2-8-settings-and-account-deletion: done
   epic-2-retrospective: optional
 
   epic-3: backlog
