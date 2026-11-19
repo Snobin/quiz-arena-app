@@ -26,6 +26,19 @@ class StompAuthenticationTest extends GameIntegrationTest {
         }
     }
 
+    /**
+     * A refused frame ends in an ERROR frame and a closed socket; Spring can close the socket before the frame
+     * is delivered, so a closed socket with no frame is a refusal too (the same rule as MatchFlowTest).
+     */
+    static void assertRefusedAfterConnect(RawStomp stomp) throws Exception {
+        String frame = stomp.nextFrame(WAIT);
+        if (frame == null) {
+            assertThat(stomp.awaitClosed(WAIT)).as("neither an ERROR frame nor a closed socket").isTrue();
+        } else {
+            assertThat(frame).startsWith("ERROR\n");
+        }
+    }
+
     @Test
     void aValidGuestTokenConnects() throws Exception {
         try (RawStomp stomp = RawStomp.open(port)) {
@@ -60,12 +73,12 @@ class StompAuthenticationTest extends GameIntegrationTest {
         // Spring refuses a frame on a session that never sent CONNECT; the interceptor backs it up.
         try (RawStomp stomp = RawStomp.open(port)) {
             stomp.send("SUBSCRIBE", "id:0", "destination:/user/queue/game");
-            assertThat(stomp.nextFrame(WAIT)).startsWith("ERROR\n");
+            assertRefusedAfterConnect(stomp);
             assertThat(stomp.awaitClosed(WAIT)).isTrue();
         }
         try (RawStomp stomp = RawStomp.open(port)) {
             stomp.send("SEND", "destination:/app/matchmaking/QUICK/join");
-            assertThat(stomp.nextFrame(WAIT)).startsWith("ERROR\n");
+            assertRefusedAfterConnect(stomp);
             assertThat(stomp.awaitClosed(WAIT)).isTrue();
         }
     }
@@ -76,14 +89,14 @@ class StompAuthenticationTest extends GameIntegrationTest {
             stomp.connect("Bearer " + JWKS.validToken());
             assertThat(stomp.nextFrame(WAIT)).startsWith("CONNECTED\n");
             stomp.send("SEND", "destination:/topic/match/x");
-            assertThat(stomp.nextFrame(WAIT)).startsWith("ERROR\n");
+            assertRefusedAfterConnect(stomp);
             assertThat(stomp.awaitClosed(WAIT)).isTrue();
         }
         try (RawStomp stomp = RawStomp.open(port)) {
             stomp.connect("Bearer " + JWKS.validToken());
             assertThat(stomp.nextFrame(WAIT)).startsWith("CONNECTED\n");
             stomp.send("SUBSCRIBE", "id:0", "destination:/queue/game-usersomeone");
-            assertThat(stomp.nextFrame(WAIT)).startsWith("ERROR\n");
+            assertRefusedAfterConnect(stomp);
             assertThat(stomp.awaitClosed(WAIT)).isTrue();
         }
     }
