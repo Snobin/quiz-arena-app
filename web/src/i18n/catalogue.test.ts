@@ -216,3 +216,23 @@ describe('catalogue shape', () => {
     }
   });
 });
+
+describe('display names inside Malayalam strings (Story 2.3)', () => {
+  it('inserts {{name}} unchanged: its own run after a space or separator, never with a Malayalam ending attached', () => {
+    const withName = Object.entries(catalogue).filter(([, entry]) => typeof entry.ml === 'string' && entry.ml.includes('{{name}}'));
+    expect(withName.length).toBeGreaterThan(0);
+    for (const [key, entry] of withName) {
+      const ml = entry.ml as string;
+      expect(ml, key).toMatch(/(?:^|[^ഀ-ൿ] )\{\{name\}\}(?![ഀ-ൿ])/);
+    }
+  });
+
+  it('has Malayalam and English names for all 14 districts plus Outside Kerala', () => {
+    const districts = Object.entries(catalogue).filter(([key]) => key.startsWith('district.'));
+    expect(districts).toHaveLength(15);
+    for (const [key, entry] of districts) {
+      expect(entry.ml, key).toBeTruthy();
+      expect(entry.en, key).toBeTruthy();
+    }
+  });
+});

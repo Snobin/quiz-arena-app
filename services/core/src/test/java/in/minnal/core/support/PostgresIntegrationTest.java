@@ -39,6 +39,6 @@ public abstract class PostgresIntegrationTest {
 
     @BeforeEach
     void emptyTables() {
-        jdbc.sql("TRUNCATE question_version, question, topic, subject, refresh_token, user_identity, app_user").update();
+        jdbc.sql("TRUNCATE question_version, question, topic, subject, refresh_token, user_identity, user_profile, app_user, event_outbox").update();
     }
 }

@@ -7,5 +7,7 @@ spring:
       - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
 
 minnal:
+  outbox:
+    relay-enabled: false
   internal:
     token: it-internal-token

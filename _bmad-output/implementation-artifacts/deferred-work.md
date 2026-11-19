@@ -123,3 +123,13 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-2-refresh-token-rotation-and-session-continuity.md`
   summary: Add a timeout around the lock-held refresh fetch, and treat a 403 from the guard as a configuration error rather than a transient one.
   evidence: A hung request holds the Web Lock for every tab; a 403 is retried every 30 s with no visible signal.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-3-profile-setup-and-editing.md`
+  summary: Make the outbox relay safe for several core instances (FOR UPDATE SKIP LOCKED or an advisory lock), keep commit order, park poison rows, and purge published rows.
+  evidence: `oldestUnpublished` is a plain SELECT; ids follow insert order; one failing row blocks all later events; published rows are never deleted.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-3-profile-setup-and-editing.md`
+  summary: Add a Valkey Testcontainer test for `RedisStreamPublisher` and the scheduled relay wiring; skip the relay when Valkey is not configured.
+  evidence: Tests use a fake publisher and `relay-enabled=false`.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-3-profile-setup-and-editing.md`
+  summary: Product decisions on display names: uniqueness, homoglyph and mixed-script policy, and a grapheme-count parity test across JDK and browser segmenters.
+  evidence: The name rule is an [ASSUMPTION] pending sign-off; Java BreakIterator and Intl.Segmenter may differ at the 24/25 boundary for some conjuncts.

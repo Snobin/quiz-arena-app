@@ -97,6 +97,8 @@ export type Session = {
   start: () => void;
   /** Resolves once the boot refresh has settled. */
   ready: () => Promise<void>;
+  /** Refreshes the access token now (e.g. after a profile save) so its `name` and `lang` are current. */
+  refreshNow: () => Promise<boolean>;
   /** After sign-in: true when she is registered (refreshing once more if the boot said otherwise). */
   confirmSignedIn: () => Promise<boolean>;
   getAccessToken: () => Promise<string>;
@@ -213,6 +215,9 @@ export function createSession(env: SessionEnv = browserEnv()): Session {
     },
     ready() {
       return booted ?? Promise.resolve();
+    },
+    async refreshNow() {
+      return (await refresh()) === 'ok';
     },
     async confirmSignedIn() {
       await this.ready();

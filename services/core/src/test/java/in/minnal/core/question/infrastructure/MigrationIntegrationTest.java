@@ -17,8 +17,18 @@ class MigrationIntegrationTest extends PostgresIntegrationTest {
     void createsTheQuestionBankAndAccountTables() {
         List<String> tables = jdbc.sql("SELECT table_name FROM information_schema.tables WHERE table_schema = 'core' ORDER BY 1")
                 .query(String.class).list();
-        assertThat(tables).containsExactly("app_user", "flyway_schema_history", "question", "question_version",
-                "refresh_token", "subject", "topic", "user_identity");
+        assertThat(tables).containsExactly("app_user", "event_outbox", "flyway_schema_history", "question", "question_version",
+                "refresh_token", "subject", "topic", "user_identity", "user_profile");
+    }
+
+    @Test
+    void profileAndOutboxTablesHoldOnlyTheirStoryColumns() {
+        assertThat(columns("user_profile")).containsExactlyInAnyOrderEntriesOf(Map.of(
+                "user_id", "uuid", "display_name", "text", "district", "text", "exam_level", "text",
+                "language", "text", "updated_at", "timestamp with time zone"));
+        assertThat(columns("event_outbox")).containsExactlyInAnyOrderEntriesOf(Map.of(
+                "id", "bigint", "stream", "text", "payload", "jsonb", "created_at", "timestamp with time zone",
+                "published_at", "timestamp with time zone", "attempts", "integer"));
     }
 
     @Test

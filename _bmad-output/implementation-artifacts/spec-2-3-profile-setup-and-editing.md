@@ -2,7 +2,8 @@
 title: 'Story 2.3: Profile setup and editing'
 type: 'feature'
 created: '2026-11-19'
-status: 'ready-for-dev'
+status: 'done'
+baseline_commit: '60a580f3033dad17b1a2d7659d490bf4fb59d74b'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -55,9 +56,9 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `core` V4, `NameRule` with table-driven tests (chillu, ZWJ, mixed script, every reserved name), profile service, `GET/PUT /me/profile`, bearer verification, token claims from the profile
-- [ ] `core` outbox: same-transaction write, ordered relay with backoff, Redis publisher, test that fails the first publish then delivers once, in order
-- [ ] `web` validator mirroring `NameRule` (same cases), profile store and API, form, setup screen and gate, Quick Match gate, `/auth/return` redirect, Me profile section and guest nudge, language preview, i18n and tests
+- [x] `core` V4, `NameRule` with table-driven tests (chillu, ZWJ, mixed script, every reserved name), profile service, `GET/PUT /me/profile`, bearer verification, token claims from the profile
+- [x] `core` outbox: same-transaction write, ordered relay with backoff, Redis publisher, test that fails the first publish then delivers once, in order
+- [x] `web` validator mirroring `NameRule` (same cases), profile store and API, form, setup screen and gate, Quick Match gate, `/auth/return` redirect, Me profile section and guest nudge, language preview, i18n and tests
 
 **Acceptance Criteria:**
 - Given the epics.md Story 2.3 criteria, when core and web run, then each passes.
@@ -65,9 +66,29 @@ context:
 
 ## Implementation Notes
 
+- Core verifies bearer tokens in `BearerAuthenticator` (JOSE, the public JWK set); `/api/core/v1/me/**` gets credential-less CORS for the PWA origins with `Authorization`.
+- `Account` carries `displayName` and `language` from `user_profile`; `UserTokenService` prefers them over the Google given name and the refresh body's `lang`.
+- The relay is a plain class (`OutboxRelay`) scheduled by `OutboxConfiguration` unless `minnal.outbox.relay-enabled=false` (the Docker-free test and it profiles); the Redis publisher trims with `MAXLEN ~100000` after each add.
+- Web: the setup screen is one element for every way of reaching it, so the form never remounts when the profile finishes loading. Saved language is applied to the UI when the profile loads.
+- The name-separator test accepts the name as its own run after a space or non-Malayalam separator and rejects any attached Malayalam ending.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+| Finding | Verdict | Route | Evidence |
+|---|---|---|---|
+| Reserved names bypassed with ZWJ/ZWNJ or fullwidth letters; runs of joiners accepted; Java `strip` vs JS `trim` whitespace differ | high | patch (fixed) | NFKC fold and joiner removal before the reserved check, joiner runs rejected, one whitespace class in both rules; shared vectors added |
+| Bearer auth: missing or odd claim or a deleted account returned 500 (FK) | high | patch (fixed) | all claim errors map to 401; account must be ACTIVE; tests added (deleted, unknown) |
+| Relay spun when recording a failure threw; XADD then XTRIM was not one command | medium | patch (fixed) | backoff set first; single `XADD ... MAXLEN ~` |
+| After sign-in a failed profile load sent a complete profile to setup (overwrite risk) | high | patch (fixed) | setup only when the server says incomplete; test added |
+| Requested screen flashed before setup; guest or complete profile could open `/profile/setup` | medium | patch (fixed) | gate holds while loading; setup redirects when not needed; tests added |
+| In-flight profile GET after sign-out wrote the old profile | medium | patch (fixed) | generation counter; test added |
+| Untested: profile-aware refresh token, ADMIN allowed, same-transaction rollback, CORS on `/me/**` | medium | patch (fixed) | tests added |
+| Relay unsafe with several instances (no SKIP LOCKED), commit-order vs id order, poison row blocks the queue, no purge | medium | defer | single-instance deployment for now; recorded in `deferred-work.md` |
+| `RedisStreamPublisher` and relay scheduling have no container test; relay on without Valkey | low | defer | needs a Valkey Testcontainer |
+| Names not unique, no homoglyph or mixed-script policy, grapheme parity across JDK and ICU versions, malformed-body error shape, district CHECK and parity test | low | defer | product decisions or parity hardening; recorded |
+| Dead code in `NameRule`, JWK rotation capture, other small items | low | false/patch | dead code removed; keys are loaded once at startup by design |
 
 ## Verification
 

@@ -50,9 +50,14 @@ class JdbcAccountRepository implements AccountRepository {
 
     @Override
     public Optional<Account> findActive(UUID id) {
-        return jdbc.sql("SELECT id, email, given_name FROM app_user WHERE id = :id AND status = 'ACTIVE'")
+        return jdbc.sql("""
+                SELECT u.id, u.email, u.given_name, p.display_name, p.language
+                FROM app_user u LEFT JOIN user_profile p ON p.user_id = u.id
+                WHERE u.id = :id AND u.status = 'ACTIVE'
+                """)
                 .param("id", id)
-                .query((rs, n) -> new Account(rs.getObject("id", UUID.class), rs.getString("email"), rs.getString("given_name")))
+                .query((rs, n) -> new Account(rs.getObject("id", UUID.class), rs.getString("email"), rs.getString("given_name"),
+                        rs.getString("display_name"), rs.getString("language")))
                 .optional();
     }
 

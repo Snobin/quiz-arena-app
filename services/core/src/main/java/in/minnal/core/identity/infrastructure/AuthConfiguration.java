@@ -58,6 +58,11 @@ public class AuthConfiguration {
         return new WebMvcConfigurer() {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
+                registry.addMapping("/api/core/v1/me/**")
+                        .allowedOrigins(settings.corsOrigins().toArray(String[]::new))
+                        .allowedMethods("GET", "PUT")
+                        .allowedHeaders("Authorization", "Content-Type")
+                        .maxAge(600);
                 registry.addMapping("/api/core/v1/auth/refresh")
                         .allowedOrigins(settings.corsOrigins().toArray(String[]::new))
                         .allowedMethods("POST")

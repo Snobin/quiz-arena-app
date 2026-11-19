@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../App.tsx';
 import { guestSession } from '../auth/guestSession.ts';
 import { REFRESH_PATH, session } from '../auth/session.ts';
+import { PROFILE_PATH, resetProfile } from '../profile/profileStore.ts';
 import i18n from '../i18n.ts';
 import { resetAnnouncements, useAnnouncements } from '../shell/announce.ts';
 import { clearReturnFocus } from '../shell/returnFocus.ts';
@@ -32,6 +33,15 @@ function stubRefresh(name: string | null, reason?: string) {
         ? jsonResponse({ status: 401, ...(reason ? { reason } : {}) }, 401, 'application/problem+json')
         : jsonResponse({ accessToken: utf8Jwt({ name }), expiresAt: new Date(Date.now() + 3600_000).toISOString() });
     }
+    if (url === PROFILE_PATH) {
+      return jsonResponse({
+        displayName: name,
+        district: 'thrissur',
+        examLevel: 'DEGREE',
+        language: i18n.language,
+        profileComplete: true,
+      });
+    }
     if (url === GUEST_TOKEN_PATH) return jsonResponse(guestTokenBody('en'));
     return jsonResponse({ status: 404 }, 404, 'application/problem+json');
   });
@@ -52,6 +62,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   session.reset();
+  resetProfile();
   guestSession.reset();
   clearReturnFocus();
   vi.unstubAllGlobals();

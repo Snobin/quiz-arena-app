@@ -5,6 +5,7 @@ import { session } from '../auth/session.ts';
 import { PageColumn } from '../design/PageColumn.tsx';
 import { useDocumentTitle } from '../i18n/useDocumentTitle.ts';
 import { announce } from '../shell/announce.ts';
+import { ensureProfileLoaded, useProfile } from '../profile/profileStore.ts';
 import { navigate, searchParam } from '../shell/router.ts';
 import { safeReturnPath } from './home/signInPath.ts';
 
@@ -39,7 +40,14 @@ export function AuthReturn() {
       if (status === 'registered') {
         // The name is inserted unchanged; the text is built here so it is announced after the move.
         announce(i18n.t('auth.signedInAs', { name: name ?? i18n.t('home.registeredHeaderNoName') }));
-        navigate(to, { replace: true });
+        // A new account (or one that never finished setup) goes through profile setup first.
+        void ensureProfileLoaded().then(() => {
+          // Setup only when the server said the profile is incomplete; a failed load never sends a player who
+          // has a profile into setup (where she could overwrite it).
+          const { status: loaded, profile } = useProfile.getState();
+          const needsSetup = loaded === 'ready' && profile?.profileComplete === false;
+          navigate(needsSetup ? `/profile/setup?to=${encodeURIComponent(to)}` : to, { replace: true });
+        });
       } else {
         navigate(withFailure(to), { replace: true });
       }
