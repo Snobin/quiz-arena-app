@@ -97,6 +97,8 @@ export type Session = {
   start: () => void;
   /** Resolves once the boot refresh has settled. */
   ready: () => Promise<void>;
+  /** The signed-in player's user id (the token's `sub`), or null for a guest. Read it when rendering; it is not reactive. */
+  userId: () => string | null;
   /** Refreshes the access token now (e.g. after a profile save) so its `name` and `lang` are current. */
   refreshNow: () => Promise<boolean>;
   /** After sign-in: true when she is registered (refreshing once more if the boot said otherwise). */
@@ -215,6 +217,11 @@ export function createSession(env: SessionEnv = browserEnv()): Session {
     },
     ready() {
       return booted ?? Promise.resolve();
+    },
+    userId() {
+      if (store.getState().status !== 'registered' || !token) return null;
+      const sub = tokenClaim(token.accessToken, 'sub');
+      return typeof sub === 'string' ? sub : null;
     },
     async refreshNow() {
       return (await refresh()) === 'ok';

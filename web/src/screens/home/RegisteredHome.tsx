@@ -7,6 +7,7 @@ import { PageColumn } from '../../design/PageColumn.tsx';
 import { useDocumentTitle } from '../../i18n/useDocumentTitle.ts';
 import { navigate } from '../../shell/router.ts';
 import { usePlayAvailability } from '../../shell/usePlayAvailability.ts';
+import { RankSnippet } from '../../ranks/RankSnippet.tsx';
 import { RatingTrio } from '../../ratings/RatingTrio.tsx';
 import { ComingSoonModeRows } from './ComingSoonModeRows.tsx';
 import { QuickMatchCard } from './QuickMatchCard.tsx';
@@ -36,6 +37,7 @@ export function RegisteredHome() {
           )}
         </h1>
         <QuickMatchCard disabledReason={play.disabled ? play.reason : !complete ? t('home.quickMatch.needsProfile') : undefined} onPlay={() => navigate('/matchmaking')} />
+        <RankSnippet />
         <RatingTrio />
         <ComingSoonModeRows />
       </main>

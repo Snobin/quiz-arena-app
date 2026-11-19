@@ -536,9 +536,103 @@ export const catalogue = {
     en: 'Rooms are coming soon. Your whole batch will play together here.',
     signoff: ['ml', 'en'],
   },
-  'ranks.placeholder': {
-    ml: 'റാങ്ക് ലിസ്റ്റ് ഉടൻ വരുന്നു. അതുവരെ കുറച്ചു കളികൾ ജയിച്ചു വെക്കൂ.',
-    en: 'Leaderboards are on the way. Win a few matches in the meantime.',
+  // Ranks (Story 2.7 part B)
+  'ranks.period.daily': {
+    ml: 'ഇന്ന്',
+    en: 'Today',
+    signoff: ['ml', 'en'],
+  },
+  'ranks.period.weekly': {
+    ml: 'ഈ ആഴ്ച',
+    en: 'This week',
+    signoff: ['ml', 'en'],
+  },
+  'ranks.period.alltime': {
+    ml: 'എക്കാലവും',
+    en: 'All time',
+    signoff: ['ml', 'en'],
+  },
+  'ranks.modes': {
+    ml: 'മോഡ്',
+    en: 'Mode',
+    signoff: ['ml', 'en'],
+  },
+  'ranks.periods': {
+    ml: 'കാലയളവ്',
+    en: 'Period',
+    signoff: ['ml', 'en'],
+  },
+  'ranks.header.daily': {
+    ml: 'ഇന്ന് നേടിയ റേറ്റിംഗ്',
+    en: 'rating gained today',
+    signoff: ['ml', 'en'],
+  },
+  'ranks.header.weekly': {
+    ml: 'ഈ ആഴ്ച നേടിയ റേറ്റിംഗ്',
+    en: 'rating gained this week',
+    signoff: ['ml', 'en'],
+  },
+  'ranks.header.alltime': {
+    ml: 'റേറ്റിംഗ്',
+    en: 'rating',
+    signoff: ['ml', 'en'],
+  },
+  'ranks.you': {
+    ml: 'നിങ്ങൾ',
+    en: 'You',
+    signoff: ['ml', 'en'],
+  },
+  'ranks.row.a11y': {
+    ml: '{{rank, number}}, {{name}}, {{district}}, {{value}}',
+    en: '{{rank, number}}, {{name}}, {{district}}, {{value}}',
+    signoff: ['ml', 'en'],
+    params: { ml: { rank: 4, name: 'Anju', district: 'തൃശ്ശൂർ', value: '+142' }, en: { rank: 4, name: 'Anju', district: 'Thrissur', value: '+142' } },
+  },
+  'ranks.showMore': {
+    ml: 'കൂടുതൽ കാണിക്കൂ',
+    en: 'Show more',
+    signoff: ['ml', 'en'],
+  },
+  'ranks.empty.daily': {
+    ml: 'ഇന്ന് ആരും ബോർഡിൽ ഇല്ല. ഇന്നത്തെ ആദ്യ ജയം ഒന്നാം സ്ഥാനം നേടും.',
+    en: "No one's on today's board yet. The first win today takes the top spot.",
+    signoff: ['ml', 'en'],
+  },
+  'ranks.empty.weekly': {
+    ml: 'ഈ ആഴ്ച ആരും ബോർഡിൽ ഇല്ല. ആദ്യ ജയം ഒന്നാം സ്ഥാനം നേടും.',
+    en: "No one's on this week's board yet. The first win takes the top spot.",
+    signoff: ['ml', 'en'],
+  },
+  'ranks.empty.alltime': {
+    ml: 'ഇതുവരെ ആരും ബോർഡിൽ ഇല്ല. ആദ്യ റേറ്റഡ് മാച്ച് ഒന്നാം സ്ഥാനം നേടും.',
+    en: "No one's on the board yet. The first rated match takes the top spot.",
+    signoff: ['ml', 'en'],
+  },
+  'ranks.empty.start': {
+    ml: '{{mode}} തുടങ്ങാം',
+    en: 'Start {{mode}}',
+    signoff: ['ml', 'en'],
+    params: { ml: { mode: 'ക്വിക്ക് മാച്ച്' }, en: { mode: 'Quick Match' } },
+  },
+  'ranks.empty.seeAll': {
+    ml: 'എക്കാലത്തെയും ബോർഡ് കാണൂ',
+    en: 'See the all-time board',
+    signoff: ['ml', 'en'],
+  },
+  'ranks.snippet.caption': {
+    ml: 'ഇന്ന് കേരളത്തിൽ',
+    en: 'in Kerala today',
+    signoff: ['ml', 'en'],
+  },
+  'ranks.snippet.gain': {
+    ml: 'ഇന്ന് {{delta, signed}}',
+    en: 'today {{delta, signed}}',
+    signoff: ['ml', 'en'],
+    params: { ml: { delta: 24 }, en: { delta: 24 } },
+  },
+  'ranks.snippet.none': {
+    ml: 'ഇന്നത്തെ ബോർഡിൽ ഇതുവരെ ഇല്ല',
+    en: "Not on today's board yet",
     signoff: ['ml', 'en'],
   },
   'me.placeholder': {

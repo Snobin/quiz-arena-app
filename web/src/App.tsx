@@ -1,7 +1,7 @@
 import { lazy, Suspense, type ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSession } from './auth/session.ts';
 import { ensureProfileLoaded, resetProfile, useProfile } from './profile/profileStore.ts';
 import { ProfileSetup } from './screens/profile/ProfileSetup.tsx';
@@ -75,12 +75,16 @@ export function App() {
   const profileReady = profileStatus === 'ready';
   const profileComplete = useProfile((s) => s.profile?.profileComplete ?? false);
   const queryClient = useQueryClient();
+  const wasRegistered = useRef(false);
   useEffect(() => {
-    // Her ratings and history belong to her: nothing is kept for the next account on this tab.
-    if (status !== 'registered') {
+    // Her ratings, history and leaderboard position belong to her: nothing is kept for the next account on this tab. Only
+    // when she actually stops being signed in (not on first render, where a guest's board request may be in flight).
+    if (wasRegistered.current && status !== 'registered') {
       queryClient.removeQueries({ queryKey: ['ratings'] });
       queryClient.removeQueries({ queryKey: ['matches'] });
+      queryClient.removeQueries({ queryKey: ['leaderboard'] });
     }
+    wasRegistered.current = status === 'registered';
     if (status === 'registered') void ensureProfileLoaded();
     else if (status === 'guest') resetProfile();
   }, [status]);
