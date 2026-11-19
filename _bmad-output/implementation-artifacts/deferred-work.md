@@ -144,3 +144,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-5-ratings-service-computes-elo.md`
   summary: Add stream and relay observability (consumer lag, pending count, applied and duplicate counters, outbox backlog age) and a ratings-service tombstone handler when account deletion (Story 2.8) defines the event.
   evidence: Only the dead-letter counter exists; nothing sets `player_directory.tombstoned_at`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-5b-game-service-rating-cache.md`
+  summary: Add a "caught up" signal (readiness or metric) for the game-service rating cache, a sanity bound on `ratedAt`, and replay progress and lag metrics.
+  evidence: Players queueing during the initial replay match as 1200 and nothing shows when replay finished; a future `ratedAt` from a bad producer would pin a rating.
