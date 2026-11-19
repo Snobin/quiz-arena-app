@@ -69,7 +69,7 @@ public class MatchCompletedHandler {
     }
 
     /** The USER participants with an id; a user listed twice is a malformed event (poison), never a silent no-op. */
-    private static List<CompletedParticipant> users(MatchCompletedEvent event) {
+    private List<CompletedParticipant> users(MatchCompletedEvent event) {
         List<CompletedParticipant> users = event.participants().stream()
                 .filter(p -> p.kind() == ParticipantKind.USER && p.userId() != null && !p.userId().isBlank())
                 .toList();
@@ -77,7 +77,18 @@ public class MatchCompletedHandler {
         if (distinct != users.size()) {
             throw new IllegalArgumentException("match " + event.matchId() + " lists a user twice");
         }
-        return users;
+        return withoutDeleted(users);
+    }
+
+    /** A tombstoned (deleted) player gets no rating, event or record; she still counts as 1200 for her opponents. */
+    private List<CompletedParticipant> withoutDeleted(List<CompletedParticipant> users) {
+        if (users.isEmpty()) {
+            return users;
+        }
+        List<UUID> ids = users.stream().map(u -> UUID.fromString(u.userId())).toList();
+        List<UUID> gone = jdbc.sql("SELECT user_id FROM player_directory WHERE user_id = ANY(:ids) AND tombstoned_at IS NOT NULL")
+                .param("ids", ids.toArray(UUID[]::new)).query(UUID.class).list();
+        return gone.isEmpty() ? users : users.stream().filter(u -> !gone.contains(UUID.fromString(u.userId()))).toList();
     }
 
     private Outcome applyUnrated(MatchCompletedEvent event) {

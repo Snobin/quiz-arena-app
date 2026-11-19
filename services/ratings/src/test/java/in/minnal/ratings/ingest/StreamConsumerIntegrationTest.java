@@ -24,12 +24,15 @@ class StreamConsumerIntegrationTest extends PostgresIntegrationTest {
     PlayerDirectory directory;
 
     @Autowired
+    UserDeletedHandler deleted;
+
+    @Autowired
     JsonMapper json;
 
     final SimpleMeterRegistry meters = new SimpleMeterRegistry();
 
     StreamConsumer consumer(FakeStreamClient streams, String name) {
-        return new StreamConsumer(streams, handler, directory, json, meters, name, Duration.ZERO);
+        return new StreamConsumer(streams, handler, directory, deleted, json, meters, name, Duration.ZERO);
     }
 
     String payload(MatchCompletedEvent event) {

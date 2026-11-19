@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { jsonResponse, utf8Jwt } from '../test-utils/guest.ts';
 import {
   GUARD_HEADER,
+  LOGOUT_PATH,
+  ME_PATH,
   REFRESH_LOCK,
   REFRESH_BEFORE_EXPIRY_MS,
   REFRESH_PATH,
@@ -292,5 +294,126 @@ describe('the browser Web Lock wiring', () => {
     await session.ready();
     expect(session.store.getState().status).toBe('registered');
     session.reset();
+  });
+
+  describe('signOut and deleteAccount (Story 2.8)', () => {
+    function withCalls() {
+      const calls: { url: string; init?: RequestInit }[] = [];
+      let status = 204;
+      const guest = { start: vi.fn(), getAccessToken: vi.fn(async () => 'guest-token'), invalidate: vi.fn() };
+      const refresh = ok('Anju');
+      const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        calls.push({ url, init });
+        if (url === REFRESH_PATH) return refresh(init);
+        return new Response(null, { status });
+      });
+      const session = createSession({
+        fetch: () => fetchMock as unknown as typeof fetch,
+        now: () => NOW,
+        language: () => 'en',
+        guest,
+      });
+      return { session, calls, guest, setStatus: (next: number) => (status = next) };
+    }
+
+    it('signOut calls logout with the cookie and guard, drops the token and starts a guest', async () => {
+      const { session, calls, guest } = withCalls();
+      session.start();
+      await session.ready();
+      guest.start.mockClear();
+
+      await session.signOut();
+
+      const logout = calls.find((c) => c.url === LOGOUT_PATH)!;
+      expect(logout.init?.method).toBe('POST');
+      expect(logout.init?.credentials).toBe('include');
+      expect((logout.init?.headers as Record<string, string>)[GUARD_HEADER]).toBe('1');
+      expect(session.store.getState()).toEqual({ status: 'guest', name: null, signedOut: false });
+      expect(session.userId()).toBeNull();
+      expect(guest.start).toHaveBeenCalled();
+    });
+
+    it('signOut still ends the session when logout cannot be reached', async () => {
+      const failing = createSession({
+        fetch: () => (() => Promise.reject(new TypeError('offline'))) as unknown as typeof fetch,
+        guest: { start: vi.fn(), getAccessToken: vi.fn(async () => 'g'), invalidate: vi.fn() },
+      });
+      await failing.signOut();
+      expect(failing.store.getState().status).toBe('guest');
+    });
+
+    it('deleteAccount sends the bearer to DELETE /me, then signs out to a guest', async () => {
+      const { session, calls } = withCalls();
+      session.start();
+      await session.ready();
+
+      expect(await session.deleteAccount()).toBe(true);
+
+      const del = calls.find((c) => c.url === ME_PATH)!;
+      expect(del.init?.method).toBe('DELETE');
+      expect((del.init?.headers as Record<string, string>).Authorization).toMatch(/^Bearer .+\..+\..+$/);
+      expect(calls.some((c) => c.url === LOGOUT_PATH)).toBe(true);
+      expect(session.store.getState().status).toBe('guest');
+    });
+
+    it('deleteAccount that the server refuses leaves her signed in', async () => {
+      const { session, setStatus } = withCalls();
+      session.start();
+      await session.ready();
+      setStatus(500);
+
+      expect(await session.deleteAccount()).toBe(false);
+      expect(session.store.getState().status).toBe('registered');
+    });
+
+    describe('DELETE 401', () => {
+      function scripted(deletes: number[], refreshes: Refresh[]) {
+        const deleteQueue = [...deletes];
+        const refreshQueue = [...refreshes];
+        const calls: string[] = [];
+        const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = String(input);
+          calls.push(`${init?.method ?? 'GET'} ${url}`);
+          if (url === REFRESH_PATH) return (refreshQueue.shift() ?? refreshes[refreshes.length - 1]!)(init);
+          if (url === ME_PATH) return new Response(null, { status: deleteQueue.shift() ?? 500 });
+          return new Response(null, { status: 204 });
+        });
+        const session = createSession({
+          fetch: () => fetchMock as unknown as typeof fetch,
+          now: () => NOW,
+          language: () => 'en',
+          guest: { start: vi.fn(), getAccessToken: vi.fn(async () => 'g'), invalidate: vi.fn() },
+        });
+        return { session, calls };
+      }
+
+      it('refreshes once and retries when the token had expired', async () => {
+        const { session, calls } = scripted([401, 204], [ok(), ok()]);
+        session.start();
+        await session.ready();
+        expect(await session.deleteAccount()).toBe(true);
+        expect(calls.filter((c) => c === `DELETE ${ME_PATH}`)).toHaveLength(2);
+        expect(session.store.getState().status).toBe('guest');
+      });
+
+      it('returns false and keeps her signed in when the retry is refused again', async () => {
+        const { session, calls } = scripted([401, 401], [ok(), ok()]);
+        session.start();
+        await session.ready();
+        expect(await session.deleteAccount()).toBe(false);
+        expect(calls.filter((c) => c === `DELETE ${ME_PATH}`)).toHaveLength(2);
+        expect(session.store.getState().status).toBe('registered');
+      });
+
+      it('counts 401 as success only when the refresh shows the session is gone', async () => {
+        const { session, calls } = scripted([401], [ok(), unauthorized]);
+        session.start();
+        await session.ready();
+        expect(await session.deleteAccount()).toBe(true);
+        expect(calls.filter((c) => c === `DELETE ${ME_PATH}`)).toHaveLength(1);
+        expect(session.store.getState().status).toBe('guest');
+      });
+    });
   });
 });

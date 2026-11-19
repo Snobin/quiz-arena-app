@@ -26,6 +26,9 @@ public interface LeaderboardStore {
     /** How many members have a strictly higher score. */
     long countHigher(String key, double score);
 
+    /** {@code ZREM} of {@code member} from every listed key; a missing key or member is a no-op. */
+    void remove(java.util.Collection<String> keys, String member);
+
     void setMarker(String key, String value);
 
     boolean hasMarker(String key);

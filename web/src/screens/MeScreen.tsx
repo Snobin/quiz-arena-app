@@ -10,6 +10,7 @@ import { districtKey, examLevelKey, type DistrictCode, type ExamLevel } from '..
 import { ensureProfileLoaded, useProfile } from '../profile/profileStore.ts';
 import { MatchHistory } from '../ratings/MatchHistory.tsx';
 import { RatingTrio } from '../ratings/RatingTrio.tsx';
+import { navigate } from '../shell/router.ts';
 import { SignInNudge } from './home/SignInNudge.tsx';
 import { ProfileForm } from './profile/ProfileForm.tsx';
 
@@ -32,6 +33,9 @@ export function MeScreen() {
         <h1 tabIndex={-1} className="font-title text-title">
           {t('tab.me')}
         </h1>
+        <Button variant="secondary" className="self-start" onClick={() => navigate('/settings')}>
+          {t('settings.link')}
+        </Button>
         {status !== 'registered' ? (
           <SignInNudge />
         ) : profileStatus === 'error' ? (

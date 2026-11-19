@@ -167,3 +167,23 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-7b-ranks-tab.md`
   summary: Tie the pinned-row spacer to its measured height, take the pinned row's name and district from the board's own entry, point the empty card at a board known to have rows, and validate the leaderboard response shape.
   evidence: The spacer (96 px) and pinned min height (56 px) are fixed numbers that can mismatch large text or a wrapped name; the all-time link can lead to another empty board.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-8-settings-and-account-deletion.md`
+  summary: DPDP erasure scope is still OPEN, to be answered in Story 7.4; launch stays blocked until then. Owner decision (2026-11-19, option A): Story 2.8 follows the epic wording only, so deletion marks `app_user` DELETED, revokes every refresh token, removes `user_identity`, tombstones `player_directory` and removes her from every live board. `rating`, `rating_event`, `match_record`, the `app_user` row (email, given name), the `user_profile` row, the `player_directory` name and district, and backups are all kept.
+  evidence: The epic asks which personal data the DPDP Act requires to be erased or kept, and for how long; nobody has answered it.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-8-settings-and-account-deletion.md`
+  summary: Story 2.8 follow-ups: a tombstoned player counts as 1200 for her opponents in a later rated match (her stored rating is not read); boards are cleared only for the current IST day and week keys (an earlier period's key expires on its own); rematch with a deleted player is not blocked in game-service; no metric for deletion handling or the deleted-user replay; the DELETED `app_user` keeps its email.
+  evidence: Chosen to keep Story 2.8 to the epic wording; each is small and can be tightened once the DPDP answer is known.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-8-settings-and-account-deletion.md`
+  summary: The delete-account confirm says ratings, board positions and history "will be removed" while option A keeps `rating`, `rating_event`, `match_record`, profile and email.
+  evidence: Copy is the epic's wording; reconcile it with the Story 7.4 DPDP answer before launch.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-8-settings-and-account-deletion.md`
+  summary: A failed logout call is swallowed, so the refresh cookie survives and a reload can restore the session after "Signed out".
+  evidence: `revokeCookie` is best effort; needs a retry-on-boot or a surfaced failure (owner decision on the UX).
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-8-settings-and-account-deletion.md`
+  summary: Game-service deleted-user set has a boot replay window, relies on a stream capped near 100000 entries, has no metrics, and rematch and rooms are not guarded; ratings enforces 401 only on `/me/*` and `matches/{id}`.
+  evidence: Same limits as the rating cache; a durable source or an entry-point-wide guard would close them.
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-8-settings-and-account-deletion.md`
+  summary: Small cleanups: `StreamConsumer` bare `else` for unknown streams, duplicated guard in `LogoutController`, duplicate `settings.link` and `settings.title`, tombstone lookup outside the rating transaction in `MatchCompletedHandler`, no deletion metrics.
+  evidence: Raised by review; low impact.

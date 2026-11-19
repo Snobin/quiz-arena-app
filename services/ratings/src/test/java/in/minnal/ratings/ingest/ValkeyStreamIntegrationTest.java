@@ -39,6 +39,9 @@ class ValkeyStreamIntegrationTest extends PostgresIntegrationTest {
     PlayerDirectory directory;
 
     @Autowired
+    UserDeletedHandler deleted;
+
+    @Autowired
     OutboxRepository outbox;
 
     @Autowired
@@ -63,7 +66,7 @@ class ValkeyStreamIntegrationTest extends PostgresIntegrationTest {
     }
 
     StreamConsumer consumer(String name) {
-        return new StreamConsumer(client, handler, directory, json, new SimpleMeterRegistry(), name, Duration.ZERO);
+        return new StreamConsumer(client, handler, directory, deleted, json, new SimpleMeterRegistry(), name, Duration.ZERO);
     }
 
     long pending(String stream) {

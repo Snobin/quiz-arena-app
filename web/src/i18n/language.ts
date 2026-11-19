@@ -24,3 +24,29 @@ function browserLanguages(): readonly string[] {
 export function deviceLanguage(languages: readonly string[] = browserLanguages()): Language {
   return languages.some((language) => /^ml(?:[-_]|$)/i.test(language)) ? 'ml' : 'en';
 }
+
+export const LANGUAGE_STORAGE_KEY = 'minnal.language';
+
+/** The language she chose in Settings on this device, or undefined (blocked storage or a bad value included). */
+export function storedLanguage(): Language | undefined {
+  try {
+    const value = typeof window === 'undefined' ? null : window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    return value === 'ml' || value === 'en' ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Remembers the Settings choice on this device (a guest's language lives only here). */
+export function storeLanguage(language: Language): void {
+  try {
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+  } catch {
+    // Storage blocked: the choice still holds for this session.
+  }
+}
+
+/** The language to start in and to ask tokens for: the device-stored choice, else the device language. */
+export function preferredLanguage(): Language {
+  return storedLanguage() ?? deviceLanguage();
+}

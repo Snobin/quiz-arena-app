@@ -24,6 +24,11 @@ class RatingsReadRepository {
         this.jdbc = jdbc;
     }
 
+    boolean tombstoned(UUID userId) {
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM player_directory WHERE user_id = :u AND tombstoned_at IS NOT NULL)")
+                .param("u", userId).query(Boolean.class).single();
+    }
+
     Optional<MatchResult> matchResult(UUID userId, UUID matchId) {
         return jdbc.sql("""
                 SELECT m.mode, m.rated, e.rating_before, e.rating_after, e.delta

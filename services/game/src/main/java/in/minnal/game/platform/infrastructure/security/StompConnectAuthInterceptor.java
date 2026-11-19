@@ -3,6 +3,7 @@ package in.minnal.game.platform.infrastructure.security;
 import in.minnal.contracts.realtime.ErrorCode;
 import in.minnal.contracts.realtime.ServerMessage;
 import in.minnal.game.platform.infrastructure.ws.InboundRateLimiter;
+import in.minnal.game.platform.session.DeletedUsers;
 import in.minnal.game.platform.session.MatchAccess;
 import in.minnal.game.platform.session.PlayerChannel;
 import java.time.Clock;
@@ -49,15 +50,17 @@ public final class StompConnectAuthInterceptor implements ChannelInterceptor {
     private final InboundRateLimiter rateLimiter;
     private final PlayerChannel channel;
     private final Clock clock;
+    private final DeletedUsers deleted;
     private final MinnalJwtAuthenticationConverter converter = new MinnalJwtAuthenticationConverter();
 
     public StompConnectAuthInterceptor(JwtDecoder decoder, MatchAccess matches, InboundRateLimiter rateLimiter,
-            PlayerChannel channel, Clock clock) {
+            PlayerChannel channel, Clock clock, DeletedUsers deleted) {
         this.decoder = decoder;
         this.matches = matches;
         this.rateLimiter = rateLimiter;
         this.channel = channel;
         this.clock = clock;
+        this.deleted = deleted;
     }
 
     @Override
@@ -134,7 +137,12 @@ public final class StompConnectAuthInterceptor implements ChannelInterceptor {
             throw new StompAuthenticationException();
         }
         try {
-            return converter.convert(decoder.decode(authorization.substring(BEARER.length()).strip()));
+            AbstractAuthenticationToken authentication = converter.convert(decoder.decode(authorization.substring(BEARER.length()).strip()));
+            // A deleted account is refused even with an unexpired token (Story 2.8).
+            if (authentication != null && deleted.contains(authentication.getName())) {
+                throw new StompAuthenticationException();
+            }
+            return authentication;
         } catch (RuntimeException e) {
             // Bad, expired or forged token, or the JWKS is unreachable: never echo the token.
             throw new StompAuthenticationException();

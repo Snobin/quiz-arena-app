@@ -81,6 +81,14 @@ class ValkeyLeaderboardStore implements LeaderboardStore {
     }
 
     @Override
+    public void remove(java.util.Collection<String> keys, String member) {
+        StringRedisTemplate template = template();
+        for (String key : keys) {
+            template.opsForZSet().remove(key, member);
+        }
+    }
+
+    @Override
     public void setMarker(String key, String value) {
         template().opsForValue().set(key, value);
     }

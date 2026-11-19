@@ -61,6 +61,17 @@ class JdbcAccountRepository implements AccountRepository {
                 .optional();
     }
 
+    @Override
+    public boolean markDeleted(UUID id) {
+        int changed = jdbc.sql("UPDATE app_user SET status = 'DELETED' WHERE id = :id AND status = 'ACTIVE'").param("id", id).update();
+        if (changed == 0) {
+            return false;
+        }
+        // Identity unlinked: signing in again with the same Google account makes a new, empty account.
+        jdbc.sql("DELETE FROM user_identity WHERE user_id = :id").param("id", id).update();
+        return true;
+    }
+
     private static String verifiedEmail(ExternalIdentity identity) {
         return identity.emailVerified() && identity.email() != null && !identity.email().isBlank() ? identity.email() : null;
     }

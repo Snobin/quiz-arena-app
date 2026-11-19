@@ -1088,6 +1088,11 @@ export function cancelMatchmaking(): CancelResult {
   return instance().cancelMatchmaking();
 }
 
+/** Closes the socket and clears the live game (sign-out and account deletion). A later join connects again with the then-current token. */
+export function closeRealtime(): void {
+  realtime?.reset();
+}
+
 /** Test helper: replaces parts of the environment (e.g. the client factory) and resets the module. */
 export function configureRealtimeForTests(override: Partial<RealtimeEnv>): void {
   realtime?.reset();

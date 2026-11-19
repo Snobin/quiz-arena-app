@@ -25,7 +25,8 @@ class NoGuestResultEndpointTest {
 
     private static final Set<String> PUBLIC_API = Set.of(
             "/api/core/v1/auth/guest", "/api/core/v1/auth/jwks", "/api/core/v1/auth/google/start",
-            "/api/core/v1/auth/google/callback", "/api/core/v1/auth/refresh", "/api/core/v1/me/profile");
+            "/api/core/v1/auth/google/callback", "/api/core/v1/auth/refresh", "/api/core/v1/auth/logout", "/api/core/v1/me",
+            "/api/core/v1/me/profile");
 
     @Autowired
     @org.springframework.beans.factory.annotation.Qualifier("requestMappingHandlerMapping")

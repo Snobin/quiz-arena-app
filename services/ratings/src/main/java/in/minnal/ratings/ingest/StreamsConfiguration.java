@@ -24,15 +24,15 @@ import tools.jackson.databind.json.JsonMapper;
 class StreamsConfiguration {
 
     @Bean
-    StreamConsumer streamConsumer(StreamClient streams, MatchCompletedHandler matches, PlayerDirectory directory, JsonMapper json,
-                                  MeterRegistry meters, @Value("${minnal.streams.reclaim-idle:30s}") Duration reclaimIdle) {
+    StreamConsumer streamConsumer(StreamClient streams, MatchCompletedHandler matches, PlayerDirectory directory,
+                                  UserDeletedHandler deletions, JsonMapper json, MeterRegistry meters, @Value("${minnal.streams.reclaim-idle:30s}") Duration reclaimIdle) {
         String host;
         try {
             host = InetAddress.getLocalHost().getHostName();
         } catch (Exception e) {
             host = "ratings";
         }
-        return new StreamConsumer(streams, matches, directory, json, meters, host + "-" + UUID.randomUUID().toString().substring(0, 8),
+        return new StreamConsumer(streams, matches, directory, deletions, json, meters, host + "-" + UUID.randomUUID().toString().substring(0, 8),
                 reclaimIdle);
     }
 

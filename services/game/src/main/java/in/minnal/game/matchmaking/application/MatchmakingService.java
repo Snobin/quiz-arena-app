@@ -9,6 +9,7 @@ import in.minnal.game.matchmaking.domain.MatchmakingRules;
 import in.minnal.game.platform.drain.DrainState;
 import in.minnal.game.platform.infrastructure.security.MinnalPrincipal;
 import in.minnal.game.platform.session.Activity;
+import in.minnal.game.platform.session.DeletedUsers;
 import in.minnal.game.platform.session.LastSessionClosed;
 import in.minnal.game.platform.session.ParticipationRegistry;
 import in.minnal.game.platform.session.PlayerChannel;
@@ -45,13 +46,14 @@ public class MatchmakingService implements DisposableBean {
     private final PlayerChannel channel;
     private final Clock clock;
     private final RematchCoordinator rematches;
+    private final DeletedUsers deleted;
     private final Map<MatchMode, MatchmakingActor> actors = new EnumMap<>(MatchMode.class);
     private final ScheduledExecutorService ticker = Executors.newSingleThreadScheduledExecutor(
             Thread.ofPlatform().name("matchmaking-ticker").daemon(true).factory());
 
     public MatchmakingService(DrainState drain, ParticipationRegistry participation, PlayerSessions sessions,
             PlayerChannel channel, Clock clock, RatingCache ratings, QuestionSetClient questionSets,
-            MatchRegistry matches, MeterRegistry meters, RematchCoordinator rematches,
+            MatchRegistry matches, MeterRegistry meters, RematchCoordinator rematches, DeletedUsers deleted,
             @Value("${minnal.matchmaking.tick:250ms}") Duration tick,
             @Value("${minnal.matchmaking.widen-after:4s}") Duration widenAfter,
             @Value("${minnal.matchmaking.bot-after:8s}") Duration botAfter) {
@@ -60,6 +62,7 @@ public class MatchmakingService implements DisposableBean {
         this.channel = channel;
         this.clock = clock;
         this.rematches = rematches;
+        this.deleted = deleted;
         MatchmakingRules rules = new MatchmakingRules(MatchmakingRules.DEFAULT.band(), MatchmakingRules.DEFAULT.widenedBand(),
                 widenAfter, botAfter);
         actors.put(MatchMode.QUICK, new MatchmakingActor(MatchMode.QUICK, new MatchmakingQueue(rules), clock, ratings,
@@ -71,6 +74,10 @@ public class MatchmakingService implements DisposableBean {
     public void join(MinnalPrincipal player, String sessionId, String modeName) {
         if (drain.isDraining()) {
             reject(player, sessionId, ErrorCode.SERVER_DRAINING, null);
+            return;
+        }
+        if (deleted.contains(player.sub())) {
+            reject(player, sessionId, ErrorCode.UNAUTHENTICATED, null);
             return;
         }
         MatchMode mode = parse(modeName).orElse(null);

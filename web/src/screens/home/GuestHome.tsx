@@ -7,6 +7,7 @@ import { useDocumentTitle } from '../../i18n/useDocumentTitle.ts';
 import { useLiveGame } from '../../realtime/liveGameStore.ts';
 import { navigate } from '../../shell/router.ts';
 import { usePlayAvailability } from '../../shell/usePlayAvailability.ts';
+import { AccountDeletedNote } from './AccountDeletedNote.tsx';
 import { SessionEndedNote } from './SessionEndedNote.tsx';
 import { LockedModeRows } from './LockedModeRows.tsx';
 import { QuickMatchCard } from './QuickMatchCard.tsx';
@@ -41,6 +42,7 @@ export function GuestHome() {
           {t('home.guestHeader')}
         </h1>
         <SessionEndedNote />
+        <AccountDeletedNote />
         {aborted ? (
           <p data-testid="notice-aborted" className="text-body text-muted">
             {t('match.aborted')}
