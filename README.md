@@ -146,6 +146,11 @@ Ratings start at 1200, are per mode and integer, a guest opponent counts as 1200
 rating; nothing is ever stored for a guest or a bot. Rating changes are published to `minnal.rating.updated`
 from a transactional outbox. Set `MINNAL_STREAMS_ENABLED=false` to run it without Valkey.
 
+game-service keeps an in-memory rating cache for matchmaking: on boot it replays `minnal.rating.updated` from the
+start of the stream with a plain `XREAD` (no consumer group) and then follows it; each player's latest `ratedAt` wins
+and a missing entry is 1200. The stream is capped at about 100,000 entries, so a long-inactive player whose last update
+was trimmed reads as 1200 after a game-service restart (a known limitation, logged at start).
+
 ### Seed the question bank
 
 The starter questions live in `services/core/src/main/resources/seed/kerala-psc-starter.csv` (columns:

@@ -157,6 +157,33 @@ class MatchmakingFlowTest extends GameIntegrationTest {
     }
 
     @Test
+    void ratingsReplayedFromTheStreamKeepPlayersRated1500And1250ApartUntilTheBandWidensAt4s() {
+        String a = newSub();
+        String b = newSub();
+        // The cache is fed the way production feeds it: entries of minnal.rating.updated through the feeder.
+        java.util.List<String> entries = java.util.List.of(
+                "{\"userId\":\"" + a + "\",\"mode\":\"QUICK\",\"rating\":1500,\"ratedAt\":\"2026-11-19T10:00:00Z\"}",
+                "{\"userId\":\"" + b + "\",\"mode\":\"QUICK\",\"rating\":1250,\"ratedAt\":\"2026-11-19T10:00:00Z\"}");
+        in.minnal.game.platform.infrastructure.valkey.RatingFeeder feeder = new in.minnal.game.platform.infrastructure.valkey.RatingFeeder(
+                after -> after.equals("0-0")
+                        ? new in.minnal.game.platform.infrastructure.valkey.RatingUpdateSource.Batch("2-0", entries)
+                        : new in.minnal.game.platform.infrastructure.valkey.RatingUpdateSource.Batch(after, java.util.List.of()),
+                ratings, tools.jackson.databind.json.JsonMapper.builder().build());
+        assertThat(feeder.pollOnce()).isEqualTo(2);
+
+        StompTestClient first = player(a, userToken(a, "Arjun K"));
+        StompTestClient second = player(b, userToken(b, "Meera"));
+        first.join();
+        second.join();
+        first.expectNothing(TWO_TICKS); // 250 apart: outside the +-200 band
+        clock.advance(Duration.ofMillis(3900));
+        first.expectNothing(TWO_TICKS);
+        clock.advance(Duration.ofMillis(100)); // the 4 s widening to +-400
+        first.next("MATCH_FOUND");
+        second.next("MATCH_FOUND");
+    }
+
+    @Test
     void aLoneGuestGetsMinnalBotAt8s() {
         String a = newSub();
         StompTestClient anju = guest(a);
