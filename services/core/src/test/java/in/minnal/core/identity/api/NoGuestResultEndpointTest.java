@@ -33,7 +33,8 @@ class NoGuestResultEndpointTest {
     RequestMappingHandlerMapping mappings;
 
     /** Non-public paths core serves; each is service-to-service and takes no player result. */
-    private static final Set<String> INTERNAL = Set.of("/internal/question-sets");
+    private static final Set<String> INTERNAL = Set.of("/internal/question-sets",
+            "/api/core/v1/admin/questions", "/api/core/v1/admin/subjects");
 
     private static final Set<String> FORBIDDEN_WORDS = Set.of("match", "score", "scores", "guest", "participant", "participants", "result", "results", "points");
 

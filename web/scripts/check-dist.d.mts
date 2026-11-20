@@ -2,6 +2,7 @@ export type ManifestChunk = {
   file: string;
   src?: string;
   isEntry?: boolean;
+  isDynamicEntry?: boolean;
   imports?: string[];
   dynamicImports?: string[];
   css?: string[];
@@ -14,6 +15,7 @@ export const WEB_ROOT: string;
 export const BUDGET_BYTES: number;
 export const PRIMITIVE_DIRS: string[];
 export const FIXTURE_SENTINEL: string;
+export const ADMIN_MARKER: string;
 
 export function initialJsFiles(manifest: Manifest, entryKey?: string): string[];
 export function gzipBytes(content: string | Uint8Array): number;
@@ -35,3 +37,7 @@ export function checkServiceWorker(input: {
 export function checkBaseRebase(input: { cssFiles: TextFile[]; indexHtml: string; fontPath: string; base: string }): string[];
 export function checkDist(distDir: string, webRoot?: string): { problems: string[]; initialJsBytes: number };
 export function checkBaseBuild(base?: string, webRoot?: string): string[];
+export function adminLeaks(manifest: Manifest, initialFiles: string[], jsFiles: TextFile[]): string[];
+export function staticAdminImports(file: string, text: string): string[];
+export function adminImportProblems(webRoot?: string): string[];
+export function adminPrecacheLeaks(manifest: Manifest, swJs: string): string[];

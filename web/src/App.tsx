@@ -19,6 +19,7 @@ import { SettingsScreen } from './screens/SettingsScreen.tsx';
 import { SignInPrompt } from './screens/SignInPrompt.tsx';
 import { AppShell } from './shell/AppShell.tsx';
 import { navigate, usePathname, useRouterSync } from './shell/router.ts';
+import { AdminRoute } from './screens/admin/AdminRoute.tsx';
 import { safeReturnPath } from './screens/home/signInPath.ts';
 
 /**
@@ -110,6 +111,9 @@ export function App() {
       </Suspense>
     );
   }
+
+  // The admin console is outside the player shell (no tab bar); its guard decides who may load it.
+  if (pathname === '/admin' || pathname.startsWith('/admin/')) return <AdminRoute />;
 
   const Screen = ROUTES[pathname] ?? Home;
   // One element for every way of reaching setup, so the form is never remounted (and typed input never lost)

@@ -187,3 +187,19 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-8-settings-and-account-deletion.md`
   summary: Small cleanups: `StreamConsumer` bare `else` for unknown streams, duplicated guard in `LogoutController`, duplicate `settings.link` and `settings.title`, tombstone lookup outside the rating transaction in `MatchCompletedHandler`, no deletion metrics.
   evidence: Raised by review; low impact.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-1-admin-console-access-and-layout.md`
+  summary: `updatedAt` on the admin list ignores soft delete and discard, so deleted or discarded questions sort by their last edit.
+  evidence: `updated_at` is `max(created_at)` over `question_version`; no delete or discard exists in 3.1. Settle in 3.2 (delete) and 3.4 (discard) by including `deleted_at` and the discard time.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-1-admin-console-access-and-layout.md`
+  summary: `AdminMappingArchitectureTest` does not assert that every admin controller method calls `requireAdmin`.
+  evidence: a new unguarded admin endpoint under the admin package would pass the source scan; add the check when 3.2 adds write endpoints.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-1-admin-console-access-and-layout.md`
+  summary: `session.isAdmin()` is not reactive, so the console shell stays open after a token refresh that drops ADMIN.
+  evidence: `AdminRoute` re-renders only on `status` changes; the API still returns 403, so only the shell lingers.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-1-admin-console-access-and-layout.md`
+  summary: Admin list `list()` runs the page and count queries as separate statements, with the count SQL built by string slicing.
+  evidence: `JdbcAdminQuestionRepository.list`; harmless until concurrent writers exist (Story 3.2); also the 300 ms target at about 2,000 questions was never measured.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-1-admin-console-access-and-layout.md`
+  summary: `/admin` has no noindex or robots rule and is served by the player shell.
+  evidence: reported by review; unverified whether crawlers reach it; the page requires sign-in so content is not exposed.

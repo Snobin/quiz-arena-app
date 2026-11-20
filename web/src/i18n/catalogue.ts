@@ -42,6 +42,13 @@ export const catalogue = {
     params: { ml: { title: 'ചോദ്യം 4 / 10', brand: 'മിന്നൽ' }, en: { title: 'Question 4 / 10', brand: 'Minnal' } },
   },
   'title.home': { ml: 'ഹോം', en: 'Home', signoff: ['ml', 'en'] },
+  'title.notAuthorised': { ml: 'അനുമതിയില്ല', en: 'Not authorised', signoff: ['ml', 'en'] },
+  'notAuthorised.title': { ml: 'അനുമതിയില്ല', en: 'Not authorised', signoff: ['ml', 'en'] },
+  'notAuthorised.body': {
+    ml: 'ഈ പേജ് കാണാൻ നിങ്ങൾക്ക് അനുമതിയില്ല.',
+    en: 'You do not have access to this page.',
+    signoff: ['ml', 'en'],
+  },
   'title.signIn': { ml: 'സൈൻ ഇൻ', en: 'Sign in', signoff: ['ml', 'en'] },
   'title.matchmaking': { ml: 'മാച്ച് തിരയൽ', en: 'Matchmaking', signoff: ['ml', 'en'] },
   'tab.play': { ml: 'കളി', en: 'Play' },

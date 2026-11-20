@@ -5,7 +5,11 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  ADMIN_MARKER,
   BUDGET_BYTES,
+  adminLeaks,
+  adminPrecacheLeaks,
+  staticAdminImports,
   PRIMITIVE_DIRS,
   WEB_ROOT,
   checkDist,
@@ -232,7 +236,11 @@ describe('check-dist: checkDist over a dist directory', () => {
     dirs.push(dir);
     mkdirSync(join(dir, '.vite'));
     mkdirSync(join(dir, 'assets'));
-    const manifest = { 'index.html': { file: 'assets/index.js', isEntry: true, css: ['assets/index.css'] } };
+    const manifest = {
+      'index.html': { file: 'assets/index.js', isEntry: true, css: ['assets/index.css'], dynamicImports: ['src/admin/AdminApp.tsx'] },
+      'src/admin/AdminApp.tsx': { file: 'assets/admin.js', src: 'src/admin/AdminApp.tsx', isDynamicEntry: true },
+    };
+    writeFileSync(join(dir, 'assets/admin.js'), `x("${ADMIN_MARKER}")`);
     writeFileSync(join(dir, '.vite/manifest.json'), JSON.stringify(manifest));
     writeFileSync(join(dir, 'assets/index.js'), dist.js);
     writeFileSync(join(dir, 'assets/index.css'), dist.css);
@@ -264,9 +272,54 @@ describe('check-dist: checkDist over a dist directory', () => {
     expect(problems.every((p) => expected.test(p)), problems.join('\n')).toBe(true);
   });
 
+  it('reports admin code in the entry chunk, by name', () => {
+    const problems = problemsOf({ ...goodDist(), js: `x("${ADMIN_MARKER}")` });
+    expect(problems).toEqual([expect.stringMatching(/^admin: assets\/index\.js \(initial JS\) contains admin console code/)]);
+  });
+
   it('reports a dist without a manifest', () => {
     const dir = mkdtempSync(join(tmpdir(), 'minnal-dist-test-'));
     dirs.push(dir);
     expect(checkDist(dir, WEB_ROOT).problems).toEqual([expect.stringMatching(/manifest\.json missing/)]);
+  });
+});
+
+describe('check-dist: admin code stays out of the player bundle', () => {
+  const adminChunk = { file: 'assets/admin.js', src: 'src/admin/AdminApp.tsx', isDynamicEntry: true };
+
+  it('passes when the admin chunk is lazy and the entry is clean', () => {
+    const manifest: Manifest = { 'index.html': { file: 'assets/index.js', isEntry: true }, 'src/admin/AdminApp.tsx': adminChunk };
+    expect(adminLeaks(manifest, ['assets/index.js'], [{ file: 'assets/index.js', text: 'x' }])).toEqual([]);
+  });
+
+  it('fails when an admin module is in a statically imported chunk', () => {
+    const manifest: Manifest = {
+      'index.html': { file: 'assets/index.js', isEntry: true, imports: ['src/admin/Shared.ts'] },
+      'src/admin/Shared.ts': { file: 'assets/shared.js', src: 'src/admin/Shared.ts' },
+      'src/admin/AdminApp.tsx': adminChunk,
+    };
+    expect(adminLeaks(manifest, ['assets/index.js', 'assets/shared.js'], [])).toEqual([
+      'admin: src/admin/Shared.ts is in the initial chunk assets/shared.js',
+    ]);
+  });
+
+  it('fails when the admin chunk is not in the build', () => {
+    const manifest: Manifest = { 'index.html': { file: 'assets/index.js', isEntry: true } };
+    expect(adminLeaks(manifest, ['assets/index.js'], [])).toEqual([expect.stringMatching(/no lazily loaded chunk/)]);
+  });
+
+  it('flags a static import of src/admin from a player file, but not a dynamic one, a test or admin itself', () => {
+    expect(staticAdminImports('src/screens/Home.tsx', "import { X } from '../admin/X.tsx';")).toEqual(['../admin/X.tsx']);
+    expect(staticAdminImports('src/App.tsx', "export * from './admin/index.ts';")).toEqual(['./admin/index.ts']);
+    expect(staticAdminImports('src/screens/Home.tsx', "const A = lazy(() => import('../admin/X.tsx'));")).toEqual([]);
+    expect(staticAdminImports('src/screens/Home.test.tsx', "import { X } from '../admin/X.tsx';")).toEqual([]);
+    expect(staticAdminImports('src/admin/Y.tsx', "import { X } from './X.tsx';")).toEqual([]);
+    expect(staticAdminImports('src/screens/Home.tsx', "import { X } from './administer.ts';")).toEqual([]);
+  });
+
+  it('fails when sw.js precaches the admin chunk', () => {
+    const manifest: Manifest = { 'src/admin/AdminApp.tsx': adminChunk };
+    expect(adminPrecacheLeaks(manifest, 'precacheAndRoute([{url:"assets/admin.js"}])')).toEqual(['admin: sw.js precaches the admin chunk assets/admin.js']);
+    expect(adminPrecacheLeaks(manifest, 'precacheAndRoute([{url:"assets/index.js"}])')).toEqual([]);
   });
 });
