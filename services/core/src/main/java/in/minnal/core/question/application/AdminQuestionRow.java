@@ -4,9 +4,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
-/** One row of the admin list: the shown version (latest published, else latest) plus the question's state. */
+/** One row of the admin list: the shown version (latest published, else latest) plus the question's state. The publish and discard actors belong to the shown version ("seed" for a seeded publish). */
 public record AdminQuestionRow(UUID questionId, long displayNo, int currentVersion, String state, boolean hasPendingDraft, Integer pendingDraftVersion,
                                String textMl, String textEn, String category, String subject, String topic,
                                UUID subjectId, UUID topicId, String examLevel, String difficulty, List<String> options,
-                               int answerIndex, String explanation, Instant updatedAt) {
+                               int answerIndex, String explanation, Instant updatedAt,
+                               String publishedBy, Instant publishedAt, String discardedBy, Instant discardedAt) {
 }

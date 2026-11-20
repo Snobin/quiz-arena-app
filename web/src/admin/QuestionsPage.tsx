@@ -103,6 +103,22 @@ function Detail({ question }: { question: AdminQuestion }) {
           {question.explanation}
         </p>
       </div>
+      {question.publishedBy ? (
+        <p className="text-caption text-muted">
+          {adminT('detail.published', {
+            who: question.publishedBy === 'seed' ? adminT('history.seed') : question.publishedBy,
+            when: question.publishedAt ? new Date(question.publishedAt).toLocaleString('en-GB') : adminT('history.none'),
+          })}
+        </p>
+      ) : null}
+      {question.discardedBy ? (
+        <p className="text-caption text-muted">
+          {adminT('detail.discarded', {
+            who: question.discardedBy,
+            when: question.discardedAt ? new Date(question.discardedAt).toLocaleString('en-GB') : adminT('history.none'),
+          })}
+        </p>
+      ) : null}
       <ul className="flex flex-wrap gap-2">
         {tags.map((tag, index) => (
           <li key={index} className="rounded-sm border border-hairline px-2 text-caption">

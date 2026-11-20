@@ -4,6 +4,7 @@ import { apiFetch } from '../auth/apiFetch.ts';
 export const QUESTIONS_PATH = '/api/core/v1/admin/questions';
 export const SUBJECTS_PATH = '/api/core/v1/admin/subjects';
 export const UPLOADS_PATH = '/api/core/v1/admin/uploads';
+export const DRAFTS_PATH = '/api/core/v1/admin/drafts';
 
 export type QuestionState = 'PUBLISHED' | 'DRAFT' | 'DISCARDED' | 'DELETED';
 
@@ -27,6 +28,11 @@ export type AdminQuestion = {
   answerIndex: number;
   explanation: string;
   updatedAt: string;
+  /** The shown version's publish and discard actors ('seed' for a seeded publish); null when they do not apply. */
+  publishedBy: string | null;
+  publishedAt: string | null;
+  discardedBy: string | null;
+  discardedAt: string | null;
 };
 
 export type AdminQuestionPage = { items: AdminQuestion[]; page: number; size: number; totalItems: number };
@@ -129,7 +135,17 @@ export type QuestionDetail = {
   deletedAt: string | null;
   /** The version the form opens on: the open draft, else the latest published, else the latest. */
   editing: { version: number; status: 'DRAFT' | 'PUBLISHED' | 'DISCARDED'; rowVersion: number; content: EditorContent };
-  versions: { version: number; status: string; createdBy: string; createdAt: string; updatedAt: string | null }[];
+  versions: {
+    version: number;
+    status: string;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string | null;
+    publishedBy: string | null;
+    publishedAt: string | null;
+    discardedBy: string | null;
+    discardedAt: string | null;
+  }[];
 };
 
 /** `search` is a query string without the leading '?'. */
@@ -187,4 +203,59 @@ export async function uploadCsv(file: File): Promise<UploadResult> {
   const response = await apiFetch(apiUrl(UPLOADS_PATH), { method: 'POST', headers: { Accept: 'application/json, application/problem+json' }, body });
   if (!response.ok) throw await failure(response);
   return (await response.json()) as UploadResult;
+}
+
+/** One open draft in the review queue. `replacesVersion` is null for a new question; `changedFields` is then empty. */
+export type AdminDraft = {
+  questionId: string;
+  displayNo: number;
+  version: number;
+  rowVersion: number;
+  content: EditorContent;
+  createdBy: string;
+  createdAt: string;
+  replacesVersion: number | null;
+  changedFields: string[];
+};
+
+export type AdminDraftPage = { items: AdminDraft[]; page: number; size: number; totalItems: number };
+
+export function fetchDrafts(): Promise<AdminDraftPage> {
+  return getJson<AdminDraftPage>(`${DRAFTS_PATH}?page=0&size=100`);
+}
+
+export type DraftRef = { questionId: string; version: number };
+
+/** One item of a bulk answer: `ok`, or the HTTP `problemStatus` with the `detail` (and field `errors`). */
+export type DraftActionResult = {
+  questionId: string | null;
+  version: number | null;
+  ok: boolean;
+  status?: string;
+  problemStatus?: number;
+  detail?: string;
+  errors?: FieldProblem[];
+};
+
+export type DraftAction = 'publish' | 'discard';
+
+const versionPath = (action: DraftAction, ref: DraftRef) =>
+  `${QUESTIONS_PATH}/${encodeURIComponent(ref.questionId)}/versions/${ref.version}/${action}`;
+
+/** The request a commit makes: one draft (the single endpoint) or several (the bulk endpoint, up to 100). */
+export function commitRequest(action: DraftAction, refs: DraftRef[], bulk: boolean): { path: string; body: unknown } {
+  const first = refs[0] as DraftRef;
+  return bulk ? { path: `${DRAFTS_PATH}/${action}`, body: bulkBody(refs) } : { path: versionPath(action, first), body: undefined };
+}
+
+const bulkBody = (refs: DraftRef[]) => ({ items: refs.map(({ questionId, version }) => ({ questionId, version })) });
+
+/** Publishes or discards one draft. Rejects with an AdminApiError (409, 400 with field errors, ...). */
+export async function commitSingle(action: DraftAction, ref: DraftRef): Promise<void> {
+  await send<DraftActionResult>('POST', versionPath(action, ref));
+}
+
+/** Applies each item independently; resolves with one result per item, in order. */
+export async function commitBulk(action: DraftAction, refs: DraftRef[]): Promise<DraftActionResult[]> {
+  return (await send<{ results: DraftActionResult[] }>('POST', `${DRAFTS_PATH}/${action}`, bulkBody(refs))).results;
 }

@@ -63,10 +63,14 @@ public class QuestionFixtures {
     }
 
     public QuestionVersion draft(Placement placement, String textEn) {
+        return draft(placement, ContentCategory.KERALA_PSC, textEn);
+    }
+
+    public QuestionVersion draft(Placement placement, ContentCategory category, String textEn) {
         Instant now = Instant.now();
         Question question = Question.create(null, now);
         questions.insert(question);
-        QuestionVersion v1 = QuestionVersion.firstDraft(question.id(), content(placement, ContentCategory.KERALA_PSC, ExamLevel.TENTH, textEn), now);
+        QuestionVersion v1 = QuestionVersion.firstDraft(question.id(), content(placement, category, ExamLevel.TENTH, textEn), now);
         questions.insertVersion(v1);
         return v1;
     }

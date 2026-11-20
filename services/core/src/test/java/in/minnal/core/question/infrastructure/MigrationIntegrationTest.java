@@ -62,7 +62,9 @@ class MigrationIntegrationTest extends PostgresIntegrationTest {
                 Map.entry("reviewed_by", "text"), Map.entry("reviewed_at", "timestamp with time zone"),
                 Map.entry("created_at", "timestamp with time zone"),
                 Map.entry("created_by", "uuid"), Map.entry("updated_at", "timestamp with time zone"),
-                Map.entry("updated_by", "uuid"), Map.entry("row_version", "integer")));
+                Map.entry("updated_by", "uuid"), Map.entry("row_version", "integer"),
+                Map.entry("published_by", "uuid"), Map.entry("published_at", "timestamp with time zone"),
+                Map.entry("discarded_by", "uuid"), Map.entry("discarded_at", "timestamp with time zone")));
     }
 
     @Test

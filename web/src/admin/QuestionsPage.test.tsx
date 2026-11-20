@@ -33,6 +33,10 @@ function question(no: number, extra: Partial<AdminQuestion> = {}): AdminQuestion
     answerIndex: 2,
     explanation: 'Because.',
     updatedAt: '2026-11-19T10:00:00Z',
+    publishedBy: null,
+    publishedAt: null,
+    discardedBy: null,
+    discardedAt: null,
     ...extra,
   };
 }
@@ -103,6 +107,15 @@ describe('Questions page', () => {
     renderPage();
     await screen.findByRole('table');
     expect(screen.getByTestId('live-polite').textContent?.trim()).toBe('2 questions');
+  });
+
+  it('shows who published or discarded the shown version, with "seed" for a seeded publish', async () => {
+    serve(() => page([question(1, { publishedBy: 'seed' }), question(2, { state: 'DISCARDED', discardedBy: 'Boss', discardedAt: '2026-11-19T10:00:00Z' })]));
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Show details for Q 1' }));
+    expect(screen.getByText(/^Published by seed/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Show details for Q 2' }));
+    expect(screen.getByText(/^Discarded by Boss/)).toBeTruthy();
   });
 
   it('expands a row from its button and from Enter on the focused row, showing both languages, options and tags', async () => {

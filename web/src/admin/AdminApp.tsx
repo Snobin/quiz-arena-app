@@ -4,9 +4,12 @@ import { LiveRegions } from '../shell/LiveRegions.tsx';
 import { Link } from '../shell/Link.tsx';
 import { navigate, usePathname } from '../shell/router.ts';
 import { adminT, registerAdminStrings, type AdminKey } from './adminI18n.ts';
+import { commitPending, hasReturnFocus, setReturnFocus } from './draftActions.ts';
+import { DraftsPage } from './DraftsPage.tsx';
 import { Placeholder } from './Placeholder.tsx';
 import { QuestionEditor } from './QuestionEditor.tsx';
 import { QuestionsPage } from './QuestionsPage.tsx';
+import { setShortcutsEnabled, useShortcuts } from './shortcuts.ts';
 import { UploadPage } from './UploadPage.tsx';
 
 /** Marker the bundle check looks for: it must never appear in the entry chunk. */
@@ -41,7 +44,7 @@ function Page({ pathname }: { pathname: string }) {
     case '/admin/upload':
       return <UploadPage />;
     case '/admin/drafts':
-      return <Placeholder heading="nav.drafts" message="placeholder.drafts" />;
+      return <DraftsPage />;
     case '/admin/reports':
       return <Placeholder heading="nav.reports" message="placeholder.reports" />;
     default:
@@ -58,10 +61,18 @@ export default function AdminApp() {
   const name = useSession((s) => s.name);
   const current = NAV.some((item) => item.to === pathname) ? pathname : '/admin';
 
-  // After a route change focus moves to the page heading, so screen-reader users hear the new page.
+  const shortcuts = useShortcuts((s) => s.enabled);
+
+  // After a route change focus moves to the page heading, so screen-reader users hear the new page. Coming back to
+  // the Drafts queue from the editor, the queue puts focus on the draft's row instead.
   useEffect(() => {
+    if (pathname !== '/admin/drafts' && !EDIT_PATH.test(pathname)) setReturnFocus(null);
+    if (pathname === '/admin/drafts' && hasReturnFocus()) return;
     document.querySelector<HTMLElement>('main h1')?.focus({ preventScroll: true });
   }, [pathname]);
+
+  // Moving elsewhere in the console, or out of it, sends any publish or discard still inside its 5 s Undo window.
+  useEffect(() => commitPending, [pathname]);
 
   const signOut = () => {
     void session.signOut().then(() => navigate('/'));
@@ -73,6 +84,16 @@ export default function AdminApp() {
       <header className="flex items-center justify-between border-b border-hairline bg-card px-gutter-text py-2">
         <span className="font-title text-title">{adminT('brand.admin')}</span>
         <div className="flex items-center gap-4">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={shortcuts}
+            onClick={() => setShortcutsEnabled(!shortcuts)}
+            className="hit-target inline-flex min-h-target-min items-center gap-2 rounded-md px-2 text-body"
+          >
+            <span aria-hidden="true">{shortcuts ? '☑' : '☐'}</span>
+            {adminT('shortcuts.switch')}
+          </button>
           <span className="text-body text-muted">{adminT('bar.signedInAs', { name: name ?? adminT('bar.adminFallback') })}</span>
           <button
             type="button"

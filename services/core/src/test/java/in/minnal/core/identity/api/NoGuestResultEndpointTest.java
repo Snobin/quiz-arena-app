@@ -36,7 +36,10 @@ class NoGuestResultEndpointTest {
     private static final Set<String> INTERNAL = Set.of("/internal/question-sets",
             "/api/core/v1/admin/questions", "/api/core/v1/admin/subjects", "/api/core/v1/admin/questions/{questionId}",
             "/api/core/v1/admin/questions/{questionId}/draft", "/api/core/v1/admin/questions/{questionId}/restore",
-            "/api/core/v1/admin/subjects/{subjectId}/topics", "/api/core/v1/admin/uploads");
+            "/api/core/v1/admin/subjects/{subjectId}/topics", "/api/core/v1/admin/uploads",
+            "/api/core/v1/admin/drafts", "/api/core/v1/admin/drafts/publish", "/api/core/v1/admin/drafts/discard",
+            "/api/core/v1/admin/questions/{questionId}/versions/{version}/publish",
+            "/api/core/v1/admin/questions/{questionId}/versions/{version}/discard");
 
     private static final Set<String> FORBIDDEN_WORDS = Set.of("match", "score", "scores", "guest", "participant", "participants", "result", "results", "points");
 

@@ -226,3 +226,13 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-3-csv-bulk-upload.md`
   summary: The concurrent-duplicate 409 path and the production selection of `ValkeyRateLimiter` by `minnal.ratelimit.store` have no test.
   evidence: needs a seam to inject the clash, and an `ApplicationContextRunner` test for the property switch.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-4-draft-review-queue.md`
+  summary: Publish and discard do not take the reviewed `rowVersion`, so a reviewer can publish content another admin edited after the queue loaded.
+  evidence: the epic defines the endpoints without a body; add an optional `rowVersion` and a `409` on mismatch when there is more than one admin.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-4-draft-review-queue.md`
+  summary: The tab-close `keepalive` commit drops an action when the token is not captured yet or has expired, and leaves the batch with no timer.
+  evidence: `web/src/admin/draftActions.ts` `sendOnUnload` skips the send when `token === null`; keep the timer or warn.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-4-draft-review-queue.md`
+  summary: A commit that fails after the admin has left the Drafts page keeps its detail in the store and shows it only on return.
+  evidence: noted by the implementer; the row reappears on the next fetch.
