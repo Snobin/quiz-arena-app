@@ -40,6 +40,7 @@ class NoGuestResultEndpointTest {
             "/api/core/v1/admin/questions/{questionId}/draft", "/api/core/v1/admin/questions/{questionId}/restore",
             "/api/core/v1/admin/subjects/{subjectId}/topics", "/api/core/v1/admin/uploads",
             "/api/core/v1/admin/drafts", "/api/core/v1/admin/drafts/publish", "/api/core/v1/admin/drafts/discard",
+            "/api/core/v1/admin/reports", "/api/core/v1/admin/reports/summary", "/api/core/v1/admin/reports/dismiss",
             "/api/core/v1/admin/questions/{questionId}/versions/{version}/publish",
             "/api/core/v1/admin/questions/{questionId}/versions/{version}/discard");
 

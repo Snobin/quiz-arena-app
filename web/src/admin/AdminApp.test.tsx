@@ -8,6 +8,8 @@ import AdminApp from './AdminApp.tsx';
 
 vi.mock('./QuestionEditor.tsx', () => ({ QuestionEditor: ({ questionId }: { questionId: string | null }) => <h1 tabIndex={-1}>{`Editor ${questionId ?? 'new'}`}</h1> }));
 vi.mock('./DraftsPage.tsx', () => ({ DraftsPage: () => <h1 tabIndex={-1}>Drafts</h1> }));
+vi.mock('./ReportsPage.tsx', () => ({ ReportsPage: () => <h1 tabIndex={-1}>Reports page</h1> }));
+vi.mock('../auth/apiFetch.ts', () => ({ apiFetch: vi.fn(async () => new Response(JSON.stringify({ openCount: 3 }), { status: 200, headers: { 'Content-Type': 'application/json' } })) }));
 vi.mock('./QuestionsPage.tsx', () => ({ QuestionsPage: () => <h1 tabIndex={-1}>Questions</h1> }));
 
 function renderAt(path: string) {
@@ -39,6 +41,12 @@ describe('AdminApp', () => {
     expect(links.map((l) => l.textContent)).toEqual(['Questions', 'Upload', 'Drafts', 'Reports']);
     expect(links.filter((l) => l.getAttribute('aria-current') === 'page').map((l) => l.textContent)).toEqual(['Drafts']);
     expect(screen.getByText('Signed in as Snobin')).toBeTruthy();
+  });
+
+  it('shows the open report count on the Reports nav item and renders the Reports page', async () => {
+    renderAt('/admin/reports');
+    expect(await screen.findByRole('link', { name: 'Reports (3)' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Reports page' })).toBeTruthy();
   });
 
   it('falls back to Questions for an unknown admin path', () => {

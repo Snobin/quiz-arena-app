@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useSession, session } from '../auth/session.ts';
 import { LiveRegions } from '../shell/LiveRegions.tsx';
@@ -6,11 +7,13 @@ import { navigate, usePathname } from '../shell/router.ts';
 import { adminT, registerAdminStrings, type AdminKey } from './adminI18n.ts';
 import { commitPending, hasReturnFocus, setReturnFocus } from './draftActions.ts';
 import { DraftsPage } from './DraftsPage.tsx';
-import { Placeholder } from './Placeholder.tsx';
 import { QuestionEditor } from './QuestionEditor.tsx';
 import { QuestionsPage } from './QuestionsPage.tsx';
+import { commitPendingReports } from './reportActions.ts';
+import { ReportsPage } from './ReportsPage.tsx';
 import { setShortcutsEnabled, useShortcuts } from './shortcuts.ts';
 import { UploadPage } from './UploadPage.tsx';
+import { fetchReportSummary } from './api.ts';
 
 /** Marker the bundle check looks for: it must never appear in the entry chunk. */
 const adminChunkMarker = 'minnal-admin-' + 'console';
@@ -46,7 +49,7 @@ function Page({ pathname }: { pathname: string }) {
     case '/admin/drafts':
       return <DraftsPage />;
     case '/admin/reports':
-      return <Placeholder heading="nav.reports" message="placeholder.reports" />;
+      return <ReportsPage />;
     default:
       return <QuestionsPage />;
   }
@@ -62,6 +65,8 @@ export default function AdminApp() {
   const current = NAV.some((item) => item.to === pathname) ? pathname : '/admin';
 
   const shortcuts = useShortcuts((s) => s.enabled);
+  const summary = useQuery({ queryKey: ['admin', 'reports', 'summary'], queryFn: fetchReportSummary, retry: false });
+  const openReports = summary.data?.openCount ?? 0;
 
   // After a route change focus moves to the page heading, so screen-reader users hear the new page. Coming back to
   // the Drafts queue from the editor, the queue puts focus on the draft's row instead.
@@ -72,7 +77,13 @@ export default function AdminApp() {
   }, [pathname]);
 
   // Moving elsewhere in the console, or out of it, sends any publish or discard still inside its 5 s Undo window.
-  useEffect(() => commitPending, [pathname]);
+  useEffect(
+    () => () => {
+      commitPending();
+      commitPendingReports();
+    },
+    [pathname],
+  );
 
   const signOut = () => {
     void session.signOut().then(() => navigate('/'));
@@ -116,7 +127,7 @@ export default function AdminApp() {
                   item.to === current ? 'font-bold underline' : 'text-muted',
                 ].join(' ')}
               >
-                {adminT(item.label)}
+                {item.to === '/admin/reports' && openReports > 0 ? adminT('nav.reportsCount', { count: openReports }) : adminT(item.label)}
               </Link>
             </li>
           ))}

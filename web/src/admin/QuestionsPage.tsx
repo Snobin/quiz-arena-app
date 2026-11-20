@@ -215,7 +215,7 @@ export function QuestionsPage() {
       await deleteQuestion(deleting.questionId);
       announce(adminT('row.deleted', { no }));
       setDeleteError(null);
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'questions'] });
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ['admin', 'questions'] }), queryClient.invalidateQueries({ queryKey: ['admin', 'reports'] })]);
       setDeleting(null);
       queueMicrotask(() => heading.current?.focus());
     } catch (error) {

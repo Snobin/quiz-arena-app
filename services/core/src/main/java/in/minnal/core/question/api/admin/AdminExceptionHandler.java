@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /** RFC 9457 Problem Details for the admin API: 401, 403, 400 (with {@code errors[]}), 404 and 409. */
-@RestControllerAdvice(assignableTypes = {AdminQuestionController.class, AdminSubjectController.class, AdminQuestionWriteController.class, AdminUploadController.class, AdminDraftController.class})
+@RestControllerAdvice(assignableTypes = {AdminQuestionController.class, AdminSubjectController.class, AdminQuestionWriteController.class, AdminUploadController.class, AdminDraftController.class, AdminReportController.class})
 class AdminExceptionHandler {
 
     @ExceptionHandler(BearerAuthenticator.Rejected.class)
