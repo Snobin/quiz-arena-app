@@ -28,9 +28,9 @@ class GuestTokenPersistenceIntegrationTest extends PostgresIntegrationTest {
         }
 
         assertThat(tables()).isEqualTo(tablesBefore)
-                .containsExactly("app_user", "event_outbox", "flyway_schema_history", "question", "question_report", "question_version", "refresh_token", "subject", "topic", "user_identity", "user_profile");
+                .containsExactly("app_user", "event_outbox", "flyway_schema_history", "question", "question_report", "question_version", "recent_topic", "refresh_token", "subject", "topic", "user_identity", "user_profile");
         assertThat(jdbc.sql("SELECT version FROM flyway_schema_history WHERE version IS NOT NULL ORDER BY installed_rank")
-                .query(String.class).list()).containsExactly("1", "2", "3", "4", "5", "6", "7", "8");
+                .query(String.class).list()).containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9");
         assertThat(totalRows(tables())).isEqualTo(rowsBefore);
     }
 

@@ -111,6 +111,22 @@ class AccountDeletionIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void deleteAlsoRemovesTheUsersRecentTopicsAndLeavesOthers() throws Exception {
+        UUID id = user();
+        UUID other = user();
+        UUID subject = UUID.randomUUID();
+        UUID topic = UUID.randomUUID();
+        jdbc.sql("INSERT INTO subject (id, name, created_at) VALUES (:id, 'S', :t)").param("id", subject).param("t", Timestamp.from(Instant.now())).update();
+        jdbc.sql("INSERT INTO topic (id, subject_id, name, created_at) VALUES (:id, :s, 'T', :t)").param("id", topic).param("s", subject).param("t", Timestamp.from(Instant.now())).update();
+        for (UUID u : List.of(id, other)) {
+            jdbc.sql("INSERT INTO recent_topic (user_id, topic_id, last_used_at) VALUES (:u, :t, :at)").param("u", u).param("t", topic).param("at", Timestamp.from(Instant.now())).update();
+        }
+        mvc.perform(delete("/api/core/v1/me").header("Authorization", bearer(id))).andExpect(status().isNoContent());
+        assertThat(count("SELECT count(*) FROM recent_topic WHERE user_id = '" + id + "'")).isZero();
+        assertThat(count("SELECT count(*) FROM recent_topic WHERE user_id = '" + other + "'")).isEqualTo(1);
+    }
+
+    @Test
     void aGuestTokenIs403AndNoTokenIs401() throws Exception {
         mvc.perform(delete("/api/core/v1/me").header("Authorization", "Bearer " + guestTokens.issue("en").accessToken()))
                 .andExpect(status().isForbidden());

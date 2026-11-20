@@ -707,6 +707,62 @@ export const catalogue = {
     signoff: ['ml', 'en'],
   },
 
+  // Topic picker (Story 4.1)
+  'title.topics': { ml: 'ടോപ്പിക് തിരഞ്ഞെടുക്കുക', en: 'Choose a topic', signoff: ['ml', 'en'] },
+  'topics.heading.duel': { ml: 'ടോപ്പിക് ഡ്യുവൽ · ടോപ്പിക് തിരഞ്ഞെടുക്കുക', en: 'Topic Duel · choose a topic', signoff: ['ml', 'en'] },
+  'topics.heading.solo': { ml: 'സോളോ പ്രാക്ടീസ് · ടോപ്പിക് തിരഞ്ഞെടുക്കുക', en: 'Solo Practice · choose a topic', signoff: ['ml', 'en'] },
+  'topics.search.label': { ml: 'ടോപ്പിക് തിരയുക', en: 'Search topics', signoff: ['ml', 'en'] },
+  'topics.recent': { ml: 'അടുത്തിടെ', en: 'Recent', signoff: ['ml', 'en'] },
+  'topics.questions_one': {
+    ml: '{{count, number}} ചോദ്യം',
+    en: '{{count, number}} question',
+    signoff: ['ml', 'en'],
+    params: { ml: { count: 1 }, en: { count: 1 } },
+  },
+  'topics.questions_other': {
+    ml: '{{count, number}} ചോദ്യം',
+    en: '{{count, number}} questions',
+    signoff: ['ml', 'en'],
+    params: { ml: { count: 124 }, en: { count: 124 } },
+  },
+  'topics.row.a11y': {
+    ml: '{{topic}}, {{subject}}, {{questions}}',
+    en: '{{topic}}, {{subject}}, {{questions}}',
+    signoff: ['ml', 'en'],
+    params: { ml: { topic: 'കേരള ചരിത്രം', subject: 'ചരിത്രം', questions: '124 ചോദ്യം' }, en: { topic: 'Kerala History', subject: 'History', questions: '124 questions' } },
+  },
+  'topics.count_one': {
+    ml: '{{count, number}} ടോപ്പിക്',
+    en: '{{count, number}} topic',
+    signoff: ['ml', 'en'],
+    params: { ml: { count: 1 }, en: { count: 1 } },
+  },
+  'topics.count_other': {
+    ml: '{{count, number}} ടോപ്പിക്',
+    en: '{{count, number}} topics',
+    signoff: ['ml', 'en'],
+    params: { ml: { count: 6 }, en: { count: 6 } },
+  },
+  'topics.noMatch': {
+    ml: "'{{query}}' എന്ന ടോപ്പിക് ഇല്ല",
+    en: "No topics match '{{query}}'",
+    signoff: ['ml', 'en'],
+    params: { ml: { query: 'ജല' }, en: { query: 'xyz' } },
+  },
+  'topics.clear': { ml: 'തിരയൽ മായ്ക്കുക', en: 'Clear search', signoff: ['ml', 'en'] },
+  'topics.empty': {
+    ml: 'ടോപ്പിക്കുകൾ ഇതുവരെ തയ്യാറായിട്ടില്ല. ഒരു ക്വിക്ക് മാച്ച് കളിച്ചു നോക്കൂ.',
+    en: 'No topics are ready yet. Try a Quick Match.',
+    signoff: ['ml', 'en'],
+  },
+  'topics.error.generic': { ml: 'ടോപ്പിക്കുകൾ ലോഡ് ചെയ്യാനായില്ല.', en: "Couldn't load the topics.", signoff: ['ml', 'en'] },
+  'topics.error.offline': {
+    ml: 'ഇന്റർനെറ്റ് ഇല്ല, ടോപ്പിക്കുകൾ ലോഡ് ചെയ്യാനായില്ല.',
+    en: "You're offline, so the topics couldn't load.",
+    signoff: ['ml', 'en'],
+  },
+  'topics.stub.unavailable': { ml: 'ഇതുവരെ ലഭ്യമല്ല', en: 'Not available yet', signoff: ['ml', 'en'] },
+
   // Voice and Tone (EXPERIENCE.md)
   'matchmaking.searching': { moment: 'Matchmaking', ml: 'എതിരാളിയെ തിരയുന്നു…', en: 'Finding an opponent…' },
   'matchmaking.botJoined': { moment: 'Bot joins', ml: 'മിന്നൽ ബോട്ട് ചേർന്നു', en: 'Minnal Bot joined' },

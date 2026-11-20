@@ -28,7 +28,9 @@ class NoGuestResultEndpointTest {
             "/api/core/v1/auth/google/callback", "/api/core/v1/auth/refresh", "/api/core/v1/auth/logout", "/api/core/v1/me",
             "/api/core/v1/me/profile",
             // Story 3.5: registered players only (guests get 403).
-            "/api/core/v1/questions/{questionId}/versions/{version}/reports");
+            "/api/core/v1/questions/{questionId}/versions/{version}/reports",
+            // Story 4.1: topic catalogue and recent topics, registered players only (guests get 403).
+            "/api/core/v1/topics", "/api/core/v1/me/recent-topics", "/api/core/v1/me/recent-topics/{topicId}");
 
     @Autowired
     @org.springframework.beans.factory.annotation.Qualifier("requestMappingHandlerMapping")
