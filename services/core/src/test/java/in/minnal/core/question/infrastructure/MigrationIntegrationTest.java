@@ -47,7 +47,8 @@ class MigrationIntegrationTest extends PostgresIntegrationTest {
     @Test
     void questionHoldsExactlyItsIdentityColumns() {
         assertThat(columns("question")).containsExactlyInAnyOrderEntriesOf(Map.of(
-                "id", "uuid", "source_ref", "text", "created_at", "timestamp with time zone", "deleted_at", "timestamp with time zone"));
+                "id", "uuid", "source_ref", "text", "created_at", "timestamp with time zone", "deleted_at", "timestamp with time zone",
+                "display_no", "bigint"));
     }
 
     @Test

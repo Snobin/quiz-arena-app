@@ -15,11 +15,14 @@
 //                     navigation fallback or its /api, /ws denylist, or the manifest lost
 //                     display: standalone / orientation: any.
 //   7. base:          a `--base /sub/` build (made into a temp dir) does not rebase the font URLs.
+//   8. admin:         admin code leaks into the player bundle: a module under src/admin/** is in the entry
+//                     chunk or a chunk it statically imports, the admin chunk marker appears in initial JS, the
+//                     admin chunk is missing from the build, or a player source file imports src/admin/** statically.
 // Usage: node scripts/check-dist.mjs [--skip-base]
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { dirname, join, posix as pathPosix, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import ts from 'typescript';
@@ -30,7 +33,7 @@ export const WEB_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const BUDGET_BYTES = 150 * 1000;
 
 /** Where primitives and screens live: their class strings must all be generated. */
-export const PRIMITIVE_DIRS = ['src/design', 'src/shell', 'src/screens'];
+export const PRIMITIVE_DIRS = ['src/design', 'src/shell', 'src/screens', 'src/admin'];
 
 export const FIXTURE_SENTINEL = 'data-dev-' + 'fixture';
 
@@ -171,6 +174,72 @@ export function missingUtilities(builtCss, classes) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// 8. Admin code stays out of the player bundle
+
+/** Built into the admin chunk by src/admin/AdminApp.tsx (split here so this file never holds it whole). */
+export const ADMIN_MARKER = 'minnal-admin-' + 'console';
+
+const isAdminSource = (src) => typeof src === 'string' && src.replace(/\\/g, '/').startsWith('src/admin/');
+
+/**
+ * Problems when admin code is part of the initial JS. initialFiles are the entry chunk and its static imports
+ * (their .file paths), jsFiles are { file, text } for those chunks.
+ */
+export function adminLeaks(manifest, initialFiles, jsFiles) {
+  const problems = [];
+  const initial = new Set(initialFiles);
+  for (const [key, chunk] of Object.entries(manifest)) {
+    const src = chunk.src ?? key;
+    if (isAdminSource(src) && initial.has(chunk.file)) problems.push(`admin: ${src} is in the initial chunk ${chunk.file}`);
+  }
+  for (const { file, text } of jsFiles) {
+    if (initial.has(file) && text.includes(ADMIN_MARKER)) problems.push(`admin: ${file} (initial JS) contains admin console code`);
+  }
+  const adminChunk = Object.entries(manifest).find(([key, chunk]) => isAdminSource(chunk.src ?? key) && chunk.isDynamicEntry);
+  if (!adminChunk) problems.push('admin: no lazily loaded chunk for src/admin/** in the build (it must load through a dynamic import())');
+  return problems;
+}
+
+/** Problems when the service worker precaches a chunk of the admin build (players would download admin code on install). */
+export function adminPrecacheLeaks(manifest, swJs) {
+  const problems = [];
+  for (const [key, chunk] of Object.entries(manifest)) {
+    if (isAdminSource(chunk.src ?? key) && swJs.includes(chunk.file)) problems.push(`admin: sw.js precaches the admin chunk ${chunk.file}`);
+  }
+  return problems;
+}
+
+/**
+ * Static `import` / `export ... from` of src/admin/** in a player source file (a dynamic import() is the only way in).
+ * `file` is the web-relative path of the importing file; the result is the offending specifiers.
+ */
+export function staticAdminImports(file, text) {
+  const posixFile = file.replace(/\\/g, '/');
+  if (posixFile.startsWith('src/admin/') || /\.test\.tsx?$/.test(posixFile)) return [];
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const found = [];
+  for (const node of source.statements) {
+    const specifier = (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier;
+    if (!specifier || !ts.isStringLiteral(specifier)) continue;
+    if (!specifier.text.startsWith('.')) continue;
+    const resolved = pathPosix.normalize(pathPosix.join(pathPosix.dirname(posixFile), specifier.text));
+    if (resolved === 'src/admin' || resolved.startsWith('src/admin/')) found.push(specifier.text);
+  }
+  return found;
+}
+
+/** Every player source file's static admin imports, as problems. */
+export function adminImportProblems(webRoot = WEB_ROOT) {
+  const problems = [];
+  for (const { file, text } of readText(join(webRoot, 'src'), /\.tsx?$/)) {
+    for (const specifier of staticAdminImports(`src/${file}`, text)) {
+      problems.push(`admin: src/${file} statically imports ${specifier}; use a dynamic import()`);
+    }
+  }
+  return problems;
+}
+
+// ---------------------------------------------------------------------------------------------
 // 5-7. Font, service worker, base
 
 /** The published font path from src/design/fonts.ts (e.g. /fonts/x.woff2). */
@@ -272,6 +341,11 @@ export function checkDist(distDir, webRoot = WEB_ROOT) {
   const budget = checkBudget(sizes);
   problems.push(...budget.problems);
 
+  const jsFiles = readText(distDir, /\.js$/);
+  problems.push(...adminLeaks(manifest, sizes.map((s) => s.file), jsFiles));
+  problems.push(...adminImportProblems(webRoot));
+  problems.push(...adminPrecacheLeaks(manifest, existsSync(at('sw.js')) ? readFileSync(at('sw.js'), 'utf8') : ''));
+
   const cssFiles = readText(distDir, /\.css$/);
   const css = cssFiles.map((f) => f.text).join('\n');
   const themeCss = readFileSync(join(webRoot, 'src/design/theme.css'), 'utf8');
@@ -279,7 +353,7 @@ export function checkDist(distDir, webRoot = WEB_ROOT) {
     problems.push(`token: ${name} is not a custom property in the built CSS`);
   }
 
-  for (const leak of fixtureLeaks(readText(distDir, /\.js$/), manifest)) problems.push(`fixture: ${leak}`);
+  for (const leak of fixtureLeaks(jsFiles, manifest)) problems.push(`fixture: ${leak}`);
 
   for (const dir of PRIMITIVE_DIRS) {
     for (const { file, text } of readText(join(webRoot, dir), /(?<!\.test)\.tsx$/)) {

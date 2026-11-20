@@ -87,6 +87,15 @@ public class BearerAuthenticator {
         return new Caller(userId, roles);
     }
 
+    /** The registered caller, who must hold ADMIN in the token: 401 without a valid token, 403 otherwise. */
+    public Caller requireAdmin(String authorization) {
+        Caller caller = requireRegistered(authorization);
+        if (!caller.roles().contains(Role.ADMIN)) {
+            throw new Rejected(HttpStatus.FORBIDDEN, "Admin access is required.");
+        }
+        return caller;
+    }
+
     private static Role role(String name) {
         try {
             return Role.valueOf(name);

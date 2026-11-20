@@ -30,6 +30,8 @@ export default defineConfig({
       workbox: {
         // App shell only: never cache /api/** or /ws (AD-18).
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],
+        // The lazy admin chunk is for admins only: players never download it, not even through the precache.
+        globIgnores: ['**/AdminApp-*.js'],
         navigateFallbackDenylist: [/^\/api\//, /^\/ws/],
         runtimeCaching: [],
       },
