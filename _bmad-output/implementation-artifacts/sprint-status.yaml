@@ -67,7 +67,7 @@ development_status:
   3-3-csv-bulk-upload: done
   3-4-draft-review-queue: done
   3-5-players-report-a-wrong-question: done
-  3-6-report-queue-and-resolution: review
+  3-6-report-queue-and-resolution: done
   epic-3-retrospective: optional
 
   epic-4: backlog
