@@ -5,6 +5,7 @@ import { Link } from '../shell/Link.tsx';
 import { navigate, usePathname } from '../shell/router.ts';
 import { adminT, registerAdminStrings, type AdminKey } from './adminI18n.ts';
 import { Placeholder } from './Placeholder.tsx';
+import { QuestionEditor } from './QuestionEditor.tsx';
 import { QuestionsPage } from './QuestionsPage.tsx';
 
 /** Marker the bundle check looks for: it must never appear in the entry chunk. */
@@ -19,7 +20,22 @@ const NAV: { to: string; label: AdminKey }[] = [
   { to: '/admin/reports', label: 'nav.reports' },
 ];
 
+const EDIT_PATH = /^\/admin\/questions\/([^/]+)\/edit$/;
+
+/** The decoded id, or null for a malformed escape (the caller falls back to the Questions page). */
+function safeDecode(raw: string): string | null {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return null;
+  }
+}
+
 function Page({ pathname }: { pathname: string }) {
+  if (pathname === '/admin/questions/new') return <QuestionEditor key="new" questionId={null} />;
+  const edit = EDIT_PATH.exec(pathname);
+  const id = edit ? safeDecode(edit[1] as string) : null;
+  if (id) return <QuestionEditor key={id} questionId={id} />;
   switch (pathname) {
     case '/admin/upload':
       return <Placeholder heading="nav.upload" message="placeholder.upload" />;
@@ -85,7 +101,7 @@ export default function AdminApp() {
         </ul>
       </nav>
       <div className="mx-auto w-full max-w-[1280px] px-gutter-text py-4">
-        <Page pathname={current} />
+        <Page pathname={pathname} />
       </div>
     </div>
   );

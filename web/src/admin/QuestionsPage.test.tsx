@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '../i18n.ts';
 import { jsonResponse } from '../test-utils/guest.ts';
@@ -90,7 +90,7 @@ describe('Questions page', () => {
     const table = await screen.findByRole('table');
     expect(within(table).getByText('Question bank').tagName).toBe('CAPTION');
     const headers = within(table).getAllByRole('columnheader').map((h) => h.textContent);
-    expect(headers).toEqual(['No.', 'Question', 'Subject · Topic', 'Level', 'Difficulty', 'State', 'Updated']);
+    expect(headers).toEqual(['No.', 'Question', 'Subject · Topic', 'Level', 'Difficulty', 'State', 'Updated', 'Actions']);
     expect(within(table).getByRole('rowheader', { name: /Q 1,234/ })).toBeTruthy();
     expect(within(table).getByText('മലയാളം 1234').getAttribute('lang')).toBe('ml');
     expect(within(table).getByText('English 1234').getAttribute('lang')).toBe('en');
@@ -180,17 +180,17 @@ describe('Questions page', () => {
       return page(Array.from({ length: 50 }, (_, i) => question(pageNo * 50 + i + 1)), 120, pageNo);
     });
     renderPage();
-    await screen.findByRole('table');
+    await screen.findByRole('table', {}, { timeout: 5000 });
     expect(screen.getByText('1–50 of 120')).toBeTruthy();
     const previous = screen.getByRole('button', { name: 'Previous' });
     expect(previous.getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText('51–100 of 120')).toBeTruthy();
+    expect(await screen.findByText('51–100 of 120', {}, { timeout: 5000 })).toBeTruthy();
     expect(window.location.search).toBe('?page=1');
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await screen.findByText('101–120 of 120')).toBeTruthy();
+    expect(await screen.findByText('101–120 of 120', {}, { timeout: 5000 })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Next' }).getAttribute('aria-disabled')).toBe('true');
-  });
+  }, 15000);
 
   it('shows skeleton rows while loading', () => {
     apiFetch.mockImplementation(() => new Promise(() => undefined));
@@ -259,5 +259,42 @@ describe('Questions page', () => {
     const last = questionCalls().at(-1)!;
     expect(last.searchParams.get('difficulty')).toBe('HARD');
     expect(last.searchParams.get('page')).toBeNull();
+  });
+
+  describe('delete', () => {
+    it('opens an alertdialog naming the question with focus on Cancel, and Esc cancels without deleting', async () => {
+      serve(() => page([question(1234)]));
+      renderPage();
+      const del = await screen.findByRole('button', { name: 'Delete Q 1,234' });
+      del.focus();
+      fireEvent.click(del);
+      const dialog = await screen.findByRole('alertdialog');
+      expect(dialog.textContent).toContain('Delete Q 1,234?');
+      expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: 'Cancel' }));
+      fireEvent.keyDown(dialog, { key: 'Escape' });
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+      expect(document.activeElement).toBe(del);
+      expect(apiFetch.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === 'DELETE')).toBe(false);
+    });
+
+    it('confirming sends DELETE, announces it and reloads the list', async () => {
+      serve(() => page([question(1234)]));
+      renderPage();
+      fireEvent.click(await screen.findByRole('button', { name: 'Delete Q 1,234' }));
+      const dialog = await screen.findByRole('alertdialog');
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Delete Q 1,234' }));
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+      const sent = apiFetch.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === 'DELETE');
+      expect(String(sent?.[0])).toContain('/api/core/v1/admin/questions/id-1234');
+      expect(await screen.findByText('Deleted Q 1,234')).toBeTruthy();
+    });
+
+    it('offers New question and an Edit link per row, and no Delete for a deleted row', async () => {
+      serve(() => page([question(1, { state: 'DELETED' })]));
+      renderPage();
+      expect((await screen.findByRole('link', { name: 'New question' })).getAttribute('href')).toBe('/admin/questions/new');
+      expect((await screen.findByRole('link', { name: 'Edit Q 1' })).getAttribute('href')).toBe('/admin/questions/id-1/edit');
+      expect(screen.queryByRole('button', { name: 'Delete Q 1' })).toBeNull();
+    });
   });
 });

@@ -69,7 +69,29 @@ export function splitPath(path: string): { path: string; suffix: string } {
  * Moves to an app path, pushing a history entry (or replacing the current one). A query or hash
  * stays on the pushed URL; the store's pathname is the path alone.
  */
-export function navigate(to: string, { replace = false }: { replace?: boolean } = {}): void {
+export function navigate(to: string, options: { replace?: boolean } = {}): void {
+  if (guard?.(() => go(to, options))) return;
+  go(to, options);
+}
+
+/**
+ * A leave guard (the admin editor's unsaved-change confirm). It is asked before an in-app `navigate()` and after a
+ * browser Back/Forward; returning true blocks the move and keeps `proceed` to run if the user chooses to leave.
+ */
+type NavigationGuard = (proceed: () => void) => boolean;
+let guard: NavigationGuard | null = null;
+/** Set when a guarded popstate was undone and is being redone on purpose. */
+let bypassPop = false;
+
+/** Installs the guard (null removes it) and returns a function that removes this guard only. */
+export function setNavigationGuard(next: NavigationGuard | null): () => void {
+  guard = next;
+  return () => {
+    if (guard === next) guard = null;
+  };
+}
+
+function go(to: string, { replace = false }: { replace?: boolean }): void {
   const from = useRouter.getState().pathname;
   rememberScroll(from, currentScrollY());
   const { path, suffix } = splitPath(to);
@@ -87,6 +109,21 @@ export function syncFromLocation(): void {
 }
 
 function onPopState(): void {
+  if (bypassPop) {
+    bypassPop = false;
+  } else if (guard) {
+    const here = withBase(useRouter.getState().pathname);
+    const blocked = guard(() => {
+      // Leave for real: step back over the entry that undid the Back.
+      bypassPop = true;
+      window.history.back();
+    });
+    if (blocked) {
+      // The location already moved: put the guarded page back (without a new store pathname).
+      window.history.pushState(APP_ENTRY, '', here);
+      return;
+    }
+  }
   // The DOM still shows the page being left, so its scroll offset is still accurate here.
   rememberScroll(useRouter.getState().pathname, currentScrollY());
   syncFromLocation();

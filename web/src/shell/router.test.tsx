@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Link } from './Link.tsx';
-import { navigate, stripBase, syncFromLocation, useRouter, withBase } from './router.ts';
+import { navigate, setNavigationGuard, stripBase, syncFromLocation, useRouter, useRouterSync, withBase } from './router.ts';
 
 afterEach(() => {
   window.history.replaceState(null, '', '/');
@@ -126,5 +126,54 @@ describe('Link', () => {
     link.addEventListener('click', (e) => e.preventDefault());
     fireEvent.click(link, { button: 0 });
     expect(useRouter.getState().pathname).toBe('/');
+  });
+});
+
+describe('navigation guard on popstate', () => {
+  /** On /edit with the router listening; then the browser moves to /other (as Back does) and fires popstate. */
+  function backFromEdit() {
+    window.history.replaceState(null, '', '/edit');
+    syncFromLocation();
+    renderHook(() => useRouterSync());
+    window.history.pushState(null, '', '/other');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }
+
+  it('blocked: asks the guard, restores the URL and keeps the store path', () => {
+    const guard = vi.fn(() => true);
+    const remove = setNavigationGuard(guard);
+    backFromEdit();
+    remove();
+    expect(guard).toHaveBeenCalledOnce();
+    expect(window.location.pathname).toBe('/edit');
+    expect(useRouter.getState().pathname).toBe('/edit');
+  });
+
+  it('Stay: the proceed callback is never run, so nothing navigates', () => {
+    const back = vi.spyOn(window.history, 'back');
+    const remove = setNavigationGuard(() => true);
+    backFromEdit();
+    remove();
+    expect(back).not.toHaveBeenCalled();
+    expect(useRouter.getState().pathname).toBe('/edit');
+  });
+
+  it('Leave: proceed calls history.back once and the guard is not asked again', () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => undefined);
+    let proceed: (() => void) | null = null;
+    const guard = vi.fn((p: () => void) => {
+      proceed = p;
+      return true;
+    });
+    const remove = setNavigationGuard(guard);
+    backFromEdit();
+    (proceed as (() => void) | null)?.();
+    expect(back).toHaveBeenCalledOnce();
+    // The browser's popstate from that back(): the guard is bypassed and the store follows the location.
+    window.history.replaceState(null, '', '/other');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    remove();
+    expect(guard).toHaveBeenCalledOnce();
+    expect(useRouter.getState().pathname).toBe('/other');
   });
 });

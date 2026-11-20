@@ -31,25 +31,97 @@ export type AdminQuestion = {
 export type AdminQuestionPage = { items: AdminQuestion[]; page: number; size: number; totalItems: number };
 export type AdminSubject = { id: string; name: string; topics: { id: string; name: string }[] };
 
+/** One field-level problem from a 400 Problem Details `errors[]`. */
+export type FieldProblem = { field: string; problem: string; fix?: string };
+
 /** A failed admin request; `detail` is the Problem Details text when the server sent one. */
 export class AdminApiError extends Error {
   constructor(
     readonly status: number,
     readonly detail: string | null,
+    readonly errors: FieldProblem[] = [],
+    /** The existing id a 409 on a subject or topic name reports. */
+    readonly existingId: string | null = null,
   ) {
     super(detail ?? `Request failed (${status})`);
   }
 }
 
+async function failure(response: Response): Promise<AdminApiError> {
+  const problem = (await response.json().catch(() => null)) as { detail?: unknown; errors?: unknown; id?: unknown } | null;
+  const errors = Array.isArray(problem?.errors)
+    ? (problem.errors as FieldProblem[]).filter((e) => typeof e?.field === 'string' && typeof e?.problem === 'string')
+    : [];
+  return new AdminApiError(
+    response.status,
+    typeof problem?.detail === 'string' ? problem.detail : null,
+    errors,
+    typeof problem?.id === 'string' ? problem.id : null,
+  );
+}
+
 async function getJson<T>(path: string): Promise<T> {
   const response = await apiFetch(apiUrl(path), { headers: { Accept: 'application/json, application/problem+json' } });
-  if (!response.ok) {
-    const problem: unknown = await response.json().catch(() => null);
-    const detail = (problem as { detail?: unknown } | null)?.detail;
-    throw new AdminApiError(response.status, typeof detail === 'string' ? detail : null);
-  }
+  if (!response.ok) throw await failure(response);
   return (await response.json()) as T;
 }
+
+async function send<T>(method: 'POST' | 'PUT' | 'DELETE', path: string, body?: unknown): Promise<T> {
+  const response = await apiFetch(apiUrl(path), {
+    method,
+    headers: { Accept: 'application/json, application/problem+json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!response.ok) throw await failure(response);
+  return (response.status === 204 ? undefined : await response.json()) as T;
+}
+
+/** What the editor sends: ids and enum names as chosen, text as typed (the server normalises). */
+export type QuestionPayload = {
+  category: string;
+  subjectId: string;
+  topicId: string;
+  examLevel: string;
+  difficulty: string;
+  textMl: string;
+  textEn: string;
+  options: string[];
+  answerIndex: number | null;
+  explanation: string;
+  attribution: string;
+  sourceRef: string;
+  /** Only when saving an open draft. */
+  rowVersion?: number;
+};
+
+export type SavedQuestion = { questionId: string; displayNo: number; version: number; status: 'DRAFT'; rowVersion: number };
+
+export type EditorContent = {
+  category: string;
+  subjectId: string;
+  topicId: string;
+  subject: string;
+  topic: string;
+  examLevel: string;
+  difficulty: string;
+  textMl: string | null;
+  textEn: string | null;
+  options: string[];
+  answerIndex: number;
+  explanation: string;
+  attribution: string | null;
+};
+
+export type QuestionDetail = {
+  questionId: string;
+  displayNo: number;
+  sourceRef: string | null;
+  deleted: boolean;
+  deletedAt: string | null;
+  /** The version the form opens on: the open draft, else the latest published, else the latest. */
+  editing: { version: number; status: 'DRAFT' | 'PUBLISHED' | 'DISCARDED'; rowVersion: number; content: EditorContent };
+  versions: { version: number; status: string; createdBy: string; createdAt: string; updatedAt: string | null }[];
+};
 
 /** `search` is a query string without the leading '?'. */
 export function fetchQuestions(search: string): Promise<AdminQuestionPage> {
@@ -58,4 +130,34 @@ export function fetchQuestions(search: string): Promise<AdminQuestionPage> {
 
 export function fetchSubjects(): Promise<AdminSubject[]> {
   return getJson<AdminSubject[]>(SUBJECTS_PATH);
+}
+
+export function fetchQuestion(questionId: string): Promise<QuestionDetail> {
+  return getJson<QuestionDetail>(`${QUESTIONS_PATH}/${encodeURIComponent(questionId)}`);
+}
+
+export function createQuestion(payload: QuestionPayload): Promise<SavedQuestion> {
+  return send<SavedQuestion>('POST', QUESTIONS_PATH, payload);
+}
+
+/** Updates the open draft in place (with its `rowVersion`), or starts the next version as a draft. */
+export function saveDraft(questionId: string, payload: QuestionPayload): Promise<SavedQuestion> {
+  return send<SavedQuestion>('PUT', `${QUESTIONS_PATH}/${encodeURIComponent(questionId)}/draft`, payload);
+}
+
+export function deleteQuestion(questionId: string): Promise<void> {
+  return send<void>('DELETE', `${QUESTIONS_PATH}/${encodeURIComponent(questionId)}`);
+}
+
+export function restoreQuestion(questionId: string): Promise<void> {
+  return send<void>('POST', `${QUESTIONS_PATH}/${encodeURIComponent(questionId)}/restore`);
+}
+
+/** Resolves with the new id; a 409 rejects with the existing id in `existingId`. */
+export async function createSubject(name: string): Promise<string> {
+  return (await send<{ id: string }>('POST', SUBJECTS_PATH, { name })).id;
+}
+
+export async function createTopic(subjectId: string, name: string): Promise<string> {
+  return (await send<{ id: string }>('POST', `${SUBJECTS_PATH}/${encodeURIComponent(subjectId)}/topics`, { name })).id;
 }
