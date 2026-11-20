@@ -15,6 +15,9 @@ public record RateLimitPolicy(String action, int capacity, int refillTokens, Dur
     /** Player question reports (Story 3.5): 5 reports, refilling 1 every 2 minutes. */
     public static final RateLimitPolicy QUESTION_REPORT = new RateLimitPolicy("question-report", 5, 1, Duration.ofMinutes(2));
 
+    /** Recent-topic writes (Story 4.1): 30 selections, refilling 1 every 4 seconds. */
+    public static final RateLimitPolicy RECENT_TOPIC = new RateLimitPolicy("recent-topic", 30, 1, Duration.ofSeconds(4));
+
     public RateLimitPolicy {
         if (action == null || action.isBlank() || action.contains(":")) {
             throw new IllegalArgumentException("action must be a non-blank name without ':'");

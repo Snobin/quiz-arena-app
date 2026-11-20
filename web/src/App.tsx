@@ -22,6 +22,10 @@ import { navigate, usePathname, useRouterSync } from './shell/router.ts';
 import { AdminRoute } from './screens/admin/AdminRoute.tsx';
 import { safeReturnPath } from './screens/home/signInPath.ts';
 
+// The topic picker and the Duel and Solo stubs load only when opened (entry budget). Paths are matched by prefix.
+const TopicsRoutes = lazy(() => import('./screens/topics/TopicsRoutes.tsx'));
+const isTopicsPath = (pathname: string) => pathname === '/play/topics' || pathname.startsWith('/play/duel/') || pathname.startsWith('/practice/');
+
 /**
  * Home for whoever is using the app: guest Home, or the registered player's. While the boot refresh is
  * in flight it shows only the heading, so a returning player never sees the guest Home flash by.
@@ -86,6 +90,8 @@ export function App() {
       queryClient.removeQueries({ queryKey: ['ratings'] });
       queryClient.removeQueries({ queryKey: ['matches'] });
       queryClient.removeQueries({ queryKey: ['leaderboard'] });
+      queryClient.removeQueries({ queryKey: ['topics'] });
+      queryClient.removeQueries({ queryKey: ['recentTopics'] });
     }
     wasRegistered.current = status === 'registered';
     if (status === 'registered') void ensureProfileLoaded();
@@ -115,7 +121,7 @@ export function App() {
   // The admin console is outside the player shell (no tab bar); its guard decides who may load it.
   if (pathname === '/admin' || pathname.startsWith('/admin/')) return <AdminRoute />;
 
-  const Screen = ROUTES[pathname] ?? Home;
+  const Screen = ROUTES[pathname] ?? (isTopicsPath(pathname) ? TopicsRoutes : Home);
   // One element for every way of reaching setup, so the form is never remounted (and typed input never lost)
   // when the profile finishes loading.
   const screen =
@@ -124,7 +130,9 @@ export function App() {
     ) : needsSetup || (pathname === '/profile/setup' && !setupNotNeeded) ? (
       <ProfileSetup to={pathname === '/profile/setup' ? (new URLSearchParams(window.location.search).get('to') ?? '/') : `${pathname}${window.location.search}`} />
     ) : (
-      <Screen />
+      <Suspense fallback={<HomePending />}>
+        <Screen />
+      </Suspense>
     );
   return (
     <AppShell>

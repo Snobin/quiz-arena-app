@@ -117,7 +117,7 @@ describe('/auth/return', () => {
 });
 
 describe('registered Home', () => {
-  it('has no Sign-in nudge; Quick Match is playable; the other modes are unlocked but "Coming soon"', async () => {
+  it('has no Sign-in nudge; Quick Match is playable; Topic Duel and Solo Practice are live links; Battle Room is "Coming soon"', async () => {
     await boot('Anju');
     renderApp('/');
 
@@ -126,19 +126,20 @@ describe('registered Home', () => {
     expect(screen.queryByRole('button', { name: 'Continue with Google' })).toBeNull();
     expect(screen.queryByText('Sign in', { exact: true })).toBeNull();
     expect(screen.getByRole('button', { name: 'Quick Match' })).not.toHaveAttribute('aria-disabled');
-    for (const mode of ['Topic Duel', 'Solo Practice', 'Battle Room']) {
-      const row = screen.getByRole('button', { name: `${mode}, coming soon` });
-      expect(row).toHaveAttribute('aria-disabled', 'true');
-      expect(within(row).getByText('Coming soon')).toBeInTheDocument();
-    }
+    expect(screen.getByRole('link', { name: /Topic Duel/ })).toHaveAttribute('href', '/play/topics?for=duel');
+    expect(screen.getByRole('link', { name: /Solo Practice/ })).toHaveAttribute('href', '/play/topics?for=solo');
+    const row = screen.getByRole('button', { name: 'Battle Room, coming soon' });
+    expect(row).toHaveAttribute('aria-disabled', 'true');
+    expect(within(row).getByText('Coming soon')).toBeInTheDocument();
+    expect(screen.getAllByText('Coming soon')).toHaveLength(1);
     // A registered player never fetches a guest token.
     expect(vi.mocked(fetch).mock.calls.map(([input]) => String(input))).not.toContain(GUEST_TOKEN_PATH);
   });
 
-  it('tapping a coming-soon row opens nothing', async () => {
+  it('tapping the coming-soon row opens nothing', async () => {
     await boot('Anju');
     renderApp('/');
-    (await screen.findByRole('button', { name: 'Topic Duel, coming soon' })).click();
+    (await screen.findByRole('button', { name: 'Battle Room, coming soon' })).click();
     expect(window.location.pathname).toBe('/');
   });
 });

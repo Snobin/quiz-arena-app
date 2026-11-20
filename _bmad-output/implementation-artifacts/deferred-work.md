@@ -251,3 +251,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-6-report-queue-and-resolution.md`
   summary: Add paging to the Reports page for more than 100 groups.
   evidence: `fetchReports` always requests page 0 size 100; groups beyond that cannot be viewed or dismissed, only a "Showing X of Y" note appears.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-1-topic-picker.md`
+  summary: Reject PUT /me/recent-topics from a deleted account whose access token is still valid.
+  evidence: `markUsed` checks only that the topic exists, so a token issued before deletion can recreate `recent_topic` rows until it expires.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-1-topic-picker.md`
+  summary: Manually check the Topic picker at 320 px and 200% text size.
+  evidence: the spec asks for a wrap test but jsdom cannot measure layout; the code uses `break-words` and `min-h-[56px]`.
