@@ -7,6 +7,7 @@ import { syncFromLocation } from '../shell/router.ts';
 import AdminApp from './AdminApp.tsx';
 
 vi.mock('./QuestionEditor.tsx', () => ({ QuestionEditor: ({ questionId }: { questionId: string | null }) => <h1 tabIndex={-1}>{`Editor ${questionId ?? 'new'}`}</h1> }));
+vi.mock('./DraftsPage.tsx', () => ({ DraftsPage: () => <h1 tabIndex={-1}>Drafts</h1> }));
 vi.mock('./QuestionsPage.tsx', () => ({ QuestionsPage: () => <h1 tabIndex={-1}>Questions</h1> }));
 
 function renderAt(path: string) {

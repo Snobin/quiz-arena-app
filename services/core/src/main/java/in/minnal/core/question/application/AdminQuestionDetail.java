@@ -19,7 +19,11 @@ public record AdminQuestionDetail(UUID questionId, long displayNo, String source
                           String explanation, String attribution) {
     }
 
-    /** {@code createdBy} is "seed" for seeded rows. */
-    public record HistoryEntry(int version, String status, String createdBy, Instant createdAt, Instant updatedAt) {
+    /**
+     * {@code createdBy} and {@code publishedBy} are "seed" for seeded rows; the publish and discard actor and time are
+     * null while they do not apply.
+     */
+    public record HistoryEntry(int version, String status, String createdBy, Instant createdAt, Instant updatedAt,
+                               String publishedBy, Instant publishedAt, String discardedBy, Instant discardedAt) {
     }
 }

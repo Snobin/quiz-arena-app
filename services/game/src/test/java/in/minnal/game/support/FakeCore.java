@@ -35,6 +35,10 @@ public final class FakeCore implements AutoCloseable {
     public volatile long delayMs;
     /** Answers with this many questions fewer than asked (a contract breach core never commits). */
     public volatile int shortBy;
+    /** The {@code version} the next call serves (core serves the latest published one). */
+    public volatile int version = 1;
+    /** The English text prefix the next call serves: question {@code i} reads {@code "<prefix> i"}. */
+    public volatile String textPrefix = "Question";
 
     private FakeCore() throws IOException {
         server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
@@ -48,7 +52,7 @@ public final class FakeCore implements AutoCloseable {
                 Thread.currentThread().interrupt();
             }
             int code = status;
-            byte[] out = (code == 200 ? questions(body.get("count").asInt() - shortBy) : "{\"status\":" + code + "}")
+            byte[] out = (code == 200 ? questions(body.get("count").asInt() - shortBy, version, textPrefix) : "{\"status\":" + code + "}")
                     .getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", code == 200 ? "application/json" : "application/problem+json");
             try {
@@ -83,14 +87,16 @@ public final class FakeCore implements AutoCloseable {
         status = 200;
         delayMs = 0;
         shortBy = 0;
+        version = 1;
+        textPrefix = "Question";
         calls.clear();
     }
 
-    private static String questions(int count) {
+    private static String questions(int count, int version, String prefix) {
         return IntStream.range(0, count).mapToObj(i -> """
-                {"questionId":"%s","version":1,"textMl":"ചോദ്യം %d","textEn":"Question %d",
+                {"questionId":"%s","version":%d,"textMl":"ചോദ്യം %d","textEn":"%s %d",
                  "options":["a","b","c","d"],"answerIndex":%d,"explanation":"x","attribution":null}"""
-                .formatted(UUID.randomUUID(), i, i, i % 4))
+                .formatted(UUID.randomUUID(), version, i, prefix, i, i % 4))
                 .collect(Collectors.joining(",", "{\"questions\":[", "]}"));
     }
 

@@ -248,6 +248,55 @@ public class JdbcQuestionRepository {
                 .optional();
     }
 
+    /** One version by its question and version number. */
+    public Optional<QuestionVersion> findVersion(UUID questionId, int version) {
+        return jdbc.sql("SELECT " + VERSION_COLUMNS + " FROM question_version WHERE question_id = :questionId AND version = :version")
+                .param("questionId", questionId)
+                .param("version", version)
+                .query((rs, n) -> mapVersion(rs))
+                .optional();
+    }
+
+    /**
+     * Publishes a version only while it is a {@code DRAFT} of a live question, recording the review and the
+     * publishing actor, and only while its {@code row_version} still equals the one that was validated. Returns false when
+     * nothing matched, and nothing changes.
+     */
+    public boolean publishDraft(UUID versionId, int expectedRowVersion, String reviewer, UUID actor, Instant at) {
+        return jdbc.sql("""
+                UPDATE question_version SET status = 'PUBLISHED', reviewed_by = :reviewer, reviewed_at = :at,
+                    published_by = :actor, published_at = :at
+                WHERE id = :id AND status = 'DRAFT' AND row_version = :expected
+                  AND EXISTS (SELECT 1 FROM question q WHERE q.id = question_version.question_id AND q.deleted_at IS NULL)
+                """)
+                .param("id", versionId)
+                .param("expected", expectedRowVersion)
+                .param("reviewer", reviewer)
+                .param("actor", actor)
+                .param("at", utc(at))
+                .update() == 1;
+    }
+
+    /** Discards a version only while it is a {@code DRAFT} of a live question. Returns false when nothing matched. */
+    public boolean discardDraft(UUID versionId, int expectedRowVersion, UUID actor, Instant at) {
+        return jdbc.sql("""
+                UPDATE question_version SET status = 'DISCARDED', discarded_by = :actor, discarded_at = :at
+                WHERE id = :id AND status = 'DRAFT' AND row_version = :expected
+                  AND EXISTS (SELECT 1 FROM question q WHERE q.id = question_version.question_id AND q.deleted_at IS NULL)
+                """)
+                .param("id", versionId)
+                .param("expected", expectedRowVersion)
+                .param("actor", actor)
+                .param("at", utc(at))
+                .update() == 1;
+    }
+
+    /** The current row version of a question's version; empty when it does not exist. */
+    public Optional<Integer> rowVersion(UUID questionId, int version) {
+        return jdbc.sql("SELECT row_version FROM question_version WHERE question_id = :q AND version = :v")
+                .param("q", questionId).param("v", version).query(Integer.class).optional();
+    }
+
     public List<QuestionVersion> findVersions(UUID questionId) {
         return jdbc.sql("SELECT " + VERSION_COLUMNS + " FROM question_version WHERE question_id = :questionId ORDER BY version")
                 .param("questionId", questionId)

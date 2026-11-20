@@ -75,18 +75,18 @@ public class AdminQuestionController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(repository.list(query));
     }
 
-    private static String blankToNull(String s) {
+    static String blankToNull(String s) {
         return s == null || s.isBlank() ? null : s.strip();
     }
 
-    private static String enumName(String field, String raw, String parsed) {
+    static String enumName(String field, String raw, String parsed) {
         if (blankToNull(raw) != null && parsed == null) {
             throw new InvalidAdminRequestException(field + " is not a known value.");
         }
         return parsed;
     }
 
-    private static UUID uuid(String field, String raw) {
+    static UUID uuid(String field, String raw) {
         if (blankToNull(raw) == null) {
             return null;
         }
@@ -97,7 +97,7 @@ public class AdminQuestionController {
         }
     }
 
-    private static int integer(String field, String raw, int fallback) {
+    static int integer(String field, String raw, int fallback) {
         if (blankToNull(raw) == null) {
             return fallback;
         }

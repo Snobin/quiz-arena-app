@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { announce } from '../shell/announce.ts';
 import { Link } from '../shell/Link.tsx';
 import { navigate } from '../shell/router.ts';
@@ -33,6 +33,9 @@ import {
   type Values,
 } from './questionForm.ts';
 import { useAdminTitle } from './useAdminTitle.ts';
+import { queueAction, refKey, undoBatch, useDraftActions } from './draftActions.ts';
+import { shortcutFrom } from './shortcuts.ts';
+import { UndoLine } from './UndoLine.tsx';
 import { useLeaveGuard } from './useLeaveGuard.ts';
 
 const CONTROL = 'min-h-target-min w-full rounded-md border-[1.5px] border-control-edge bg-card px-3 py-2 text-body text-ink aria-[invalid=true]:border-brick';
@@ -111,6 +114,49 @@ export function QuestionEditor({ questionId }: { questionId: string | null }) {
   const detail = load.status === 'ready' ? load.detail : null;
   const deleted = detail?.deleted ?? false;
   const editing = detail?.editing ?? null;
+
+  // Publish and Discard for an open draft, with the same 5 s Undo as the Drafts page.
+  const draftRef =
+    detail && editing && editing.status === 'DRAFT' && !deleted ? { questionId: detail.questionId, version: editing.version, displayNo: detail.displayNo } : null;
+  const batches = useDraftActions((s) => s.batches);
+  const failures = useDraftActions((s) => s.failures);
+  const myBatch = draftRef ? batches.find((b) => b.refs.some((r) => refKey(r) === refKey(draftRef))) : undefined;
+  const failure = draftRef ? failures[refKey(draftRef)] : undefined;
+  const publishButton = useRef<HTMLButtonElement>(null);
+  const hadBatch = useRef(false);
+  const dirtyNow = useRef(dirty);
+  dirtyNow.current = dirty;
+  useEffect(() => {
+    if (myBatch) {
+      hadBatch.current = true;
+      return;
+    }
+    if (!hadBatch.current) return;
+    hadBatch.current = false;
+    // The action was committed (or failed): show the question as it now is, unless there are unsaved edits.
+    if (!dirtyNow.current) {
+      fetchDetail()
+        .then((fresh) => {
+          if (fresh && !dirtyNow.current) apply(fresh);
+        })
+        .catch(() => undefined);
+    }
+  }, [myBatch, fetchDetail, apply]);
+
+  const draftAction = (action: 'publish' | 'discard') => {
+    if (!draftRef || myBatch) return;
+    if (dirty) {
+      announce(adminT('editor.saveFirst'));
+      return;
+    }
+    queueAction(queryClient, action, [draftRef], false);
+  };
+  const onToolbarKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const key = shortcutFrom(event);
+    if (key !== 'p' && key !== 'd') return;
+    event.preventDefault();
+    draftAction(key === 'p' ? 'publish' : 'discard');
+  };
 
   let header = adminT('editor.header.new');
   if (detail && editing) {
@@ -264,6 +310,38 @@ export function QuestionEditor({ questionId }: { questionId: string | null }) {
         </Link>
       </div>
 
+      {draftRef ? (
+        <div role="toolbar" aria-label={adminT('editor.toolbar')} onKeyDown={onToolbarKeyDown} className="flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-card p-3">
+          {myBatch ? (
+            myBatch.phase === 'pending' ? (
+              <UndoLine
+                batch={myBatch}
+                autoFocus
+                onUndo={() => {
+                  if (undoBatch(myBatch.id)) setTimeout(() => publishButton.current?.focus(), 0);
+                }}
+              />
+            ) : null
+          ) : (
+            <>
+              <button ref={publishButton} type="button" aria-keyshortcuts="P" aria-disabled={dirty} onClick={() => draftAction('publish')} className={PRIMARY}>
+                {adminT('editor.publish')}
+              </button>
+              <button type="button" aria-keyshortcuts="D" aria-disabled={dirty} onClick={() => draftAction('discard')} className={BUTTON}>
+                {adminT('editor.discard')}
+              </button>
+              {dirty ? <span className="text-caption text-muted">{adminT('editor.saveFirst')}</span> : null}
+            </>
+          )}
+          {failure ? (
+            <p className="font-semibold text-brick">
+              <span aria-hidden="true">⚠ </span>
+              {adminT('drafts.failed', { detail: failure })}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       {deleted ? (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-card p-4">
           <p>{adminT('editor.deletedNote')}</p>
@@ -413,7 +491,7 @@ export function QuestionEditor({ questionId }: { questionId: string | null }) {
           <table className="w-full border-collapse text-left text-body">
             <thead>
               <tr className="border-b border-ink">
-                {(['history.version', 'history.status', 'history.createdBy', 'history.createdAt'] as const).map((key) => (
+                {(['history.version', 'history.status', 'history.createdBy', 'history.createdAt', 'history.publishedBy', 'history.publishedAt', 'history.discardedBy', 'history.discardedAt'] as const).map((key) => (
                   <th key={key} scope="col" className="px-2 py-1 text-label font-bold">
                     {adminT(key)}
                   </th>
@@ -429,6 +507,10 @@ export function QuestionEditor({ questionId }: { questionId: string | null }) {
                   <td className="px-2 py-1">{adminT(`state.${v.status}` as AdminKey)}</td>
                   <td className="px-2 py-1">{v.createdBy === 'seed' ? adminT('history.seed') : v.createdBy}</td>
                   <td className="px-2 py-1">{new Date(v.createdAt).toLocaleString('en-GB')}</td>
+                  <td className="px-2 py-1">{v.publishedBy === 'seed' ? adminT('history.seed') : (v.publishedBy ?? adminT('history.none'))}</td>
+                  <td className="px-2 py-1">{v.publishedAt ? new Date(v.publishedAt).toLocaleString('en-GB') : adminT('history.none')}</td>
+                  <td className="px-2 py-1">{v.discardedBy ?? adminT('history.none')}</td>
+                  <td className="px-2 py-1">{v.discardedAt ? new Date(v.discardedAt).toLocaleString('en-GB') : adminT('history.none')}</td>
                 </tr>
               ))}
             </tbody>

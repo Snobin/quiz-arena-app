@@ -7,7 +7,9 @@ import { LiveRegions } from '../shell/LiveRegions.tsx';
 import { resetAnnouncements } from '../shell/announce.ts';
 import { navigate, syncFromLocation } from '../shell/router.ts';
 import type { AdminSubject, QuestionDetail } from './api.ts';
+import { resetDraftActions } from './draftActions.ts';
 import { QuestionEditor } from './QuestionEditor.tsx';
+import { session } from '../auth/session.ts';
 
 const apiFetch = vi.hoisted(() => vi.fn());
 vi.mock('../auth/apiFetch.ts', () => ({ apiFetch }));
@@ -45,8 +47,8 @@ function detail(extra: Partial<QuestionDetail> = {}, status: QuestionDetail['edi
       },
     },
     versions: [
-      { version: 2, status, createdBy: 'Boss', createdAt: '2026-11-19T10:00:00Z', updatedAt: null },
-      { version: 1, status: 'PUBLISHED', createdBy: 'seed', createdAt: '2026-11-01T10:00:00Z', updatedAt: null },
+      { version: 2, status, createdBy: 'Boss', createdAt: '2026-11-19T10:00:00Z', updatedAt: null, publishedBy: null, publishedAt: null, discardedBy: null, discardedAt: null },
+      { version: 1, status: 'PUBLISHED', createdBy: 'seed', createdAt: '2026-11-01T10:00:00Z', updatedAt: null, publishedBy: 'seed', publishedAt: '2026-11-01T10:00:00Z', discardedBy: null, discardedAt: null },
     ],
     ...extra,
   };
@@ -86,6 +88,8 @@ async function ready() {
 const field = (name: string) => within(screen.getByRole('form', { name: 'Question fields' })).getByLabelText(name) as HTMLInputElement;
 
 beforeEach(() => {
+  resetDraftActions();
+  vi.spyOn(session, 'getAccessToken').mockResolvedValue('tok');
   calls = [];
   apiFetch.mockReset();
   resetAnnouncements();
@@ -94,6 +98,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+  resetDraftActions();
   window.history.replaceState(null, '', '/');
   syncFromLocation();
 });
@@ -104,7 +111,9 @@ describe('QuestionEditor', () => {
     renderEditor('q1');
     expect(await screen.findByRole('heading', { level: 1, name: 'Q 1,234 · new draft from published v2' })).toBeTruthy();
     const history = screen.getByRole('table');
-    expect(within(history).getByText('seed')).toBeTruthy();
+    // created by and published by are both "seed" for the seeded version
+    expect(within(history).getAllByText('seed')).toHaveLength(2);
+    expect(within(history).getByRole('columnheader', { name: 'Published by' })).toBeTruthy();
     expect(within(history).getByText('Boss')).toBeTruthy();
   });
 
@@ -298,5 +307,58 @@ describe('QuestionEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save as draft' }));
     await waitFor(() => expect(window.location.pathname).toBe('/admin/questions/new1/edit'));
     expect(calls.find((c) => c.method === 'POST')?.body).toMatchObject({ answerIndex: 1, options: ['A1', 'B1', 'C1', 'D1'], subjectId: 's1' });
+  });
+
+  describe('draft actions', () => {
+    const writes = () => calls.filter((c) => c.method !== 'GET');
+
+    it('has no Publish or Discard for a published question', async () => {
+      serve(() => undefined);
+      renderEditor('q1');
+      await ready();
+      expect(screen.queryByRole('toolbar')).toBeNull();
+    });
+
+    it('Undo inside the window sends nothing and puts the buttons back with focus', async () => {
+      serve(() => undefined, detail({}, 'DRAFT'));
+      renderEditor('q1');
+      await ready();
+      const toolbar = screen.getByRole('toolbar', { name: 'Draft actions' });
+      fireEvent.click(within(toolbar).getByRole('button', { name: 'Publish' }));
+      const undo = screen.getByRole('button', { name: 'Undo: Published Q 1,234 v2' });
+      await waitFor(() => expect(screen.getByTestId('live-polite').textContent).toContain('Published Q 1,234 v2'));
+      await waitFor(() => expect(document.activeElement).toBe(undo));
+      fireEvent.click(undo);
+      await waitFor(() => expect(document.activeElement).toBe(within(toolbar).getByRole('button', { name: 'Publish' })));
+      expect(writes()).toEqual([]);
+    });
+
+    it('P on the toolbar publishes after the 5 s window; D discards', async () => {
+      serve(() => undefined, detail({}, 'DRAFT'));
+      renderEditor('q1');
+      await ready();
+      vi.useFakeTimers({ shouldAdvanceTime: false });
+      const toolbar = screen.getByRole('toolbar', { name: 'Draft actions' });
+      fireEvent.keyDown(within(toolbar).getByRole('button', { name: 'Publish' }), { key: 'p' });
+      expect(writes()).toEqual([]);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5100);
+      });
+      expect(writes().map((c) => c.path)).toEqual(['/api/core/v1/admin/questions/q1/versions/2/publish']);
+      vi.useRealTimers();
+    });
+
+    it('is disabled while the form has unsaved changes', async () => {
+      serve(() => undefined, detail({}, 'DRAFT'));
+      renderEditor('q1');
+      await ready();
+      fireEvent.change(field('English text'), { target: { value: 'Changed' } });
+      const toolbar = screen.getByRole('toolbar', { name: 'Draft actions' });
+      const publish = within(toolbar).getByRole('button', { name: 'Publish' });
+      expect(publish.getAttribute('aria-disabled')).toBe('true');
+      fireEvent.click(publish);
+      expect(screen.queryByRole('button', { name: /^Undo/ })).toBeNull();
+      expect(within(toolbar).getByText('Save your changes before you publish or discard.')).toBeTruthy();
+    });
   });
 });
