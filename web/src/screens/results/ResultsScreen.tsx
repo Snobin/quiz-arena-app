@@ -150,6 +150,8 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
   const baseHeading = t(`results.heading.${view.kind}`, { you, them });
   // The accessible name gains the rating once it is known ("You won, 3,140 to 2,980, rating +24").
   const heading = delta.status === 'ready' ? `${baseHeading}, ${t('results.rating.sr', { delta: delta.delta })}` : baseHeading;
+  // Questions she marked during the live reveals open expanded with the note ready (Story 3.5).
+  const [marks] = useState(() => new Set(lastResult.loadMarks(matchId)));
   const answers = full.payload.breakdown.find((b) => b.participantId === full.selfId)?.answers ?? [];
 
   return (
@@ -187,7 +189,19 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
             <ol data-testid="breakdown" className="flex flex-col gap-2">
               {full.payload.questions.map((question, i) => {
                 const answer = answers[i];
-                return answer ? <BreakdownRow key={`${i}:${question.questionId}`} index={i} question={question} answer={answer} /> : null;
+                return answer ? (
+                  <BreakdownRow
+                    key={`${i}:${question.questionId}`}
+                    index={i}
+                    question={question}
+                    answer={answer}
+                    report={{
+                      matchId,
+                      questionSource: full.payload.questionSource,
+                      marked: marks.has(lastResult.markKey(question.questionId, question.version)),
+                    }}
+                  />
+                ) : null;
               })}
             </ol>
           </main>

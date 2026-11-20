@@ -12,6 +12,9 @@ public record RateLimitPolicy(String action, int capacity, int refillTokens, Dur
     /** Admin CSV upload: 10 uploads, refilling 10 per hour. */
     public static final RateLimitPolicy ADMIN_UPLOAD = new RateLimitPolicy("admin-upload", 10, 10, Duration.ofHours(1));
 
+    /** Player question reports (Story 3.5): 5 reports, refilling 1 every 2 minutes. */
+    public static final RateLimitPolicy QUESTION_REPORT = new RateLimitPolicy("question-report", 5, 1, Duration.ofMinutes(2));
+
     public RateLimitPolicy {
         if (action == null || action.isBlank() || action.contains(":")) {
             throw new IllegalArgumentException("action must be a non-blank name without ':'");
