@@ -8,6 +8,7 @@ import type {
   Participant,
   QuestionRevealedPayload,
   QuestionStartedPayload,
+  QuestionSource,
 } from './protocol.ts';
 
 /**
@@ -70,6 +71,8 @@ export type LiveMatch = {
   selfParticipantId: string;
   /** Questions in the match (MATCH_FOUND questionCount). */
   total: number;
+  /** MATCH_FOUND's question source; null after a rejoin, whose SNAPSHOT does not carry it (no report link then). */
+  questionSource: QuestionSource | null;
   phase: LiveMatchPhase;
   /** The last QUESTION_STARTED payload. */
   question: QuestionStartedPayload | null;
@@ -157,6 +160,7 @@ export function liveMatchFor(found: MatchFoundPayload): LiveMatch {
     participants: found.participants,
     selfParticipantId: found.selfParticipantId,
     total: found.questionCount,
+    questionSource: found.questionSource,
   });
 }
 
@@ -164,12 +168,19 @@ export function liveMatchFor(found: MatchFoundPayload): LiveMatch {
  * A fresh live match from who plays and how many questions: the base for MATCH_FOUND, and for a
  * rejoin after a reload, where a SNAPSHOT (participants, total, `selfParticipantId`) is all there is.
  */
-export function liveMatchBase(base: { matchId: string; participants: Participant[]; selfParticipantId: string; total: number }): LiveMatch {
+export function liveMatchBase(base: {
+  matchId: string;
+  participants: Participant[];
+  selfParticipantId: string;
+  total: number;
+  questionSource?: QuestionSource;
+}): LiveMatch {
   return {
     matchId: base.matchId,
     participants: base.participants,
     selfParticipantId: base.selfParticipantId,
     total: base.total,
+    questionSource: base.questionSource ?? null,
     phase: 'lead-in',
     question: null,
     answered: [],

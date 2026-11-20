@@ -3,11 +3,18 @@ import { useTranslation } from 'react-i18next';
 import { formatNumber, formatSigned, formatTenths } from '../../i18n/format.ts';
 import { uiLanguage } from '../../i18n/index.ts';
 import { detectLanguage } from '../../i18n/Lang.tsx';
-import type { BreakdownAnswer, ResultQuestion } from '../../realtime/protocol.ts';
+import type { BreakdownAnswer, QuestionSource, ResultQuestion } from '../../realtime/protocol.ts';
+import { ReportQuestion } from '../../report/ReportQuestion.tsx';
 import { baseLanguage } from '../match/QuestionCard.tsx';
 import { RevealDetails } from '../match/RevealDetails.tsx';
 
-type BreakdownRowProps = { index: number; question: ResultQuestion; answer: BreakdownAnswer };
+/**
+ * `report`: what the report link needs (Story 3.5). `marked`: she tapped "Something wrong?" on this question
+ * during the live reveal, so its row opens expanded with the note field ready.
+ */
+export type RowReport = { matchId: string; questionSource: QuestionSource; marked: boolean };
+
+type BreakdownRowProps = { index: number; question: ResultQuestion; answer: BreakdownAnswer; report?: RowReport };
 
 const HEADER = 'flex w-full min-h-target-min items-center gap-3 px-4 py-2 text-left text-body';
 
@@ -17,11 +24,11 @@ const HEADER = 'flex w-full min-h-target-min items-center gap-3 px-4 py-2 text-l
  * shows the full question. Wrong and missed rows are always expanded: the question, "You:" (her
  * pick in brick, or "not answered"), "Answer:" (bold), the explanation and the attribution or
  * "source not available". Expanding never animates height (so the reduced path needs nothing
- * extra). No report link in Epic 1. Every value is the server's.
+ * extra). The report link sits under the attribution (Story 3.5). Every value is the server's.
  */
-export function BreakdownRow({ index, question, answer }: BreakdownRowProps) {
+export function BreakdownRow({ index, question, answer, report }: BreakdownRowProps) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(report?.marked === true);
   const detailsId = useId();
   const n = index + 1;
   const state = answer.correct ? 'correct' : answer.pickedIndex === null ? 'missed' : 'wrong';
@@ -52,7 +59,7 @@ export function BreakdownRow({ index, question, answer }: BreakdownRowProps) {
           {header}
         </button>
         <div id={detailsId} hidden={!open}>
-          {open ? <Details question={question} answer={answer} /> : null}
+          {open ? <Details question={question} answer={answer} report={report} /> : null}
         </div>
       </li>
     );
@@ -60,12 +67,12 @@ export function BreakdownRow({ index, question, answer }: BreakdownRowProps) {
   return (
     <li data-testid="breakdown-row" data-state={state} className="rounded-md border border-hairline bg-card">
       <div className={HEADER}>{header}</div>
-      <Details question={question} answer={answer} />
+      <Details question={question} answer={answer} report={report} />
     </li>
   );
 }
 
-function Details({ question, answer }: { question: ResultQuestion; answer: BreakdownAnswer }) {
+function Details({ question, answer, report }: { question: ResultQuestion; answer: BreakdownAnswer; report?: RowReport }) {
   const { t, i18n } = useTranslation();
   const language = baseLanguage(question, uiLanguage(i18n));
   const text = language === 'ml' ? question.textMl : question.textEn;
@@ -95,6 +102,16 @@ function Details({ question, answer }: { question: ResultQuestion; answer: Break
         </p>
       )}
       <RevealDetails explanation={question.explanation} attribution={question.attribution} />
+      {report ? (
+        <ReportQuestion
+          questionId={question.questionId}
+          version={question.version}
+          surface={report.marked ? 'LIVE_REVEAL' : 'RESULTS'}
+          matchId={report.matchId}
+          questionSource={report.questionSource}
+          startOpen={report.marked}
+        />
+      ) : null}
     </div>
   );
 }

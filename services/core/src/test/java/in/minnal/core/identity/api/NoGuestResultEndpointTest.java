@@ -26,7 +26,9 @@ class NoGuestResultEndpointTest {
     private static final Set<String> PUBLIC_API = Set.of(
             "/api/core/v1/auth/guest", "/api/core/v1/auth/jwks", "/api/core/v1/auth/google/start",
             "/api/core/v1/auth/google/callback", "/api/core/v1/auth/refresh", "/api/core/v1/auth/logout", "/api/core/v1/me",
-            "/api/core/v1/me/profile");
+            "/api/core/v1/me/profile",
+            // Story 3.5: registered players only (guests get 403).
+            "/api/core/v1/questions/{questionId}/versions/{version}/reports");
 
     @Autowired
     @org.springframework.beans.factory.annotation.Qualifier("requestMappingHandlerMapping")
@@ -40,6 +42,9 @@ class NoGuestResultEndpointTest {
             "/api/core/v1/admin/drafts", "/api/core/v1/admin/drafts/publish", "/api/core/v1/admin/drafts/discard",
             "/api/core/v1/admin/questions/{questionId}/versions/{version}/publish",
             "/api/core/v1/admin/questions/{questionId}/versions/{version}/discard");
+
+    private static final String REPORT_MATCH_ID = "matchId";
+    private static final String REPORT_CONTROLLER = "in.minnal.core.question.api.QuestionReportController";
 
     private static final Set<String> FORBIDDEN_WORDS = Set.of("match", "score", "scores", "guest", "participant", "participants", "result", "results", "points");
 
@@ -71,10 +76,19 @@ class NoGuestResultEndpointTest {
                     // A body that is not a record (a Map, JsonNode or a free-form class) cannot be checked field by
                     // field, so it is not allowed at all.
                     assertThat(parameter.getParameterType().isRecord()).as(method + " takes a non-record body").isTrue();
-                    collect(parameter.getParameterType(), names);
+                    Set<String> own = new TreeSet<>();
+                    collect(parameter.getParameterType(), own);
+                    // Only the question-report body may carry matchId (see REPORT_MATCH_ID); every other body is held to the full rule.
+                    if (method.getBeanType().getName().equals(REPORT_CONTROLLER)) {
+                        own.remove(REPORT_MATCH_ID);
+                    }
+                    names.addAll(own);
                 }
             }
         }
+        // Story 3.5: the question-report body carries the id of the match the report came from. The endpoint is
+        // registered-only (a guest is 403), core never reads match data and the id is stored as an opaque string, so
+        // this one field is allowed; nothing else may carry "match".
         assertThat(names).isNotEmpty().allSatisfy(name -> assertThat(words(name)).doesNotContainAnyElementsOf(FORBIDDEN_WORDS));
     }
 

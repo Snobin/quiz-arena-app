@@ -18,6 +18,7 @@ import { LeaveDialog } from './LeaveDialog.tsx';
 import { OptionList, type OptionReveal } from './OptionList.tsx';
 import { QuestionCard } from './QuestionCard.tsx';
 import { ReconnectBanner } from './ReconnectBanner.tsx';
+import { ReportQuestion } from '../../report/ReportQuestion.tsx';
 import { RevealDetails } from './RevealDetails.tsx';
 import { opponentsOf } from './opponents.tsx';
 import { ScoreStrip } from './ScoreStrip.tsx';
@@ -157,6 +158,8 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
   const view = started?.question ?? null;
   const index = started?.questionIndex ?? -1;
   const reveal = live.reveal && live.reveal.questionIndex === index ? live.reveal : null;
+  // Questions she marked "Something wrong?" during the reveals (Story 3.5); they survive a reload.
+  const [marks, setMarks] = useState(() => new Set(lastResult.loadMarks(live.matchId)));
   const opponents = opponentsOf(live);
   // A 1v1 (Quick Match, Topic Duel) has one opponent; a Battle Room has several.
   const oneVsOne = opponents.length === 1;
@@ -462,6 +465,21 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
             />
 
             {reveal ? <RevealDetails explanation={reveal.explanation} attribution={reveal.attribution} /> : null}
+            {reveal ? (
+              // Story 3.5: the tap only marks the question; the note is added on the results (no typing in play).
+              <ReportQuestion
+                questionId={reveal.questionId}
+                version={reveal.version}
+                surface="LIVE_REVEAL"
+                matchId={live.matchId}
+                questionSource={live.questionSource}
+                marked={marks.has(lastResult.markKey(reveal.questionId, reveal.version))}
+                onMark={() => {
+                  lastResult.saveMark(live.matchId, reveal.questionId, reveal.version);
+                  setMarks(new Set(lastResult.loadMarks(live.matchId)));
+                }}
+              />
+            ) : null}
 
             {reveal ? null : (
               <p data-testid="footer" className="mt-6 text-center text-label text-muted">

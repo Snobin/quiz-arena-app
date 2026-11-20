@@ -62,8 +62,54 @@ export function save(result: Omit<LastResult, 'guest'> & { guest: boolean }): vo
   }
 }
 
+/**
+ * Story 3.5: the questions she tapped "Something wrong?" on during the live reveals, kept next to the stored
+ * MATCH_ENDED (its own key, since marks are made before MATCH_ENDED exists) and dropped with it. Entries are
+ * `questionId:version`; they belong to one match, so another match's marks never show.
+ */
+export const REPORT_MARKS_KEY = 'minnal.lastResult.marks';
+
+export function markKey(questionId: string, version: number): string {
+  return `${questionId}:${version}`;
+}
+
+export function loadMarks(matchId: string): string[] {
+  try {
+    const value: unknown = JSON.parse(storage()?.getItem(REPORT_MARKS_KEY) ?? 'null');
+    if (typeof value === 'object' && value !== null) {
+      const { matchId: stored, marks } = value as Record<string, unknown>;
+      if (stored === matchId && Array.isArray(marks)) return marks.filter((m): m is string => typeof m === 'string');
+    }
+  } catch {
+    // Blocked or corrupt storage reads as no marks.
+  }
+  return [];
+}
+
+export function saveMark(matchId: string, questionId: string, version: number): void {
+  try {
+    const marks = new Set(loadMarks(matchId));
+    marks.add(markKey(questionId, version));
+    storage()?.setItem(REPORT_MARKS_KEY, JSON.stringify({ matchId, marks: [...marks] }));
+  } catch {
+    // Blocked storage: the mark just won't survive a reload.
+  }
+}
+
+/** Drops one mark once her report for that question is in, so a reload does not reopen its note field. */
+export function removeMark(matchId: string, questionId: string, version: number): void {
+  try {
+    const key = markKey(questionId, version);
+    const marks = loadMarks(matchId).filter((m) => m !== key);
+    storage()?.setItem(REPORT_MARKS_KEY, JSON.stringify({ matchId, marks }));
+  } catch {
+    // Blocked storage: nothing to remove.
+  }
+}
+
 export function clear(): void {
   try {
+    storage()?.removeItem(REPORT_MARKS_KEY);
     storage()?.removeItem(LAST_RESULT_KEY);
   } catch {
     // Blocked storage: nothing to clear.

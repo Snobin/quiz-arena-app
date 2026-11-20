@@ -236,3 +236,10 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-4-draft-review-queue.md`
   summary: A commit that fails after the admin has left the Drafts page keeps its detail in the store and shows it only on return.
   evidence: noted by the implementer; the row reappears on the next fetch.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-5-players-report-a-wrong-question.md`
+  summary: The report limiter token is spent before validation, the published-version check and the duplicate check, so invalid, 404 and 409 requests drain the 5-report budget.
+  evidence: `QuestionReportController` calls `tryAcquire` first, the same ordering as the 3.3 upload limiter; decide once for both.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-5-players-report-a-wrong-question.md`
+  summary: After a mid-match reload the snapshot lacks `questionSource`, so the live-reveal link is hidden for the rest of that match; a published version of a soft-deleted question can still be reported.
+  evidence: `liveGameStore` builds `questionSource` null from a SNAPSHOT; the report service checks only `PUBLISHED` status.
