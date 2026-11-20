@@ -141,7 +141,11 @@ async function commit(id: number): Promise<void> {
   clients.delete(id);
   // The rows stay collapsed until the list has been refreshed, so a committed row never flashes back.
   try {
-    await Promise.all([client?.invalidateQueries({ queryKey: ['admin', 'drafts'] }), client?.invalidateQueries({ queryKey: ['admin', 'questions'] })]);
+    await Promise.all([
+      client?.invalidateQueries({ queryKey: ['admin', 'drafts'] }),
+      client?.invalidateQueries({ queryKey: ['admin', 'questions'] }),
+      client?.invalidateQueries({ queryKey: ['admin', 'reports'] }),
+    ]);
   } catch {
     // A failed refresh leaves the old list; the next visit refetches.
   }

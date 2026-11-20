@@ -7,6 +7,7 @@ import in.minnal.core.question.domain.QuestionContent;
 import in.minnal.core.question.domain.QuestionValidator;
 import in.minnal.core.question.domain.QuestionVersion;
 import in.minnal.core.question.domain.VersionStatus;
+import in.minnal.core.question.infrastructure.JdbcQuestionReportRepository;
 import in.minnal.core.question.infrastructure.JdbcQuestionRepository;
 import in.minnal.core.question.infrastructure.JdbcSubjectTopicRepository;
 import java.time.Instant;
@@ -30,9 +31,11 @@ public class AdminDraftService {
     private final JdbcSubjectTopicRepository subjectsAndTopics;
     private final QuestionValidator validator;
     private final TransactionTemplate transactions;
+    private final JdbcQuestionReportRepository reports;
 
     public AdminDraftService(JdbcQuestionRepository questions, JdbcSubjectTopicRepository subjectsAndTopics,
-                             QuestionValidator validator, TransactionTemplate transactions) {
+                             QuestionValidator validator, TransactionTemplate transactions, JdbcQuestionReportRepository reports) {
+        this.reports = reports;
         this.questions = questions;
         this.subjectsAndTopics = subjectsAndTopics;
         this.validator = validator;
@@ -103,6 +106,8 @@ public class AdminDraftService {
         if (!questions.publishDraft(draft.id(), open.rowVersion(), published.reviewedBy(), actor, now)) {
             throw notDraft();
         }
+        // Same transaction as the publish: if either fails, the reports stay open.
+        reports.resolveOlderOpen(questionId, version, actor, now);
         return DraftActionResult.done(questionId, version, VersionStatus.PUBLISHED.name());
     }
 

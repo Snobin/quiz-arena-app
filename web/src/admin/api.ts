@@ -259,3 +259,61 @@ export async function commitSingle(action: DraftAction, ref: DraftRef): Promise<
 export async function commitBulk(action: DraftAction, refs: DraftRef[]): Promise<DraftActionResult[]> {
   return (await send<{ results: DraftActionResult[] }>('POST', `${DRAFTS_PATH}/${action}`, bulkBody(refs))).results;
 }
+
+export const REPORTS_PATH = '/api/core/v1/admin/reports';
+
+export type ReportStatus = 'OPEN' | 'RESOLVED_FIXED' | 'DISMISSED';
+export type ReportSurface = 'LIVE_REVEAL' | 'RESULTS' | 'SOLO';
+
+export type AdminReport = {
+  reportId: string;
+  note: string | null;
+  reporterName: string;
+  surface: ReportSurface;
+  createdAt: string;
+  status: ReportStatus;
+  resolvedBy: string | null;
+  resolvedAt: string | null;
+  resolutionNote: string | null;
+  fixedByVersion: number | null;
+};
+
+/** The reports on one `{questionId, version}`. */
+export type AdminReportGroup = {
+  questionId: string;
+  displayNo: number;
+  version: number;
+  textMl: string | null;
+  textEn: string | null;
+  currentPublishedVersion: number | null;
+  pendingDraftVersion: number | null;
+  reportCount: number;
+  firstReportedAt: string;
+  lastReportedAt: string;
+  reports: AdminReport[];
+};
+
+export type AdminReportPage = { items: AdminReportGroup[]; page: number; size: number; totalItems: number };
+
+export function fetchReportSummary(): Promise<{ openCount: number }> {
+  return getJson<{ openCount: number }>(`${REPORTS_PATH}/summary`);
+}
+
+/** One page of report groups; `questionId` narrows the list to one question (the editor banner). */
+export function fetchReports(status: 'OPEN' | 'CLOSED', questionId?: string): Promise<AdminReportPage> {
+  const params = new URLSearchParams({ status, page: '0', size: '100' });
+  if (questionId) params.set('questionId', questionId);
+  return getJson<AdminReportPage>(`${REPORTS_PATH}?${params.toString()}`);
+}
+
+export type DismissRequest = { questionId: string; version: number; note: string };
+
+/** The request a dismiss makes, precomputed so a tab close can send it with `keepalive`. */
+export function dismissRequest(body: DismissRequest): { path: string; body: DismissRequest } {
+  return { path: `${REPORTS_PATH}/dismiss`, body };
+}
+
+/** Dismisses every open report on one version. Rejects with an AdminApiError (400 field error, 409 none open). */
+export async function dismissReports(body: DismissRequest): Promise<void> {
+  await send<{ ok: true }>('POST', `${REPORTS_PATH}/dismiss`, body);
+}

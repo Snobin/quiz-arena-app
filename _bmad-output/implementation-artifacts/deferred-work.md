@@ -243,3 +243,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-5-players-report-a-wrong-question.md`
   summary: After a mid-match reload the snapshot lacks `questionSource`, so the live-reveal link is hidden for the rest of that match; a published version of a soft-deleted question can still be reported.
   evidence: `liveGameStore` builds `questionSource` null from a SNAPSHOT; the report service checks only `PUBLISHED` status.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-6-report-queue-and-resolution.md`
+  summary: Add a fault-injection test proving publish and report resolution roll back together.
+  evidence: `aFailedPublishLeavesReportsOpen` fails on validation before `publishDraft`, so the same-transaction rule in `AdminDraftService.publishInTransaction` is not pinned.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-6-report-queue-and-resolution.md`
+  summary: Add paging to the Reports page for more than 100 groups.
+  evidence: `fetchReports` always requests page 0 size 100; groups beyond that cannot be viewed or dismissed, only a "Showing X of Y" note appears.

@@ -11,6 +11,7 @@ import in.minnal.core.question.domain.QuestionValidator;
 import in.minnal.core.question.domain.QuestionVersion;
 import in.minnal.core.question.domain.Text;
 import in.minnal.core.question.domain.VersionStatus;
+import in.minnal.core.question.infrastructure.JdbcQuestionReportRepository;
 import in.minnal.core.question.infrastructure.JdbcQuestionRepository;
 import in.minnal.core.question.infrastructure.JdbcSubjectTopicRepository;
 import java.time.Instant;
@@ -38,8 +39,11 @@ public class AdminQuestionService {
     private final JdbcQuestionRepository questions;
     private final JdbcSubjectTopicRepository subjectsAndTopics;
     private final QuestionValidator validator;
+    private final JdbcQuestionReportRepository reports;
 
-    public AdminQuestionService(JdbcQuestionRepository questions, JdbcSubjectTopicRepository subjectsAndTopics, QuestionValidator validator) {
+    public AdminQuestionService(JdbcQuestionRepository questions, JdbcSubjectTopicRepository subjectsAndTopics, QuestionValidator validator,
+                                JdbcQuestionReportRepository reports) {
+        this.reports = reports;
         this.questions = questions;
         this.subjectsAndTopics = subjectsAndTopics;
         this.validator = validator;
@@ -100,10 +104,12 @@ public class AdminQuestionService {
     @Transactional
     public void delete(UUID actor, UUID questionId) {
         Question question = questions.findQuestion(questionId).orElseThrow(() -> AdminWriteException.notFound("No such question."));
-        if (!questions.softDelete(question.id(), Instant.now(), actor)) {
+        Instant now = Instant.now();
+        if (!questions.softDelete(question.id(), now, actor)) {
             throw AdminWriteException.conflict("This question is already deleted.");
         }
         questions.discardOpenDraft(question.id());
+        reports.dismissAllForQuestion(question.id(), "Question deleted", actor, now);
     }
 
     @Transactional

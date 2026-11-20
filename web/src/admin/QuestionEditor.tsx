@@ -36,6 +36,7 @@ import { useAdminTitle } from './useAdminTitle.ts';
 import { queueAction, refKey, undoBatch, useDraftActions } from './draftActions.ts';
 import { shortcutFrom } from './shortcuts.ts';
 import { UndoLine } from './UndoLine.tsx';
+import { ReportBanner } from './ReportBanner.tsx';
 import { useLeaveGuard } from './useLeaveGuard.ts';
 
 const CONTROL = 'min-h-target-min w-full rounded-md border-[1.5px] border-control-edge bg-card px-3 py-2 text-body text-ink aria-[invalid=true]:border-brick';
@@ -309,6 +310,8 @@ export function QuestionEditor({ questionId }: { questionId: string | null }) {
           {adminT('editor.back')}
         </Link>
       </div>
+
+      {detail && !deleted ? <ReportBanner questionId={detail.questionId} versions={detail.versions} /> : null}
 
       {draftRef ? (
         <div role="toolbar" aria-label={adminT('editor.toolbar')} onKeyDown={onToolbarKeyDown} className="flex flex-wrap items-center gap-3 rounded-lg border border-hairline bg-card p-3">
