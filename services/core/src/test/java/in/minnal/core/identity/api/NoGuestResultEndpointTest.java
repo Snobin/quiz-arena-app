@@ -34,7 +34,9 @@ class NoGuestResultEndpointTest {
 
     /** Non-public paths core serves; each is service-to-service and takes no player result. */
     private static final Set<String> INTERNAL = Set.of("/internal/question-sets",
-            "/api/core/v1/admin/questions", "/api/core/v1/admin/subjects");
+            "/api/core/v1/admin/questions", "/api/core/v1/admin/subjects", "/api/core/v1/admin/questions/{questionId}",
+            "/api/core/v1/admin/questions/{questionId}/draft", "/api/core/v1/admin/questions/{questionId}/restore",
+            "/api/core/v1/admin/subjects/{subjectId}/topics");
 
     private static final Set<String> FORBIDDEN_WORDS = Set.of("match", "score", "scores", "guest", "participant", "participants", "result", "results", "points");
 

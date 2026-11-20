@@ -6,6 +6,7 @@ import { session } from '../auth/session.ts';
 import { syncFromLocation } from '../shell/router.ts';
 import AdminApp from './AdminApp.tsx';
 
+vi.mock('./QuestionEditor.tsx', () => ({ QuestionEditor: ({ questionId }: { questionId: string | null }) => <h1 tabIndex={-1}>{`Editor ${questionId ?? 'new'}`}</h1> }));
 vi.mock('./QuestionsPage.tsx', () => ({ QuestionsPage: () => <h1 tabIndex={-1}>Questions</h1> }));
 
 function renderAt(path: string) {
@@ -52,5 +53,18 @@ describe('AdminApp', () => {
     await act(async () => undefined);
     expect(signOut).toHaveBeenCalledOnce();
     expect(window.location.pathname).toBe('/');
+  });
+
+  it('renders the editor for /admin/questions/new and /admin/questions/:id/edit', () => {
+    const first = renderAt('/admin/questions/new');
+    expect(screen.getByRole('heading', { name: 'Editor new' })).toBeTruthy();
+    first.unmount();
+    renderAt('/admin/questions/abc/edit');
+    expect(screen.getByRole('heading', { name: 'Editor abc' })).toBeTruthy();
+  });
+
+  it('falls back to Questions for a malformed escape in the edit path', () => {
+    renderAt('/admin/questions/%E0%A4%A/edit');
+    expect(screen.getByRole('heading', { name: 'Questions' })).toBeTruthy();
   });
 });

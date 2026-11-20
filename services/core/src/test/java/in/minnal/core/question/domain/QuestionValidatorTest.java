@@ -53,6 +53,11 @@ class QuestionValidatorTest {
                 Arguments.of("answerIndex missing", with(c -> answer(c, null)), "answerIndex", "required"),
                 Arguments.of("answerIndex negative", with(c -> answer(c, -1)), "answerIndex", "must be a whole number 0–3"),
                 Arguments.of("answerIndex 4", with(c -> answer(c, 4)), "answerIndex", "must be a whole number 0–3"),
+                Arguments.of("text too long", with(c -> copy(c, c.textMl(), "x".repeat(1001))), "textEn", "must be at most 1000 characters (got 1001)"),
+                Arguments.of("Malayalam text too long", with(c -> copy(c, "ക".repeat(1001), c.textEn())), "textMl", "must be at most 1000 characters (got 1001)"),
+                Arguments.of("option too long", with(c -> options(c, List.of("a", "b", "c", "d".repeat(301)))), "optionD", "must be at most 300 characters (got 301)"),
+                Arguments.of("explanation too long", with(c -> new QuestionCandidate(c.category(), c.subject(), c.topic(), c.examLevel(), c.difficulty(), c.textMl(), c.textEn(), c.options(), c.answerIndex(), "e".repeat(2001), c.attribution())), "explanation", "must be at most 2000 characters (got 2001)"),
+                Arguments.of("attribution too long", with(c -> new QuestionCandidate(c.category(), c.subject(), c.topic(), c.examLevel(), c.difficulty(), c.textMl(), c.textEn(), c.options(), c.answerIndex(), c.explanation(), "a".repeat(121))), "attribution", "must be at most 120 characters (got 121)"),
                 Arguments.of("explanation blank", with(c -> new QuestionCandidate(c.category(), c.subject(), c.topic(), c.examLevel(), c.difficulty(), c.textMl(), c.textEn(), c.options(), c.answerIndex(), " ", c.attribution())), "explanation", "required"));
     }
 
@@ -77,6 +82,30 @@ class QuestionValidatorTest {
     @Test
     void nullCandidateIsAnErrorNotAnException() {
         assertThat(validator.validate(null)).extracting(FieldError::field).containsExactly("question");
+    }
+
+    @Test
+    void capsCountCharactersAfterNfcAndTrimmingAndAcceptTheLimitExactly() {
+        // 500 decomposed pairs normalise to 500 characters; padding is trimmed.
+        String decomposed = java.text.Normalizer.normalize("\u00e9", java.text.Normalizer.Form.NFD).repeat(1000);
+        assertThat(validator.validate(with(c -> copy(c, c.textMl(), "  " + decomposed + "  ")))).isEmpty();
+        assertThat(validator.validate(with(c -> copy(c, c.textMl(), "x".repeat(1000))))).isEmpty();
+        assertThat(validator.validate(with(c -> options(c, List.of("a", "b", "c", "d".repeat(300)))))).isEmpty();
+    }
+
+    @Test
+    void malayalamChilluAndZwjCountEachCodePointAndSurvive() {
+        // chillu (ൽ U+0D7D), ZWJ (U+200D) and ZWNJ (U+200C) are kept and counted as characters
+        String chillu = "അവൻ\u200d\u200c";
+        assertThat(validator.validate(with(c -> copy(c, chillu.repeat(200), c.textEn())))).isEmpty();
+        assertThat(validator.validate(with(c -> copy(c, chillu.repeat(201), c.textEn())))).extracting(FieldError::field).containsExactly("textMl");
+        assertThat(validator.validate(with(c -> options(c, List.of("അവൻ\u200d", "അവൻ", "b", "c"))))).isEmpty();
+    }
+
+    @Test
+    void capErrorsCarryAFixHint() {
+        assertThat(validator.validate(with(c -> copy(c, c.textMl(), "x".repeat(1003))))).singleElement()
+                .satisfies(e -> assertThat(e.fix()).isEqualTo("Shorten it by 3 characters."));
     }
 
     @Test

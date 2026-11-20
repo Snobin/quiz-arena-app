@@ -46,7 +46,13 @@ public class JdbcQuestionRepository {
     }
 
     public void insert(Question question) {
-        jdbc.sql("INSERT INTO question (id, source_ref, created_at, deleted_at) VALUES (:id, :sourceRef, :createdAt, :deletedAt)")
+        insert(question, null);
+    }
+
+    /** Inserts a question recording the admin who created it (null for seeded rows). */
+    public void insert(Question question, UUID createdBy) {
+        jdbc.sql("INSERT INTO question (id, source_ref, created_at, deleted_at, created_by) VALUES (:id, :sourceRef, :createdAt, :deletedAt, :createdBy)")
+                .param("createdBy", createdBy)
                 .param("id", question.id())
                 .param("sourceRef", question.sourceRef())
                 .param("createdAt", utc(question.createdAt()))
@@ -63,11 +69,17 @@ public class JdbcQuestionRepository {
     }
 
     public void insertVersion(QuestionVersion version) {
+        insertVersion(version, null);
+    }
+
+    /** Inserts a version recording the admin who created it (null for seeded rows). */
+    public void insertVersion(QuestionVersion version, UUID createdBy) {
         QuestionContent c = version.content();
         jdbc.sql("INSERT INTO question_version (" + VERSION_COLUMNS + """
-                ) VALUES (:id, :questionId, :version, :status, :category, :subjectId, :topicId, :examLevel, :difficulty,
-                          :textMl, :textEn, :options, :answerIndex, :explanation, :attribution, :reviewedBy, :reviewedAt, :createdAt)
+                , created_by) VALUES (:id, :questionId, :version, :status, :category, :subjectId, :topicId, :examLevel, :difficulty,
+                          :textMl, :textEn, :options, :answerIndex, :explanation, :attribution, :reviewedBy, :reviewedAt, :createdAt, :createdBy)
                 """)
+                .param("createdBy", createdBy)
                 .param("id", version.id())
                 .param("questionId", version.questionId())
                 .param("version", version.version())
@@ -124,6 +136,93 @@ public class JdbcQuestionRepository {
             VersionStatus current = findVersion(version.id()).map(QuestionVersion::status).orElse(null);
             throw new ImmutableVersionException(version.id(), current);
         }
+    }
+
+    /**
+     * Saves an open draft in place only while its {@code row_version} still equals
+     * {@code expectedRowVersion}; bumps the row version. Returns false when nothing matched (a stale
+     * save, or the draft is no longer open).
+     */
+    public boolean updateDraftChecked(QuestionVersion version, int expectedRowVersion, UUID actor, Instant now) {
+        QuestionContent c = version.content();
+        return jdbc.sql("""
+                UPDATE question_version SET
+                    content_category = :category, subject_id = :subjectId, topic_id = :topicId,
+                    exam_level = :examLevel, difficulty = :difficulty, text_ml = :textMl, text_en = :textEn,
+                    options = :options, answer_index = :answerIndex, explanation = :explanation,
+                    attribution = :attribution, updated_at = :now, updated_by = :actor, row_version = row_version + 1
+                WHERE id = :id AND status = 'DRAFT' AND row_version = :expected
+                """)
+                .param("id", version.id())
+                .param("category", c.category().name())
+                .param("subjectId", c.subjectId())
+                .param("topicId", c.topicId())
+                .param("examLevel", c.examLevel().name())
+                .param("difficulty", c.difficulty().name())
+                .param("textMl", c.textMl())
+                .param("textEn", c.textEn())
+                .param("options", textArray(c.options()))
+                .param("answerIndex", c.answerIndex())
+                .param("explanation", c.explanation())
+                .param("attribution", c.attribution())
+                .param("now", utc(now))
+                .param("actor", actor)
+                .param("expected", expectedRowVersion)
+                .update() == 1;
+    }
+
+    /** The highest version number of the question, discarded ones included; 0 when it has none. */
+    public int maxVersion(UUID questionId) {
+        return jdbc.sql("SELECT coalesce(max(version), 0) FROM question_version WHERE question_id = :id")
+                .param("id", questionId)
+                .query(Integer.class)
+                .single();
+    }
+
+    public long displayNo(UUID questionId) {
+        return jdbc.sql("SELECT display_no FROM question WHERE id = :id").param("id", questionId).query(Long.class).single();
+    }
+
+    public Optional<Question> findQuestion(UUID questionId) {
+        return jdbc.sql("SELECT id, source_ref, created_at, deleted_at FROM question WHERE id = :id")
+                .param("id", questionId)
+                .query((rs, n) -> new Question(rs.getObject("id", UUID.class), rs.getString("source_ref"),
+                        instant(rs, "created_at"), instant(rs, "deleted_at")))
+                .optional();
+    }
+
+    /** The open draft's database id and row version, when the question has one. */
+    public Optional<OpenDraft> findOpenDraft(UUID questionId) {
+        return jdbc.sql("SELECT id, version, row_version FROM question_version WHERE question_id = :id AND status = 'DRAFT'")
+                .param("id", questionId)
+                .query((rs, n) -> new OpenDraft(rs.getObject("id", UUID.class), rs.getInt("version"), rs.getInt("row_version")))
+                .optional();
+    }
+
+    public record OpenDraft(UUID versionId, int version, int rowVersion) {
+    }
+
+    /** Soft delete by an admin. Returns false when the question is missing or already deleted. */
+    public boolean softDelete(UUID questionId, Instant now, UUID actor) {
+        return jdbc.sql("UPDATE question SET deleted_at = :now, deleted_by = :actor WHERE id = :id AND deleted_at IS NULL")
+                .param("now", utc(now))
+                .param("actor", actor)
+                .param("id", questionId)
+                .update() == 1;
+    }
+
+    /** Clears the delete marker. Returns false when the question is missing or not deleted. */
+    public boolean restore(UUID questionId) {
+        return jdbc.sql("UPDATE question SET deleted_at = NULL, deleted_by = NULL WHERE id = :id AND deleted_at IS NOT NULL")
+                .param("id", questionId)
+                .update() == 1;
+    }
+
+    /** Marks the question's open draft, if any, as DISCARDED (never touches a published version). */
+    public void discardOpenDraft(UUID questionId) {
+        jdbc.sql("UPDATE question_version SET status = 'DISCARDED' WHERE question_id = :id AND status = 'DRAFT'")
+                .param("id", questionId)
+                .update();
     }
 
     public Optional<QuestionVersion> findVersion(UUID versionId) {

@@ -203,3 +203,16 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-1-admin-console-access-and-layout.md`
   summary: `/admin` has no noindex or robots rule and is served by the player shell.
   evidence: reported by review; unverified whether crawlers reach it; the page requires sign-in so content is not exposed.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-2-add-and-edit-single-questions.md`
+  summary: The router's guarded popstate handling re-pushes an entry on a blocked move and Leave always calls `history.back()`, so Forward and repeated blocked Backs misbehave.
+  evidence: `web/src/shell/router.ts` `onPopState`; only the Back path is tested after review; settle by recording the popstate direction.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-2-add-and-edit-single-questions.md`
+  summary: The editor distinguishes a deleted-question 409 from a stale-draft 409 by matching "deleted" in the message text.
+  evidence: `QuestionEditor.tsx` 409 branch; add a stable `reason` property to the 409 Problem Details and branch on it.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-2-add-and-edit-single-questions.md`
+  summary: A draft save that succeeds but whose follow-up refresh fails shows "Could not save" and leaves the editor on stale state.
+  evidence: `QuestionEditor.tsx` submit wraps the save and the refresh in one try block.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-2-add-and-edit-single-questions.md`
+  summary: Restoring a draft-only question leaves it with only a DISCARDED version, so the editor opens on discarded content.
+  evidence: the epic says the discarded draft stays discarded; Story 3.4 should decide how the draft queue treats it.

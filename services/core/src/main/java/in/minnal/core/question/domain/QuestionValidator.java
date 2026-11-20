@@ -15,6 +15,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class QuestionValidator {
 
+    public static final int MAX_TEXT = 1000;
+    public static final int MAX_OPTION = 300;
+    public static final int MAX_EXPLANATION = 2000;
+    public static final int MAX_ATTRIBUTION = 120;
+
     public static final List<String> OPTION_FIELDS = List.of("optionA", "optionB", "optionC", "optionD");
 
     public List<FieldError> validate(QuestionCandidate candidate) {
@@ -63,7 +68,30 @@ public class QuestionValidator {
         }
 
         requireText(errors, "explanation", candidate.explanation());
+
+        // Length caps, counted in characters (code points) after NFC normalisation and trimming.
+        cap(errors, "textMl", candidate.textMl(), MAX_TEXT);
+        cap(errors, "textEn", candidate.textEn(), MAX_TEXT);
+        if (options != null && options.size() == 4) {
+            for (int i = 0; i < 4; i++) {
+                cap(errors, OPTION_FIELDS.get(i), options.get(i), MAX_OPTION);
+            }
+        }
+        cap(errors, "explanation", candidate.explanation(), MAX_EXPLANATION);
+        cap(errors, "attribution", candidate.attribution(), MAX_ATTRIBUTION);
         return errors;
+    }
+
+    private static void cap(List<FieldError> errors, String field, String value, int max) {
+        String normalised = Text.normalise(value);
+        if (normalised == null) {
+            return;
+        }
+        int length = normalised.codePointCount(0, normalised.length());
+        if (length > max) {
+            errors.add(new FieldError(field, "must be at most " + max + " characters (got " + length + ")",
+                    "Shorten it by " + (length - max) + " characters."));
+        }
     }
 
     private static void requireText(List<FieldError> errors, String field, String value) {

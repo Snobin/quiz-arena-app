@@ -1,10 +1,11 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { announce } from '../shell/announce.ts';
 import { Link } from '../shell/Link.tsx';
 import { Skeleton } from '../design/Skeleton.tsx';
 import { adminT } from './adminI18n.ts';
-import { AdminApiError, fetchQuestions, fetchSubjects, type AdminQuestion } from './api.ts';
+import { AdminApiError, deleteQuestion, fetchQuestions, fetchSubjects, type AdminQuestion } from './api.ts';
+import { ConfirmDialog } from './ConfirmDialog.tsx';
 import { apiSearch, EMPTY_FILTERS, isFiltered, PAGE_SIZE, useFilters, type Filters } from './filters.ts';
 import { useAdminTitle } from './useAdminTitle.ts';
 
@@ -113,7 +114,7 @@ function Detail({ question }: { question: AdminQuestion }) {
   );
 }
 
-function Row({ question, open, onToggle }: { question: AdminQuestion; open: boolean; onToggle: () => void }) {
+function Row({ question, open, onToggle, onDelete }: { question: AdminQuestion; open: boolean; onToggle: () => void; onDelete: () => void }) {
   const detailId = `q-detail-${question.questionId}`;
   const no = number(question.displayNo);
   const onKeyDown = (event: KeyboardEvent<HTMLTableRowElement>) => {
@@ -156,10 +157,20 @@ function Row({ question, open, onToggle }: { question: AdminQuestion; open: bool
           ) : null}
         </td>
         <td className="px-2 py-2 whitespace-nowrap">{new Date(question.updatedAt).toLocaleDateString('en-GB')}</td>
+        <td className="px-2 py-2 whitespace-nowrap">
+          <Link to={`/admin/questions/${question.questionId}/edit`} aria-label={adminT('row.editLabel', { no })} className="hit-target mr-2 inline-flex min-h-target-min items-center underline">
+            {adminT('row.edit')}
+          </Link>
+          {question.state === 'DELETED' ? null : (
+            <button type="button" aria-label={adminT('row.deleteLabel', { no })} onClick={onDelete} className="hit-target inline-flex min-h-target-min items-center font-bold text-brick">
+              {adminT('row.delete')}
+            </button>
+          )}
+        </td>
       </tr>
       {open ? (
         <tr id={detailId} className="border-b border-hairline bg-card">
-          <td colSpan={7} className="px-4">
+          <td colSpan={8} className="px-4">
             <Detail question={question} />
           </td>
         </tr>
@@ -175,6 +186,29 @@ export function QuestionsPage() {
   const heading = useRef<HTMLHeadingElement>(null);
   const [typed, setTyped] = useState(filters.q);
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+  const queryClient = useQueryClient();
+  const [deleting, setDeleting] = useState<AdminQuestion | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    const no = number(deleting.displayNo);
+    setDeleteBusy(true);
+    try {
+      await deleteQuestion(deleting.questionId);
+      announce(adminT('row.deleted', { no }));
+      setDeleteError(null);
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'questions'] });
+      setDeleting(null);
+      queueMicrotask(() => heading.current?.focus());
+    } catch (error) {
+      setDeleteError(adminT('row.deleteFailed', { no, detail: error instanceof AdminApiError && error.detail ? error.detail : '' }).trim());
+      setDeleting(null);
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
 
   // The search box follows the URL (Back, Clear), and writes to it 300 ms after typing stops.
   useEffect(() => setTyped(filters.q), [filters.q]);
@@ -223,9 +257,20 @@ export function QuestionsPage() {
 
   return (
     <main className="flex flex-col gap-4">
-      <h1 ref={heading} tabIndex={-1} className="font-title text-title">
-        {adminT('questions.title')}
-      </h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 ref={heading} tabIndex={-1} className="font-title text-title">
+          {adminT('questions.title')}
+        </h1>
+        <Link to="/admin/questions/new" className="hit-target inline-flex min-h-target-min items-center rounded-md bg-band px-4 text-body text-on-band">
+          {adminT('questions.new')}
+        </Link>
+      </div>
+      {deleteError ? (
+        <p role="alert" className="text-body font-semibold text-brick">
+          <span aria-hidden="true">⚠ </span>
+          {deleteError}
+        </p>
+      ) : null}
       <form role="search" aria-label={adminT('questions.filters')} onSubmit={(event) => event.preventDefault()} className="flex flex-wrap items-end gap-3">
         <SelectField
           label={adminT('filter.status')}
@@ -302,7 +347,7 @@ export function QuestionsPage() {
               <caption className="pb-2 text-left text-caption text-muted">{adminT('questions.caption')}</caption>
               <thead>
                 <tr className="border-b border-ink">
-                  {(['col.no', 'col.question', 'col.subjectTopic', 'col.level', 'col.difficulty', 'col.state', 'col.updated'] as const).map((key) => (
+                  {(['col.no', 'col.question', 'col.subjectTopic', 'col.level', 'col.difficulty', 'col.state', 'col.updated', 'col.actions'] as const).map((key) => (
                     <th key={key} scope="col" className="px-2 py-2 text-label font-bold">
                       {adminT(key)}
                     </th>
@@ -311,7 +356,7 @@ export function QuestionsPage() {
               </thead>
               <tbody>
                 {showing.items.map((question) => (
-                  <Row key={question.questionId} question={question} open={open.has(question.questionId)} onToggle={() => toggle(question.questionId)} />
+                  <Row key={question.questionId} question={question} open={open.has(question.questionId)} onToggle={() => toggle(question.questionId)} onDelete={() => setDeleting(question)} />
                 ))}
               </tbody>
             </table>
@@ -327,6 +372,16 @@ export function QuestionsPage() {
           </nav>
         </>
       )}
+      {deleting ? (
+        <ConfirmDialog
+          title={adminT('delete.title', { no: number(deleting.displayNo) })}
+          cancelLabel={adminT('delete.cancel')}
+          confirmLabel={adminT('delete.confirm', { no: number(deleting.displayNo) })}
+          busy={deleteBusy}
+          onCancel={() => setDeleting(null)}
+          onConfirm={() => void confirmDelete()}
+        />
+      ) : null}
     </main>
   );
 }
