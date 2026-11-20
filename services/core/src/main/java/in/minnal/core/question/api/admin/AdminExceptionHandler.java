@@ -8,14 +8,17 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /** RFC 9457 Problem Details for the admin API: 401, 403, 400 (with {@code errors[]}), 404 and 409. */
-@RestControllerAdvice(assignableTypes = {AdminQuestionController.class, AdminSubjectController.class, AdminQuestionWriteController.class})
+@RestControllerAdvice(assignableTypes = {AdminQuestionController.class, AdminSubjectController.class, AdminQuestionWriteController.class, AdminUploadController.class})
 class AdminExceptionHandler {
 
     @ExceptionHandler(BearerAuthenticator.Rejected.class)
@@ -34,11 +37,13 @@ class AdminExceptionHandler {
     }
 
     @ExceptionHandler(AdminWriteException.class)
-    ProblemDetail write(AdminWriteException e) {
+    ResponseEntity<ProblemDetail> write(AdminWriteException e) {
         HttpStatus status = switch (e.kind()) {
             case INVALID -> HttpStatus.BAD_REQUEST;
             case NOT_FOUND -> HttpStatus.NOT_FOUND;
             case CONFLICT -> HttpStatus.CONFLICT;
+            case RATE_LIMITED -> HttpStatus.TOO_MANY_REQUESTS;
+            case INTERNAL -> HttpStatus.INTERNAL_SERVER_ERROR;
         };
         ProblemDetail problem = problem(status, e.getMessage());
         if (!e.errors().isEmpty()) {
@@ -55,7 +60,11 @@ class AdminExceptionHandler {
             problem.setProperty("errors", errors);
         }
         e.properties().forEach(problem::setProperty);
-        return problem;
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(status).contentType(MediaType.APPLICATION_PROBLEM_JSON);
+        if (e.kind() == AdminWriteException.Kind.RATE_LIMITED) {
+            response.header(HttpHeaders.RETRY_AFTER, Long.toString(Math.max(1, e.retryAfterSeconds())));
+        }
+        return response.body(problem);
     }
 
     private static ProblemDetail problem(HttpStatus status, String detail) {

@@ -216,3 +216,13 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-2-add-and-edit-single-questions.md`
   summary: Restoring a draft-only question leaves it with only a DISCARDED version, so the editor opens on discarded content.
   evidence: the epic says the discarded draft stays discarded; Story 3.4 should decide how the draft queue treats it.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-3-csv-bulk-upload.md`
+  summary: A Valkey outage turns every upload into an unshaped 500, and the limiter's fail-open or fail-closed policy is undefined.
+  evidence: `ValkeyRateLimiter` throws a Redis connection exception that no admin handler maps; decide the policy and add a Problem Details 503 or 500.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-3-csv-bulk-upload.md`
+  summary: The upload limit token is spent before the file is checked, so malformed or oversize uploads count against the 10 per hour.
+  evidence: `AdminUploadController` calls `tryAcquire` before reading the file; the epic counts uploads, so the owner should confirm or ask for a refund on file-level 400s.
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-3-csv-bulk-upload.md`
+  summary: The concurrent-duplicate 409 path and the production selection of `ValkeyRateLimiter` by `minnal.ratelimit.store` have no test.
+  evidence: needs a seam to inject the clash, and an `ApplicationContextRunner` test for the property switch.

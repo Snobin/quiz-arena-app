@@ -15,9 +15,44 @@ export const adminStrings = {
   'bar.signOut': 'Sign out',
   'bar.signedInAs': 'Signed in as {{name}}',
   'bar.adminFallback': 'Admin',
-  'placeholder.upload': 'Upload is not available yet.',
   'placeholder.drafts': 'Drafts is not available yet.',
   'placeholder.reports': 'Reports is not available yet.',
+  'upload.title': 'Upload questions',
+  'upload.intro': 'Upload a CSV of questions. Good rows become drafts straight away and nothing goes live until you publish. Rows that need fixing are listed so you can correct them.',
+  'upload.file': 'CSV file',
+  'upload.columns': 'Columns',
+  'upload.columnsNote': 'Columns can be in any order. Every column must be present; the sourceRef and attribution values can be blank.',
+  'upload.template': 'Download template',
+  'upload.caps': 'Up to 2 MB and 1,000 rows per file. UTF-8 CSV only.',
+  'upload.submit': 'Upload',
+  'upload.uploading': 'Uploading…',
+  'upload.needFile': 'Choose a CSV file to upload.',
+  'upload.chosen': 'Chosen: {{name}}',
+  'upload.notCsv': 'Choose a .csv file. Save the sheet as CSV UTF-8 first.',
+  'upload.tooBig': 'File is {{size}} MB; the limit is 2 MB. Split it into smaller files.',
+  'upload.limitMinute': 'Upload limit reached. Try again in 1 minute.',
+  'upload.limitMinutes': 'Upload limit reached. Try again in {{minutes}} minutes.',
+  'upload.failed': 'The upload failed. Try again.',
+  'upload.result': 'Upload result',
+  'upload.summary_one': '{{imported}} imported as drafts · {{count}} row needs fixes',
+  'upload.summary_other': '{{imported}} imported as drafts · {{count}} rows need fixes',
+  'upload.allFailed': 'Nothing was imported. Every row needs fixes.',
+  'upload.createdSubjects_one': 'Created {{count}} new subject: {{names}}',
+  'upload.createdSubjects_other': 'Created {{count}} new subjects: {{names}}',
+  'upload.createdTopics_one': 'Created {{count}} new topic: {{names}}',
+  'upload.createdTopics_other': 'Created {{count}} new topics: {{names}}',
+  'upload.review_one': 'Review {{count}} draft',
+  'upload.review_other': 'Review {{count}} drafts',
+  'upload.problems_one': '{{count}} problem to fix',
+  'upload.problems_other': '{{count}} problems to fix',
+  'upload.problemRow': 'Row {{row}} · {{field}} · {{problem}}',
+  'upload.problemFix': 'Row {{row}} · {{field}} · {{problem}} · {{fix}}',
+  'upload.firstGrouped': 'Showing the first {{shown}} of {{total}} problems, grouped by field. Download the rows to fix, or copy the errors, for the full list.',
+  'upload.group': '{{field}}',
+  'upload.download': 'Download rows to fix (CSV)',
+  'upload.copy': 'Copy errors',
+  'upload.copied': 'Copied',
+  'upload.copyFailed': 'Could not copy',
   'questions.title': 'Questions',
   'questions.caption': 'Question bank',
   'questions.filters': 'Filters',
@@ -160,7 +195,11 @@ export const adminStrings = {
   'leave.leave': 'Leave',
 } as const;
 
-export type AdminKey = Exclude<keyof typeof adminStrings, 'count_one' | 'count_other' | 'editor.summary_one' | 'editor.summary_other'> | 'count' | 'editor.summary';
+type PluralKey = keyof typeof adminStrings;
+/** Plural entries are written `<key>_one` / `<key>_other` and used as `<key>` with a `count` option. */
+export type AdminKey =
+  | Exclude<PluralKey, `${string}_one` | `${string}_other`>
+  | (PluralKey extends infer K ? (K extends `${infer Base}_one` ? Base : never) : never);
 
 export const ADMIN_NS = 'admin';
 

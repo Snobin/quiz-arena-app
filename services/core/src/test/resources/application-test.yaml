@@ -11,5 +11,7 @@ spring:
       - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
 
 minnal:
+  ratelimit:
+    store: memory
   outbox:
     relay-enabled: false

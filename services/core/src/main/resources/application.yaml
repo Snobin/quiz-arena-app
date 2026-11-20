@@ -23,6 +23,13 @@ spring:
   mvc:
     problemdetails:
       enabled: true
+  servlet:
+    multipart:
+      # Admin CSV upload (Story 3.3): 2 MB. The request limit leaves room for the multipart envelope.
+      # Parsed on first access, so the controller checks the role and the rate limit before reading the file.
+      resolve-lazily: true
+      max-file-size: 2MB
+      max-request-size: 2100KB
 
 server:
   port: ${SERVER_PORT:8081}
@@ -55,6 +62,9 @@ minnal:
   outbox:
     # Publishes event_outbox rows to Valkey streams (AD-15). Off where Valkey is not available.
     relay-enabled: ${MINNAL_OUTBOX_RELAY_ENABLED:true}
+  ratelimit:
+    # valkey (default) or memory (tests, where Valkey autoconfiguration is excluded).
+    store: valkey
   valkey:
     # Owner prefix for every key this service writes (AD-3). Applied when a story first writes keys.
     key-prefix: "core:"

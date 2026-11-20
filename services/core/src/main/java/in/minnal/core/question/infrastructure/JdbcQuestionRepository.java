@@ -45,6 +45,22 @@ public class JdbcQuestionRepository {
                 .single();
     }
 
+    /** The display number of each existing question (live or soft-deleted) whose source reference is in {@code refs}. */
+    public java.util.Map<String, Long> displayNosBySourceRef(java.util.Collection<String> refs) {
+        java.util.Map<String, Long> found = new java.util.HashMap<>();
+        if (refs.isEmpty()) {
+            return found;
+        }
+        jdbc.sql("SELECT source_ref, display_no FROM question WHERE source_ref = ANY (:refs)")
+                .param("refs", textArray(List.copyOf(refs)))
+                .query((rs, n) -> {
+                    found.put(rs.getString("source_ref"), rs.getLong("display_no"));
+                    return null;
+                })
+                .list();
+        return found;
+    }
+
     public void insert(Question question) {
         insert(question, null);
     }
