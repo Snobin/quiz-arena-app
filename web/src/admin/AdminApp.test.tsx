@@ -63,6 +63,12 @@ describe('AdminApp', () => {
     expect(screen.getByRole('heading', { name: 'Editor abc' })).toBeTruthy();
   });
 
+  it('renders the Upload page at /admin/upload', () => {
+    renderAt('/admin/upload');
+    expect(screen.getByRole('heading', { name: 'Upload questions' })).toBeTruthy();
+    expect(screen.getByLabelText('CSV file')).toBeTruthy();
+  });
+
   it('falls back to Questions for a malformed escape in the edit path', () => {
     renderAt('/admin/questions/%E0%A4%A/edit');
     expect(screen.getByRole('heading', { name: 'Questions' })).toBeTruthy();

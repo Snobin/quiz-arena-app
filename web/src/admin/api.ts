@@ -3,6 +3,7 @@ import { apiFetch } from '../auth/apiFetch.ts';
 
 export const QUESTIONS_PATH = '/api/core/v1/admin/questions';
 export const SUBJECTS_PATH = '/api/core/v1/admin/subjects';
+export const UPLOADS_PATH = '/api/core/v1/admin/uploads';
 
 export type QuestionState = 'PUBLISHED' | 'DRAFT' | 'DISCARDED' | 'DELETED';
 
@@ -42,9 +43,16 @@ export class AdminApiError extends Error {
     readonly errors: FieldProblem[] = [],
     /** The existing id a 409 on a subject or topic name reports. */
     readonly existingId: string | null = null,
+    /** Seconds from a 429's Retry-After header. */
+    readonly retryAfterSeconds: number | null = null,
   ) {
     super(detail ?? `Request failed (${status})`);
   }
+}
+
+function retryAfter(response: Response): number | null {
+  const seconds = Number.parseInt(response.headers.get('Retry-After') ?? '', 10);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
 }
 
 async function failure(response: Response): Promise<AdminApiError> {
@@ -57,6 +65,7 @@ async function failure(response: Response): Promise<AdminApiError> {
     typeof problem?.detail === 'string' ? problem.detail : null,
     errors,
     typeof problem?.id === 'string' ? problem.id : null,
+    retryAfter(response),
   );
 }
 
@@ -160,4 +169,22 @@ export async function createSubject(name: string): Promise<string> {
 
 export async function createTopic(subjectId: string, name: string): Promise<string> {
   return (await send<{ id: string }>('POST', `${SUBJECTS_PATH}/${encodeURIComponent(subjectId)}/topics`, { name })).id;
+}
+
+export type UploadResult = {
+  importedCount: number;
+  errorCount: number;
+  imported: { row: number; questionId: string; displayNo: number }[];
+  createdSubjects: string[];
+  createdTopics: string[];
+  errors: { row: number; field: string; problem: string; fix?: string }[];
+};
+
+/** Sends the CSV as multipart `file`; the browser sets the Content-Type with its boundary. */
+export async function uploadCsv(file: File): Promise<UploadResult> {
+  const body = new FormData();
+  body.append('file', file);
+  const response = await apiFetch(apiUrl(UPLOADS_PATH), { method: 'POST', headers: { Accept: 'application/json, application/problem+json' }, body });
+  if (!response.ok) throw await failure(response);
+  return (await response.json()) as UploadResult;
 }

@@ -1,13 +1,11 @@
 package in.minnal.core.question.infrastructure.seed;
 
 import in.minnal.core.question.application.SeedRow;
+import in.minnal.core.question.infrastructure.csv.CsvText;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
-import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -43,9 +41,7 @@ public final class SeedCsvReader {
     }
 
     static List<SeedRow> parse(String content) throws IOException {
-        if (!content.isEmpty() && content.charAt(0) == '﻿') {
-            content = content.substring(1);
-        }
+        content = CsvText.stripBom(content);
         try (CSVParser parser = CSVParser.parse(new StringReader(content), FORMAT)) {
             List<String> header = parser.getHeaderNames().stream().map(String::strip).toList();
             List<String> duplicates = header.stream().filter(h -> header.indexOf(h) != header.lastIndexOf(h)).distinct().toList();
@@ -76,11 +72,7 @@ public final class SeedCsvReader {
 
     private static String decodeUtf8(byte[] bytes) throws IOException {
         try {
-            return StandardCharsets.UTF_8.newDecoder()
-                    .onMalformedInput(CodingErrorAction.REPORT)
-                    .onUnmappableCharacter(CodingErrorAction.REPORT)
-                    .decode(ByteBuffer.wrap(bytes))
-                    .toString();
+            return CsvText.decodeUtf8(bytes);
         } catch (CharacterCodingException e) {
             throw new IOException("seed CSV is not valid UTF-8", e);
         }

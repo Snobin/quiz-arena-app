@@ -7,6 +7,7 @@ import { adminT, registerAdminStrings, type AdminKey } from './adminI18n.ts';
 import { Placeholder } from './Placeholder.tsx';
 import { QuestionEditor } from './QuestionEditor.tsx';
 import { QuestionsPage } from './QuestionsPage.tsx';
+import { UploadPage } from './UploadPage.tsx';
 
 /** Marker the bundle check looks for: it must never appear in the entry chunk. */
 const adminChunkMarker = 'minnal-admin-' + 'console';
@@ -38,7 +39,7 @@ function Page({ pathname }: { pathname: string }) {
   if (id) return <QuestionEditor key={id} questionId={id} />;
   switch (pathname) {
     case '/admin/upload':
-      return <Placeholder heading="nav.upload" message="placeholder.upload" />;
+      return <UploadPage />;
     case '/admin/drafts':
       return <Placeholder heading="nav.drafts" message="placeholder.drafts" />;
     case '/admin/reports':
