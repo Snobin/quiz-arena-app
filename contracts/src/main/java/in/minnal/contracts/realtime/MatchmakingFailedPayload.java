@@ -9,4 +9,7 @@ public record MatchmakingFailedPayload(String reason) {
 
     /** core-service did not return the question set in time, or refused it (4xx/5xx). */
     public static final String QUESTION_SET_UNAVAILABLE = "QUESTION_SET_UNAVAILABLE";
+
+    /** core-service answered 422: the Topic Duel topic has too few published questions, or is unknown. */
+    public static final String TOPIC_UNAVAILABLE = "TOPIC_UNAVAILABLE";
 }

@@ -1,0 +1,57 @@
+{
+  "type" : "SNAPSHOT",
+  "matchId" : "6f1c2a3e-8a4b-4c1d-9e2f-0a1b2c3d4e5f",
+  "refSeq" : 14,
+  "serverTime" : "2026-11-12T10:15:30.123Z",
+  "payload" : {
+    "phase" : "REVEAL",
+    "questionIndex" : 3,
+    "total" : 10,
+    "lastReveal" : {
+      "questionIndex" : 3,
+      "total" : 10,
+      "questionId" : "3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f",
+      "version" : 2,
+      "answerIndex" : 0,
+      "explanation" : "x",
+      "results" : [ {
+        "participantId" : "0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+        "pickedIndex" : 0,
+        "correct" : true,
+        "points" : 800,
+        "totalScore" : 2140
+      }, {
+        "participantId" : "9d8c7b6a-5f4e-4d3c-b2a1-0f9e8d7c6b5a",
+        "correct" : false,
+        "points" : 0,
+        "totalScore" : 1310
+      } ]
+    },
+    "answered" : [ ],
+    "scores" : [ {
+      "participantId" : "0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+      "score" : 2140,
+      "forfeited" : false
+    }, {
+      "participantId" : "9d8c7b6a-5f4e-4d3c-b2a1-0f9e8d7c6b5a",
+      "score" : 1310,
+      "forfeited" : false
+    } ],
+    "participants" : [ {
+      "participantId" : "0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+      "displayName" : "Guest 4821",
+      "kind" : "GUEST"
+    }, {
+      "participantId" : "9d8c7b6a-5f4e-4d3c-b2a1-0f9e8d7c6b5a",
+      "displayName" : "Minnal Bot",
+      "kind" : "BOT"
+    } ],
+    "youForfeited" : false,
+    "selfParticipantId" : "0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+    "topic" : {
+      "topicId" : "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+      "name" : "Kerala History",
+      "subjectName" : "History"
+    }
+  }
+}

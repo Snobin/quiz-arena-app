@@ -1,0 +1,16 @@
+{
+  "questions" : [ {
+    "questionId" : "3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f",
+    "version" : 2,
+    "textMl" : "കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി?",
+    "options" : [ "a", "b", "c", "d" ],
+    "answerIndex" : 0,
+    "explanation" : "x"
+  } ],
+  "topic" : {
+    "topicId" : "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+    "name" : "കേരള ചരിത്രം",
+    "subjectId" : "2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e",
+    "subjectName" : "ചരിത്രം"
+  }
+}

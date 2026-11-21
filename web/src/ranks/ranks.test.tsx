@@ -346,19 +346,33 @@ describe('Ranks: an empty board', () => {
     expect(paths).toContain(boardPath('QUICK', 'alltime', 0, 50));
   });
 
-  it('for Topic Duel and Battle Room the start action is aria-disabled with "Coming soon"', async () => {
+  it('for Topic Duel the start action is enabled and opens the Topic Duel picker, with no "Coming soon"', async () => {
+    const user = userEvent.setup();
+    core({ registered: true, board: () => ({ entries: [] }) });
+    await boot();
+    renderApp('/ranks');
+    await screen.findByRole('radiogroup');
+    await user.click(screen.getByRole('radio', { name: 'Topic Duel' }));
+    const button = await screen.findByRole('button', { name: 'Start Topic Duel' });
+    expect(button).not.toHaveAttribute('aria-disabled');
+    expect(button).not.toHaveAccessibleDescription('Coming soon');
+    expect(within(screen.getByTestId('empty-board')).queryByText('Coming soon')).toBeNull();
+    await user.click(button);
+    expect(window.location.pathname).toBe('/play/topics');
+    expect(window.location.search).toBe('?for=duel');
+  });
+
+  it('for Battle Room the start action is aria-disabled with "Coming soon"', async () => {
     const user = userEvent.setup();
     core({ registered: false, board: () => ({ entries: [] }) });
     await boot();
     renderApp('/ranks');
-    for (const mode of ['Topic Duel', 'Battle Room']) {
-      await user.click(screen.getByRole('radio', { name: mode }));
-      const button = await screen.findByRole('button', { name: `Start ${mode}` });
-      expect(button).toHaveAttribute('aria-disabled', 'true');
-      expect(button).toHaveAccessibleDescription('Coming soon');
-      await user.click(button);
-      expect(window.location.pathname).toBe('/ranks');
-    }
+    await user.click(screen.getByRole('radio', { name: 'Battle Room' }));
+    const button = await screen.findByRole('button', { name: 'Start Battle Room' });
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).toHaveAccessibleDescription('Coming soon');
+    await user.click(button);
+    expect(window.location.pathname).toBe('/ranks');
   });
 });
 

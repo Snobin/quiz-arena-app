@@ -7,6 +7,7 @@ import in.minnal.contracts.realtime.ErrorCode;
 import in.minnal.contracts.realtime.ErrorPayload;
 import in.minnal.contracts.realtime.MatchAbortedPayload;
 import in.minnal.contracts.realtime.MatchMode;
+import in.minnal.contracts.realtime.TopicInfo;
 import in.minnal.contracts.realtime.MessageType;
 import in.minnal.contracts.realtime.MyAnswer;
 import in.minnal.contracts.realtime.Participant;
@@ -60,6 +61,8 @@ public final class MatchState {
     private final Map<UUID, MatchParticipant> byId = new LinkedHashMap<>();
     private final List<InternalQuestion> questions;
     private final Duration window;
+    /** The Topic Duel topic (Story 4.2); null in Quick Match. */
+    private final TopicInfo topic;
     private final List<UUID> answered = new ArrayList<>();
 
     private MatchPhase phase = MatchPhase.LEAD_IN;
@@ -74,6 +77,11 @@ public final class MatchState {
 
     public MatchState(UUID matchId, MatchMode mode, List<MatchParticipant> participants, List<InternalQuestion> questions,
             Duration window) {
+        this(matchId, mode, participants, questions, window, null);
+    }
+
+    public MatchState(UUID matchId, MatchMode mode, List<MatchParticipant> participants, List<InternalQuestion> questions,
+            Duration window, TopicInfo topic) {
         if (participants.isEmpty() || questions.isEmpty()) {
             throw new IllegalArgumentException("a match needs participants and questions");
         }
@@ -82,6 +90,7 @@ public final class MatchState {
         this.participants = List.copyOf(participants);
         this.questions = List.copyOf(questions);
         this.window = window;
+        this.topic = topic;
         for (MatchParticipant participant : this.participants) {
             byId.put(participant.participantId(), participant);
         }
@@ -104,7 +113,7 @@ public final class MatchState {
                     setup.ratings().getOrDefault(participant.participantId(), 1200), setup.questions().size(),
                     online ? Connection.CONNECTED : Connection.DISCONNECTED));
         }
-        return new MatchState(setup.matchId(), setup.mode(), participants, setup.questions(), window);
+        return new MatchState(setup.matchId(), setup.mode(), participants, setup.questions(), window, setup.topic());
     }
 
     // -----------------------------------------------------------------------------------------
@@ -380,7 +389,8 @@ public final class MatchState {
                 scores, views,
                 self != null && self.forfeited(),
                 myAnswer,
-                participantId);
+                participantId,
+                topic);
         return ServerMessage.reply(MessageType.SNAPSHOT, matchId, seq, now, payload);
     }
 

@@ -107,6 +107,8 @@ export function useFakeRealtime(): FakeStomp[] {
 export const SERVER_TIME = '2026-11-12T10:15:30.123Z';
 export const JOIN = '/app/matchmaking/QUICK/join';
 export const CANCEL = '/app/matchmaking/QUICK/cancel';
+export const DUEL_JOIN = '/app/matchmaking/TOPIC_DUEL/join';
+export const CANCEL_DUEL = '/app/matchmaking/TOPIC_DUEL/cancel';
 
 export function matchFound(opponent: { name: string; kind: ParticipantKind }, matchId = crypto.randomUUID()) {
   const self = crypto.randomUUID();

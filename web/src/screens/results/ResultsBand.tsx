@@ -11,9 +11,9 @@ import { RatingDelta } from './RatingDelta.tsx';
  * The compact results band (DESIGN.md › Results band / Draw band). Win: "You won!", her score in
  * volt, the opponent muted, a volt edge in dark mode. Loss: the ink band with no volt and the loss
  * line naming the winner unchanged. Draw: "Draw", both scores in white, no volt. A registered player's own
- * rated match adds the rating-change slot (Story 2.6). A forfeited opponent carries the "left" tag; a bot always carries the BOT badge.
+ * rated match adds the rating-change slot (Story 2.6). A Topic Duel names its topic under the line. A forfeited opponent carries the "left" tag; a bot always carries the BOT badge.
  */
-export function ResultsBand({ view, delta }: { view: ResultView; delta?: DeltaState }) {
+export function ResultsBand({ view, delta, topicLabel }: { view: ResultView; delta?: DeltaState; topicLabel?: string }) {
   const { t } = useTranslation();
   const { kind, self, rival, winner } = view;
   const line =
@@ -31,6 +31,11 @@ export function ResultsBand({ view, delta }: { view: ResultView; delta?: DeltaSt
       <p data-testid="results-line" className="font-peak-word text-peak-word text-on-band">
         {line}
       </p>
+      {topicLabel ? (
+        <p data-testid="results-topic" className="text-body text-on-band-muted">
+          {topicLabel}
+        </p>
+      ) : null}
       <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
         {kind === 'win' ? (
           <VoltText testId="results-self-score" className="font-peak-points text-peak-points tabular-nums">

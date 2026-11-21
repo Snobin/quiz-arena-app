@@ -184,13 +184,13 @@ class RematchCoordinatorTest {
     }
 
     void request(String sub, MatchSetup setup) {
-        coordinator.request(sub, "s-" + sub, setup.matchId().toString());
+        coordinator.request(sub, false, "s-" + sub, setup.matchId().toString());
     }
 
     /** Waits until everything told so far was handled (the actor is FIFO). */
     void settle() {
         String marker = "marker-" + UUID.randomUUID();
-        coordinator.request(marker, "s", UUID.randomUUID().toString());
+        coordinator.request(marker, false, "s", UUID.randomUUID().toString());
         await().atMost(Duration.ofSeconds(2)).until(() -> !channel.to(marker, MessageType.REMATCH_DECLINED).isEmpty());
     }
 
@@ -377,9 +377,9 @@ class RematchCoordinatorTest {
     @Test
     void aLateRequestOrAnUnknownMatchOrAStrangerIsUnavailable() {
         MatchSetup old = ended(List.of("anju"), true);
-        coordinator.request("anju", "s-anju", UUID.randomUUID().toString());
-        coordinator.request("anju", "s-anju", "not-a-uuid");
-        coordinator.request("stranger", "s-x", old.matchId().toString());
+        coordinator.request("anju", false, "s-anju", UUID.randomUUID().toString());
+        coordinator.request("anju", false, "s-anju", "not-a-uuid");
+        coordinator.request("stranger", false, "s-x", old.matchId().toString());
         settle();
         assertThat(channel.to("anju", MessageType.REMATCH_DECLINED)).hasSize(2);
         assertThat(lastDecline("stranger")).isEqualTo(RematchDeclineReason.UNAVAILABLE);

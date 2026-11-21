@@ -4,6 +4,7 @@ import in.minnal.contracts.internal.InternalQuestion;
 import in.minnal.contracts.internal.QuestionSetFilters;
 import in.minnal.contracts.internal.QuestionSetRequest;
 import in.minnal.contracts.internal.QuestionSetResponse;
+import in.minnal.contracts.internal.QuestionSetTopic;
 import in.minnal.contracts.internal.QuestionSource;
 import in.minnal.contracts.realtime.ErrorCode;
 import in.minnal.contracts.realtime.MatchFoundPayload;
@@ -13,6 +14,7 @@ import in.minnal.contracts.realtime.MessageType;
 import in.minnal.contracts.realtime.Participant;
 import in.minnal.contracts.realtime.ParticipantKind;
 import in.minnal.contracts.realtime.ServerMessage;
+import in.minnal.contracts.realtime.TopicInfo;
 import in.minnal.game.match.application.MatchRegistry;
 import in.minnal.game.match.domain.MatchSetup;
 import in.minnal.game.platform.session.Activity;
@@ -65,13 +67,30 @@ final class MatchStarter {
 
     /** The Quick Match question-set request: a random bank mix, asked for on behalf of {@code requesterSub}. */
     static QuestionSetRequest questionSetRequest(String requesterSub) {
-        return new QuestionSetRequest(QuestionSource.BANK, QuestionSetFilters.category(CATEGORY), null, QUESTION_COUNT,
-                requesterSub);
+        return questionSetRequest(requesterSub, null);
+    }
+
+    /** The question-set request, narrowed to {@code topicId} for a Topic Duel (null for Quick Match). */
+    static QuestionSetRequest questionSetRequest(String requesterSub, UUID topicId) {
+        QuestionSetFilters filters = topicId == null ? QuestionSetFilters.category(CATEGORY)
+                : new QuestionSetFilters(CATEGORY, null, topicId, null);
+        return new QuestionSetRequest(QuestionSource.BANK, filters, null, QUESTION_COUNT, requesterSub);
     }
 
     /** Whether {@code set} is usable: no failure and exactly the asked count. */
     static boolean usable(QuestionSetResponse set, Throwable failure) {
         return failure == null && set != null && set.questions().size() == QUESTION_COUNT;
+    }
+
+    /** As {@link #usable(QuestionSetResponse, Throwable)}; a Topic Duel set must also name its topic. */
+    static boolean usable(QuestionSetResponse set, Throwable failure, MatchMode mode) {
+        return usable(set, failure) && (mode != MatchMode.TOPIC_DUEL || set.topic() != null);
+    }
+
+    /** The topic block a Topic Duel carries on the wire; null when the set has none. */
+    static TopicInfo topicOf(QuestionSetResponse set) {
+        QuestionSetTopic topic = set == null ? null : set.topic();
+        return topic == null ? null : new TopicInfo(topic.topicId(), topic.name(), topic.subjectName());
     }
 
     /**
@@ -83,6 +102,12 @@ final class MatchStarter {
      */
     boolean start(UUID matchId, MatchMode mode, List<Human> humans, String botName, int botRating,
             List<InternalQuestion> questions, Instant now) {
+        return start(matchId, mode, humans, botName, botRating, questions, now, null);
+    }
+
+    /** As above, for a Topic Duel on {@code topic} (null for Quick Match). */
+    boolean start(UUID matchId, MatchMode mode, List<Human> humans, String botName, int botRating,
+            List<InternalQuestion> questions, Instant now, TopicInfo topic) {
         List<Participant> participants = new ArrayList<>();
         Map<String, UUID> bySub = new LinkedHashMap<>();
         Map<String, Long> waits = new LinkedHashMap<>();
@@ -102,11 +127,11 @@ final class MatchStarter {
         // Begins the match: its lead-in gives the clients time to subscribe after MATCH_FOUND. Once
         // draining, no match may start (the shutdown waits only for matches already live).
         if (matches.start(new MatchSetup(matchId, mode, participants, bySub, questions, waits, ratings, now,
-                QuestionSource.BANK)).isEmpty()) {
+                QuestionSource.BANK, topic)).isEmpty()) {
             log.atWarn().addKeyValue("matchId", matchId).log("match not started: draining");
             ServerMessage<?> draining = ServerMessage.error(ErrorCode.SERVER_DRAINING, null, now);
             for (Human human : humans) {
-                participation.release(human.sub(), new Activity.Queued(mode));
+                participation.release(human.sub(), queued(mode, topic));
                 channel.toPlayer(human.sub(), draining);
             }
             return false;
@@ -114,28 +139,47 @@ final class MatchStarter {
         for (Map.Entry<String, UUID> human : bySub.entrySet()) {
             channel.toPlayer(human.getKey(), ServerMessage.aboutMatch(MessageType.MATCH_FOUND, matchId, now,
                     new MatchFoundPayload(matchId, mode, participants, QUESTION_COUNT, QuestionSource.BANK,
-                            human.getValue())));
+                            human.getValue(), topic)));
         }
         return true;
     }
 
     /** The question set did not come: release each human's claim and send her {@code MATCHMAKING_FAILED}. */
     void failed(UUID matchId, MatchMode mode, List<String> humanSubs, Throwable failure, Instant now) {
+        failed(matchId, mode, null, humanSubs, failure, now);
+    }
+
+    /**
+     * As above; {@code topicId} names the Topic Duel queue the claims were taken in (null otherwise). A
+     * {@code 422} in a Topic Duel is the {@code TOPIC_UNAVAILABLE} reason, every other failure keeps
+     * {@code QUESTION_SET_UNAVAILABLE}.
+     */
+    void failed(UUID matchId, MatchMode mode, UUID topicId, List<String> humanSubs, Throwable failure, Instant now) {
         log.atWarn().addKeyValue("matchId", matchId)
                 .log("question set unavailable, match not started: {}", describe(failure));
+        boolean topicGone = mode == MatchMode.TOPIC_DUEL && cause(failure) instanceof QuestionSetClient.TopicUnavailableException;
         ServerMessage<MatchmakingFailedPayload> failed = ServerMessage.direct(MessageType.MATCHMAKING_FAILED, now,
-                new MatchmakingFailedPayload(MatchmakingFailedPayload.QUESTION_SET_UNAVAILABLE));
+                new MatchmakingFailedPayload(topicGone ? MatchmakingFailedPayload.TOPIC_UNAVAILABLE
+                        : MatchmakingFailedPayload.QUESTION_SET_UNAVAILABLE));
         for (String sub : humanSubs) {
-            participation.release(sub, new Activity.Queued(mode));
+            participation.release(sub, new Activity.Queued(mode, topicId));
             channel.toPlayer(sub, failed);
         }
+    }
+
+    private static Activity queued(MatchMode mode, TopicInfo topic) {
+        return new Activity.Queued(mode, topic == null ? null : topic.topicId());
+    }
+
+    private static Throwable cause(Throwable failure) {
+        return failure instanceof CompletionException && failure.getCause() != null ? failure.getCause() : failure;
     }
 
     private static String describe(Throwable failure) {
         if (failure == null) {
             return "short or empty set";
         }
-        Throwable cause = failure instanceof CompletionException && failure.getCause() != null ? failure.getCause() : failure;
+        Throwable cause = cause(failure);
         return cause.getClass().getSimpleName() + ": " + cause.getMessage();
     }
 }

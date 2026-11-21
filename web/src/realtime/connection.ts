@@ -27,6 +27,7 @@ import {
   parseIncoming,
   USER_PRIVATE_QUEUE,
   type Incoming,
+  type MatchMode,
   type SnapshotPayload,
 } from './protocol.ts';
 
@@ -131,7 +132,8 @@ function defaultEnv(): RealtimeEnv {
 export type CancelResult = 'sent' | 'closed' | 'none';
 
 export type Realtime = {
-  joinQuickMatch: () => void;
+  /** Joins the Quick Match queue, or the Topic Duel queue of `topicId`. */
+  joinQuickMatch: (topicId?: string) => void;
   /** Sends an answer to the open question. False when it is not sendable (not open, already answered, socket closed). */
   submitAnswer: (optionIndex: number) => boolean;
   /** Leaves the live match (an immediate forfeit). False when there is no match in play. */
@@ -174,6 +176,8 @@ export function createRealtime(env: RealtimeEnv): Realtime {
   let reconnecting = false;
   /** Topic frames are held here until the next SNAPSHOT (after a drop, or a seq gap). */
   let awaitingSnapshot = false;
+  /** The mode of the queue she last joined, so a cancel names it. */
+  let queuedMode: MatchMode = 'QUICK';
   let buffer: Incoming[] = [];
   /** Send `leave` on the next CONNECT instead of `resync` (gave up locally, or left while offline). */
   let pendingLeave = false;
@@ -554,6 +558,7 @@ export function createRealtime(env: RealtimeEnv): Realtime {
             participants: payload.participants,
             selfParticipantId: payload.selfParticipantId,
             total: payload.total,
+            topic: payload.topic,
           });
           const held = buffer;
           endRejoin(null);
@@ -716,12 +721,13 @@ export function createRealtime(env: RealtimeEnv): Realtime {
         return;
       case 'MATCHMAKING_FAILED': {
         const asked = rematchUnderway();
+        const gone = incoming.payload.reason === 'TOPIC_UNAVAILABLE';
         if (asked) {
           // The rematch's question set did not come: a note on the results, not a matchmaking problem.
-          set({ rematch: { matchId: asked.matchId, state: 'idle', note: 'failed' }, clockOffsetMs });
+          set({ rematch: { matchId: asked.matchId, state: 'idle', note: gone ? 'topicUnavailable' : 'failed' }, clockOffsetMs });
           return;
         }
-        set({ phase: 'failed', problem: { kind: 'matchmaking' }, clockOffsetMs });
+        set({ phase: 'failed', problem: { kind: gone ? 'topicUnavailable' : 'matchmaking' }, clockOffsetMs });
         return;
       }
       case 'REMATCH_REQUESTED': {
@@ -920,7 +926,7 @@ export function createRealtime(env: RealtimeEnv): Realtime {
   }
 
   return {
-    joinQuickMatch() {
+    joinQuickMatch(topicId) {
       // A new search: an ended match is gone from /match. A match still in play is kept (topic
       // included), so ALREADY_IN_MATCH → "Back to your match" can still show it.
       if (live()?.phase === 'ended' || live()?.outcome) {
@@ -932,7 +938,9 @@ export function createRealtime(env: RealtimeEnv): Realtime {
         set({ live: null });
       }
       set({ phase: 'searching', problem: null, rematch: null });
-      send((c) => c.publish({ destination: matchmakingJoin('QUICK'), body: '{}' }));
+      queuedMode = topicId !== undefined ? 'TOPIC_DUEL' : 'QUICK';
+      const mode = queuedMode;
+      send((c) => c.publish({ destination: matchmakingJoin(mode), body: topicId !== undefined ? JSON.stringify({ topicId }) : '{}' }));
     },
     requestRematch(matchId) {
       const current = rematch();
@@ -1025,7 +1033,7 @@ export function createRealtime(env: RealtimeEnv): Realtime {
       if (phase() !== 'searching') return 'none';
       if (status === 'open' && client) {
         set({ phase: 'cancelling' });
-        client.publish({ destination: matchmakingCancel('QUICK'), body: '{}' });
+        client.publish({ destination: matchmakingCancel(queuedMode), body: '{}' });
         return 'sent';
       }
       // Not open yet: nothing reached the server, so abandoning the attempt is the cancel.
@@ -1048,9 +1056,9 @@ function instance(): Realtime {
   return realtime;
 }
 
-/** Joins the Quick Match queue, connecting first if needed. */
-export function joinQuickMatch(): void {
-  instance().joinQuickMatch();
+/** Joins the Quick Match queue, or the Topic Duel queue of `topicId`, connecting first if needed. */
+export function joinQuickMatch(topicId?: string): void {
+  instance().joinQuickMatch(topicId);
 }
 
 /** Answers the open question (Story 1.8). See `Realtime.submitAnswer`. */

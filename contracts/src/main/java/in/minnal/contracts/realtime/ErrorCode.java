@@ -23,5 +23,7 @@ public enum ErrorCode {
     /** The sender is not a participant of that match, or the match is not live. */
     NOT_IN_MATCH,
     /** An answer for a question that is not open, after the deadline, or with an option outside 0–3. */
-    ANSWER_REJECTED
+    ANSWER_REJECTED,
+    /** A Topic Duel join with no {@code topicId}, or one that is not a UUID. */
+    INVALID_TOPIC
 }

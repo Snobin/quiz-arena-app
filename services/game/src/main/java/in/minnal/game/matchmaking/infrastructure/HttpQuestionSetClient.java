@@ -3,6 +3,7 @@ package in.minnal.game.matchmaking.infrastructure;
 import in.minnal.contracts.internal.QuestionSetRequest;
 import in.minnal.contracts.internal.QuestionSetResponse;
 import in.minnal.game.matchmaking.application.QuestionSetClient;
+import in.minnal.game.matchmaking.application.QuestionSetClient.TopicUnavailableException;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
@@ -16,6 +17,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 /**
@@ -61,13 +63,21 @@ class HttpQuestionSetClient implements QuestionSetClient, DisposableBean {
     }
 
     private QuestionSetResponse call(QuestionSetRequest request) {
-        QuestionSetResponse response = rest.post()
-                .uri(PATH)
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .body(request)
-                .retrieve()
-                .body(QuestionSetResponse.class);
+        QuestionSetResponse response;
+        try {
+            response = rest.post()
+                    .uri(PATH)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .body(request)
+                    .retrieve()
+                    .body(QuestionSetResponse.class);
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode().value() == 422) {
+                throw new TopicUnavailableException("core answered 422: not enough published questions");
+            }
+            throw e;
+        }
         if (response == null || response.questions().size() != request.count()) {
             throw new IllegalStateException("question set has the wrong size");
         }

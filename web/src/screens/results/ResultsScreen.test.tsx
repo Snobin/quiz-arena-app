@@ -112,7 +112,7 @@ function ended(
   o: {
     self?: { score: number; placement: number; forfeited?: boolean };
     opponent?: { score: number; placement: number; forfeited?: boolean; name?: string; kind?: string };
-    mode?: 'QUICK' | 'BATTLE_ROOM';
+    mode?: 'QUICK' | 'TOPIC_DUEL' | 'BATTLE_ROOM';
   } = {},
 ) {
   const self = o.self ?? { score: 3140, placement: 1 };
@@ -622,5 +622,74 @@ describe('rematch (Story 1.10 part 2)', () => {
     expect(socket().sentTo(rematchSend(m.matchId))).toBe(1);
     act(() => socket().deliver(requested(m, m.self)));
     expect(screen.getByTestId('rematch-waiting')).toBeInTheDocument();
+  });
+});
+
+describe('Topic Duel results (Story 4.2)', () => {
+  const TOPIC = { topicId: '7c1f0c9a-1111-4a2b-8c3d-0e1f2a3b4c5d', name: 'Kerala History', subjectName: 'History' };
+
+  async function topicDuelResults() {
+    joinQuickMatch(TOPIC.topicId);
+    await waitFor(() => expect(clients).toHaveLength(1));
+    act(() => socket().open());
+    const message = matchFound({ name: 'Vishnu R', kind: 'GUEST' });
+    act(() => socket().deliver({ ...message, payload: { ...message.payload, mode: 'TOPIC_DUEL', topic: TOPIC } }));
+    const { matchId, selfParticipantId, participants } = message.payload;
+    const m: Match = {
+      matchId,
+      self: selfParticipantId,
+      opponent: participants.find((p) => p.participantId !== selfParticipantId)!.participantId,
+    };
+    act(() => socket().deliverTopic(m.matchId, questionStarted(m.matchId, { seq: 1, questionIndex: 9, startedAt: Date.now() })));
+    act(() =>
+      socket().deliverTopic(
+        m.matchId,
+        questionRevealed(m.matchId, {
+          seq: 2,
+          questionIndex: 9,
+          answerIndex: 0,
+          results: [
+            { participantId: m.self, pickedIndex: 0, correct: true, points: 800, totalScore: 2980 },
+            { participantId: m.opponent, pickedIndex: 1, correct: false, points: 0, totalScore: 3140 },
+          ],
+        }),
+      ),
+    );
+    // A loss: a win opens the takeover, which hides the results from the accessibility tree for a moment.
+    const result = ended(m, { mode: 'TOPIC_DUEL', self: { score: 2980, placement: 2 }, opponent: { score: 3140, placement: 1 } });
+    act(() => socket().deliver({ ...result, payload: { ...result.payload, topic: TOPIC } }));
+    renderApp('/results');
+    return m;
+  }
+
+  it('names the topic under the result line and in the heading\'s accessible name', async () => {
+    await topicDuelResults();
+    expect(screen.getByTestId('results-topic')).toHaveTextContent('Topic Duel · Kerala History');
+    expect(heading()).toHaveAccessibleName('You lost, 2,980 to 3,140, Topic Duel · Kerala History');
+    expect(screen.getByTestId('results-line')).toBeInTheDocument();
+  });
+
+  it('survives a reload: the stored result keeps the topic', async () => {
+    await topicDuelResults();
+    cleanup();
+    resetRealtime();
+    clients = useFakeRealtime();
+    renderApp('/results');
+    expect(await screen.findByTestId('results-topic')).toHaveTextContent('Topic Duel · Kerala History');
+  });
+
+  it('a Quick Match names no topic', async () => {
+    await liveResults();
+    expect(screen.queryByTestId('results-topic')).toBeNull();
+  });
+
+  it('a rematch refused because the topic is too small shows the one-line note with a link to the picker', async () => {
+    const m = await topicDuelResults();
+    fireEvent.click(screen.getByRole('button', { name: 'Rematch' }));
+    expect(socket().sentTo(rematchSend(m.matchId))).toBe(1);
+    act(() => socket().deliver({ ...MATCHMAKING_FAILED, payload: { reason: 'TOPIC_UNAVAILABLE' } }));
+    const note = await screen.findByTestId('rematch-note');
+    expect(note).toHaveTextContent('Rematch unavailable · topic too small now');
+    expect(within(note).getByRole('link', { name: 'Choose a topic' })).toHaveAttribute('href', '/play/topics?for=duel');
   });
 });

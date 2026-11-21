@@ -12,4 +12,15 @@ import java.util.concurrent.CompletableFuture;
 public interface QuestionSetClient {
 
     CompletableFuture<QuestionSetResponse> fetch(QuestionSetRequest request);
+
+    /**
+     * core answered {@code 422}: the topic has too few published questions, or does not exist
+     * (Story 4.2). The future fails with this (possibly wrapped in a {@code CompletionException}).
+     */
+    class TopicUnavailableException extends RuntimeException {
+
+        public TopicUnavailableException(String message) {
+            super(message);
+        }
+    }
 }

@@ -878,3 +878,49 @@ describe('1v1: her own result at the ack (Story 1.11)', () => {
     }
   });
 });
+
+describe('Topic Duel (Story 4.2)', () => {
+  const TOPIC = { topicId: '7c1f0c9a-1111-4a2b-8c3d-0e1f2a3b4c5d', name: 'Kerala History', subjectName: 'History' };
+
+  async function duel(): Promise<Match> {
+    joinQuickMatch(TOPIC.topicId);
+    await waitFor(() => expect(clients).toHaveLength(1));
+    act(() => socket().open());
+    const message = matchFound({ name: 'Vishnu R', kind: 'GUEST' });
+    act(() => socket().deliver({ ...message, payload: { ...message.payload, mode: 'TOPIC_DUEL', topic: TOPIC } }));
+    const { matchId, selfParticipantId, participants } = message.payload;
+    return {
+      matchId,
+      self: selfParticipantId,
+      opponent: participants.find((p) => p.participantId !== selfParticipantId)!.participantId,
+      seq: 0,
+    };
+  }
+
+  it('the mode label beside the EN tag reads "Topic Duel · <topic>" and wraps instead of truncating; the title keeps its form', async () => {
+    const m = await duel();
+    start(m, 3);
+    renderApp('/match');
+    const label = screen.getByTestId('mode-label');
+    expect(label).toHaveTextContent('Topic Duel · Kerala History');
+    expect(label.className).toContain('break-words');
+    expect(label.className).not.toContain('truncate');
+    expect(screen.getByTestId('en-tag')).toBeInTheDocument();
+    expect(document.title).toBe('Question 4 / 10 · Minnal');
+  });
+
+  it('in Malayalam the label is "ടോപ്പിക് ഡ്യുവൽ · <topic>"', async () => {
+    await act(() => i18n.changeLanguage('ml'));
+    const m = await duel();
+    start(m, 0);
+    renderApp('/match');
+    expect(screen.getByTestId('mode-label')).toHaveTextContent('ടോപ്പിക് ഡ്യുവൽ · Kerala History');
+  });
+
+  it('a Quick Match keeps its label', async () => {
+    const m = await found();
+    start(m, 0);
+    renderApp('/match');
+    expect(screen.getByTestId('mode-label')).toHaveTextContent('Quick Match');
+  });
+});

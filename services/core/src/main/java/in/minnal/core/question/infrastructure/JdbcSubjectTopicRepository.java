@@ -110,6 +110,19 @@ public class JdbcSubjectTopicRepository {
                 .param("id", topicId).param("subjectId", subjectId).query(String.class).optional();
     }
 
+    /** A topic with the subject it belongs to. */
+    public record TopicWithSubject(UUID topicId, String topicName, UUID subjectId, String subjectName) {
+    }
+
+    public java.util.Optional<TopicWithSubject> topicWithSubject(UUID topicId) {
+        return jdbc.sql("SELECT t.id AS topic_id, t.name AS topic_name, s.id AS subject_id, s.name AS subject_name"
+                        + " FROM topic t JOIN subject s ON s.id = t.subject_id WHERE t.id = :id")
+                .param("id", topicId)
+                .query((rs, i) -> new TopicWithSubject(rs.getObject("topic_id", UUID.class), rs.getString("topic_name"),
+                        rs.getObject("subject_id", UUID.class), rs.getString("subject_name")))
+                .optional();
+    }
+
     private static String requireName(String name) {
         String normalised = Text.normaliseToNull(name);
         if (normalised == null) {

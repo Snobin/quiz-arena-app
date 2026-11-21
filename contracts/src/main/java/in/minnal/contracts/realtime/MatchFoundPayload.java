@@ -10,6 +10,7 @@ import java.util.UUID;
  * @param participants      every participant, the receiver included
  * @param questionCount     how many questions the match will ask
  * @param questionSource    always {@code BANK} until Epic 6
+ * @param topic             the Topic Duel topic, null in Quick Match
  * @param selfParticipantId which participant the receiver is
  */
 public record MatchFoundPayload(
@@ -18,7 +19,8 @@ public record MatchFoundPayload(
         List<Participant> participants,
         int questionCount,
         QuestionSource questionSource,
-        UUID selfParticipantId) {
+        UUID selfParticipantId,
+        TopicInfo topic) {
 
     public MatchFoundPayload {
         participants = List.copyOf(participants);

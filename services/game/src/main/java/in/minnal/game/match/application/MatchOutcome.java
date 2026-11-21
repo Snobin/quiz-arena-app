@@ -54,7 +54,7 @@ final class MatchOutcome {
         }
         List<ResultQuestion> questions = results.asked().stream().map(MatchOutcome::questionOf).toList();
         return new MatchEndedPayload(setup.matchId(), setup.mode(), setup.questionSource(), participants, questions,
-                breakdown);
+                breakdown, setup.topic());
     }
 
     MatchCompletedEvent completedEvent(Instant endedAt) {

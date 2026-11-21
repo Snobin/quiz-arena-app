@@ -224,6 +224,18 @@ class MatchStateTest {
     }
 
     @Test
+    void theSnapshotCarriesTheTopicOfATopicDuelAndNothingInQuick() {
+        MatchSetup base = setup(2, MatchMode.TOPIC_DUEL);
+        in.minnal.contracts.realtime.TopicInfo topic = new in.minnal.contracts.realtime.TopicInfo(UUID.randomUUID(), "Kerala History", "History");
+        MatchSetup duel = new MatchSetup(base.matchId(), base.mode(), base.participants(), base.humans(), base.questions(),
+                base.queueWaitMs(), base.ratings(), base.createdAt(), base.questionSource(), topic);
+        MatchState state = MatchState.of(duel, WINDOW, sub -> true);
+        assertThat(state.snapshot(id(state, 0), clock.instant()).payload().topic()).isEqualTo(topic);
+        MatchState quick = state(2);
+        assertThat(quick.snapshot(id(quick, 0), clock.instant()).payload().topic()).isNull();
+    }
+
+    @Test
     void aBattleRoomAckIsAReceiptOnly() {
         MatchState state = MatchState.of(setup(5, MatchMode.BATTLE_ROOM), WINDOW, sub -> true);
         state.startQuestion(0, clock.instant());

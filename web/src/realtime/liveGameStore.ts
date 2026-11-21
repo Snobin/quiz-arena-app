@@ -9,11 +9,12 @@ import type {
   QuestionRevealedPayload,
   QuestionStartedPayload,
   QuestionSource,
+  TopicInfo,
 } from './protocol.ts';
 
 /**
  * The live-game store (AD-18). Only the WebSocket module (`connection.ts`) writes it; components
- * read it with `useLiveGame` and act through `joinQuickMatch` / `cancelMatchmaking`.
+ * read it with `useLiveGame` and act through `joinQuickMatch` (also a Topic Duel, given a topic id) / `cancelMatchmaking`.
  *
  * Phases: `idle` → `searching` (connecting or queued) → `found`, or → `cancelling` → `cancelled`,
  * or → `failed` with a `problem` saying why.
@@ -23,6 +24,8 @@ export type LivePhase = 'idle' | 'searching' | 'cancelling' | 'cancelled' | 'fou
 export type LiveProblem =
   /** The question set could not be fetched (MATCHMAKING_FAILED). */
   | { kind: 'matchmaking' }
+  /** The Topic Duel topic has too few questions now (MATCHMAKING_FAILED TOPIC_UNAVAILABLE). */
+  | { kind: 'topicUnavailable' }
   /** The socket could not open, or closed while searching. */
   | { kind: 'connection' }
   /** game-service is restarting (SERVER_DRAINING). */
@@ -73,6 +76,8 @@ export type LiveMatch = {
   total: number;
   /** MATCH_FOUND's question source; null after a rejoin, whose SNAPSHOT does not carry it (no report link then). */
   questionSource: QuestionSource | null;
+  /** The Topic Duel topic (MATCH_FOUND, or a rejoin's SNAPSHOT); absent in Quick Match. */
+  topic?: TopicInfo;
   phase: LiveMatchPhase;
   /** The last QUESTION_STARTED payload. */
   question: QuestionStartedPayload | null;
@@ -109,7 +114,7 @@ export type LiveMatch = {
 export type LiveRejoin = { matchId: string; state: 'pending' | 'gone' };
 
 /** A one-line note after a rematch attempt reverted (Story 1.10). */
-export type RematchNote = 'expired' | 'cancelled' | 'unavailable' | 'failed' | 'draining';
+export type RematchNote = 'expired' | 'cancelled' | 'unavailable' | 'failed' | 'draining' | 'topicUnavailable';
 
 /**
  * The rematch of the ended match `matchId` (Story 1.10), written only from the server's messages
@@ -161,6 +166,7 @@ export function liveMatchFor(found: MatchFoundPayload): LiveMatch {
     selfParticipantId: found.selfParticipantId,
     total: found.questionCount,
     questionSource: found.questionSource,
+    topic: found.topic,
   });
 }
 
@@ -174,6 +180,7 @@ export function liveMatchBase(base: {
   selfParticipantId: string;
   total: number;
   questionSource?: QuestionSource;
+  topic?: TopicInfo;
 }): LiveMatch {
   return {
     matchId: base.matchId,
@@ -181,6 +188,7 @@ export function liveMatchBase(base: {
     selfParticipantId: base.selfParticipantId,
     total: base.total,
     questionSource: base.questionSource ?? null,
+    ...(base.topic && { topic: base.topic }),
     phase: 'lead-in',
     question: null,
     answered: [],
