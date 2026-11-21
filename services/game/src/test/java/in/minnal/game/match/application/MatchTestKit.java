@@ -87,6 +87,12 @@ final class MatchTestKit {
                 "Question " + i, List.of("a", "b", "c", "d"), i % 4, "explanation " + i, null)).toList();
     }
 
+    /** The same question, tagged with a bank topic. */
+    static InternalQuestion withTopic(InternalQuestion q, UUID topicId) {
+        return new InternalQuestion(q.questionId(), q.version(), q.textMl(), q.textEn(), q.options(), q.answerIndex(),
+                q.explanation(), q.attribution(), topicId);
+    }
+
     /** {@code humans} guests with sub "h0", "h1"…, then {@code bots} bots, over {@code questionCount} questions. */
     static MatchSetup setup(int humans, int bots, int questionCount) {
         List<Participant> participants = new ArrayList<>();

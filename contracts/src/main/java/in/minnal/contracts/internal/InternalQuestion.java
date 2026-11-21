@@ -12,6 +12,7 @@ import java.util.UUID;
  * @param options     exactly 4 options
  * @param answerIndex 0–3
  * @param attribution source attribution, or null ("source not available" is shown then)
+ * @param topicId     the bank topic the question belongs to, or null (custom questions, or unknown)
  */
 public record InternalQuestion(
         UUID questionId,
@@ -21,9 +22,16 @@ public record InternalQuestion(
         List<String> options,
         int answerIndex,
         String explanation,
-        String attribution) {
+        String attribution,
+        UUID topicId) {
 
     public InternalQuestion {
         options = List.copyOf(options);
+    }
+
+    /** A question without a topic. */
+    public InternalQuestion(UUID questionId, int version, String textMl, String textEn, List<String> options,
+                            int answerIndex, String explanation, String attribution) {
+        this(questionId, version, textMl, textEn, options, answerIndex, explanation, attribution, null);
     }
 }

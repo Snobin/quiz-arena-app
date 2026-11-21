@@ -86,7 +86,8 @@ class QuestionSetEndpointIntegrationTest extends PostgresIntegrationTest {
             assertThat(q.get("answerIndex")).isEqualTo(2);
             assertThat(q.get("explanation")).isEqualTo(expected.content().explanation());
             assertThat(q.get("attribution")).isEqualTo("Kerala PSC test");
-            assertThat(q).containsOnlyKeys("questionId", "version", "textMl", "textEn", "options", "answerIndex", "explanation", "attribution");
+            assertThat(q).containsOnlyKeys("questionId", "version", "textMl", "textEn", "options", "answerIndex", "explanation", "attribution", "topicId");
+            assertThat(q.get("topicId")).isEqualTo(expected.content().topicId().toString());
         }
     }
 
@@ -202,6 +203,7 @@ class QuestionSetEndpointIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.questions.length()").value(10))
                 .andExpect(jsonPath("$.questions[?(@.textEn =~ /^districts-.*/)]").value(org.hamcrest.Matchers.hasSize(10)))
+                .andExpect(jsonPath("$.questions[?(@.topicId == '%s')]".formatted(districts.topicId())).value(org.hamcrest.Matchers.hasSize(10)))
                 .andExpect(jsonPath("$.topic.topicId").value(districts.topicId().toString()))
                 .andExpect(jsonPath("$.topic.name").value("Districts"))
                 .andExpect(jsonPath("$.topic.subjectId").value(districts.subjectId().toString()))

@@ -640,7 +640,10 @@ class MatchActorTest {
         List<Participant> participants = new ArrayList<>(base.participants());
         Participant user = participants.getFirst();
         participants.set(0, new Participant(user.participantId(), "Anju", ParticipantKind.USER));
-        MatchSetup setup = new MatchSetup(base.matchId(), MatchMode.QUICK, participants, base.humans(), base.questions(),
+        UUID topicId = UUID.randomUUID();
+        List<in.minnal.contracts.internal.InternalQuestion> drawn = new ArrayList<>(base.questions());
+        drawn.set(0, MatchTestKit.withTopic(drawn.get(0), topicId));
+        MatchSetup setup = new MatchSetup(base.matchId(), MatchMode.QUICK, participants, base.humans(), drawn,
                 java.util.Map.of("h0", 2_000L, "h1", 5_000L), base.ratings(), base.createdAt(), QuestionSource.BANK);
         MatchActor actor = actor(setup, graced(Duration.ofMillis(400), Duration.ofSeconds(10)), silentBots(),
                 sub -> true);
@@ -675,6 +678,8 @@ class MatchActorTest {
         assertThat(payload.mode()).isEqualTo(MatchMode.QUICK);
         assertThat(payload.questionSource()).isEqualTo(QuestionSource.BANK);
         assertThat(payload.questions()).hasSize(3);
+        assertThat(payload.questions().get(0).topicId()).isEqualTo(topicId);
+        assertThat(payload.questions().get(1).topicId()).as("a question without a topic omits it").isNull();
         assertThat(payload.questions().get(1).answerIndex()).isEqualTo(setup.questions().get(1).answerIndex());
         assertThat(payload.participants()).extracting(ResultParticipant::participantId)
                 .containsExactly(h0, h1, setup.participants().get(2).participantId());

@@ -200,6 +200,7 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
                     index={i}
                     question={question}
                     answer={answer}
+                    practise={ratedForHer}
                     report={{
                       matchId,
                       questionSource: full.payload.questionSource,

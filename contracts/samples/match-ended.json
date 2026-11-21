@@ -31,7 +31,8 @@
       "options" : [ "പെരിയാർ", "ഭാരതപ്പുഴ", "പമ്പ", "ചാലിയാർ" ],
       "answerIndex" : 0,
       "explanation" : "പെരിയാറിന് 244 കി.മീ. നീളമുണ്ട്.",
-      "attribution" : "Kerala PSC 2019, Q 14"
+      "attribution" : "Kerala PSC 2019, Q 14",
+      "topicId" : "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
     }, {
       "questionId" : "4d5e6f7a-8b9c-4d0e-9f1a-2b3c4d5e6f7a",
       "version" : 1,

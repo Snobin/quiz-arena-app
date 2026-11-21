@@ -96,6 +96,7 @@ async function found(opponent: { name: string; kind: 'BOT' | 'GUEST' } = { name:
 }
 
 /** Q1 right in 4.2 s (+800), Q2 wrong (picked option 2), Q3 not answered. */
+const TOPIC = '11111111-1111-4111-8111-111111111111';
 const MINE: EndedAnswer[] = [
   { pickedIndex: 0, correct: true, responseMs: 4200, points: 800 },
   { pickedIndex: 2, correct: false, responseMs: 6000, points: 0 },
@@ -113,12 +114,14 @@ function ended(
     self?: { score: number; placement: number; forfeited?: boolean };
     opponent?: { score: number; placement: number; forfeited?: boolean; name?: string; kind?: string };
     mode?: 'QUICK' | 'TOPIC_DUEL' | 'BATTLE_ROOM';
+    questionSource?: 'BANK' | 'CUSTOM';
   } = {},
 ) {
   const self = o.self ?? { score: 3140, placement: 1 };
   const opponent = o.opponent ?? { score: 2980, placement: 2 };
   return matchEnded(m.matchId, {
     ...(o.mode ? { mode: o.mode } : {}),
+    ...(o.questionSource ? { questionSource: o.questionSource } : {}),
     participants: [
       { participantId: m.self, displayName: 'Guest 4821', kind: 'GUEST', correctCount: 1, ...self },
       {
@@ -132,7 +135,11 @@ function ended(
       },
     ],
     breakdown: { [m.self]: MINE, [m.opponent]: THEIRS },
-    questions: [{}, { options: ['Periyar', 'Bharathapuzha', 'Pamba', 'Chaliyar'], answerIndex: 0, attribution: null }, {}],
+    questions: [
+      { topicId: TOPIC },
+      { options: ['Periyar', 'Bharathapuzha', 'Pamba', 'Chaliyar'], answerIndex: 0, attribution: null, topicId: TOPIC },
+      { topicId: TOPIC },
+    ],
   });
 }
 
@@ -229,6 +236,48 @@ describe('the guest prompt on a live arrival (Story 2.4)', () => {
     act(() => session.store.setState({ status: 'guest', name: null, signedOut: true }));
     expect(screen.queryByTestId('results-sign-in-prompt')).toBeNull();
     expect(screen.queryByTestId('guest-match-note')).toBeNull();
+  });
+});
+
+describe('Practise this topic on the results (Story 4.4)', () => {
+  const PRACTISE = /Practise this topic/;
+  // Losing skips the win takeover, which would otherwise cover the rows.
+  const LOSS = { self: { score: 2980, placement: 2 }, opponent: { score: 3140, placement: 1 } };
+
+  async function registered() {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input) === REFRESH_PATH
+          ? jsonResponse({ accessToken: utf8Jwt({ name: 'Anju' }), expiresAt: new Date(Date.now() + 3600_000).toISOString() })
+          : String(input) === PROFILE_PATH
+            ? jsonResponse({ displayName: 'Anju', district: 'thrissur', examLevel: 'DEGREE', language: 'en', profileComplete: true })
+            : jsonResponse({ status: 404 }, 404, 'application/problem+json'),
+      ),
+    );
+    session.start();
+    await session.ready();
+  }
+
+  it('a registered player on a bank match sees it on an expanded row, named by its question number', async () => {
+    await registered();
+    await liveResults(LOSS);
+    expect(await screen.findByRole('button', { name: 'Practise this topic, question 2' })).toBeInTheDocument();
+    // The correct row is collapsed: no link until it is expanded.
+    expect(screen.queryByRole('button', { name: 'Practise this topic, question 1' })).toBeNull();
+  });
+
+  it('a guest never sees it', async () => {
+    await liveResults(LOSS);
+    await screen.findByTestId('rematch-button');
+    expect(screen.queryByRole('button', { name: PRACTISE })).toBeNull();
+  });
+
+  it('a custom-source match never shows it, even for a registered player', async () => {
+    await registered();
+    await liveResults({ ...LOSS, questionSource: 'CUSTOM' });
+    expect(await screen.findByTestId('rematch-button')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: PRACTISE })).toBeNull();
   });
 });
 

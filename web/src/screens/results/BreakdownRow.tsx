@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { lazy, Suspense, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatNumber, formatSigned, formatTenths } from '../../i18n/format.ts';
 import { uiLanguage } from '../../i18n/index.ts';
@@ -14,7 +14,10 @@ import { RevealDetails } from '../match/RevealDetails.tsx';
  */
 export type RowReport = { matchId: string; questionSource: QuestionSource; marked: boolean };
 
-type BreakdownRowProps = { index: number; question: ResultQuestion; answer: BreakdownAnswer; report?: RowReport };
+type BreakdownRowProps = { index: number; question: ResultQuestion; answer: BreakdownAnswer; report?: RowReport; practise?: boolean };
+
+// The "Practise this topic" link, its strings and its start logic load only when a row shows it (the bundle budget).
+const PractiseLink = lazy(() => import('./PractiseLink.tsx'));
 
 const HEADER = 'flex w-full min-h-target-min items-center gap-3 px-4 py-2 text-left text-body';
 
@@ -26,7 +29,7 @@ const HEADER = 'flex w-full min-h-target-min items-center gap-3 px-4 py-2 text-l
  * "source not available". Expanding never animates height (so the reduced path needs nothing
  * extra). The report link sits under the attribution (Story 3.5). Every value is the server's.
  */
-export function BreakdownRow({ index, question, answer, report }: BreakdownRowProps) {
+export function BreakdownRow({ index, question, answer, report, practise }: BreakdownRowProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(report?.marked === true);
   const detailsId = useId();
@@ -59,7 +62,7 @@ export function BreakdownRow({ index, question, answer, report }: BreakdownRowPr
           {header}
         </button>
         <div id={detailsId} hidden={!open}>
-          {open ? <Details question={question} answer={answer} report={report} /> : null}
+          {open ? <Details question={question} answer={answer} report={report} practise={practise} index={index} /> : null}
         </div>
       </li>
     );
@@ -67,12 +70,24 @@ export function BreakdownRow({ index, question, answer, report }: BreakdownRowPr
   return (
     <li data-testid="breakdown-row" data-state={state} className="rounded-md border border-hairline bg-card">
       <div className={HEADER}>{header}</div>
-      <Details question={question} answer={answer} report={report} />
+      <Details question={question} answer={answer} report={report} practise={practise} index={index} />
     </li>
   );
 }
 
-function Details({ question, answer, report }: { question: ResultQuestion; answer: BreakdownAnswer; report?: RowReport }) {
+function Details({
+  question,
+  answer,
+  report,
+  practise,
+  index,
+}: {
+  question: ResultQuestion;
+  answer: BreakdownAnswer;
+  report?: RowReport;
+  practise?: boolean;
+  index: number;
+}) {
   const { t, i18n } = useTranslation();
   const language = baseLanguage(question, uiLanguage(i18n));
   const text = language === 'ml' ? question.textMl : question.textEn;
@@ -111,6 +126,11 @@ function Details({ question, answer, report }: { question: ResultQuestion; answe
           questionSource={report.questionSource}
           startOpen={report.marked}
         />
+      ) : null}
+      {practise && question.topicId ? (
+        <Suspense fallback={null}>
+          <PractiseLink topicId={question.topicId} index={index} />
+        </Suspense>
       ) : null}
     </div>
   );

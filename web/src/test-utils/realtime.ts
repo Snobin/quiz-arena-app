@@ -325,7 +325,8 @@ export function matchEnded(
     participants: EndedParticipant[];
     breakdown: Record<string, EndedAnswer[]>;
     count?: number;
-    questions?: { textMl?: string; textEn?: string; options?: string[]; answerIndex?: number; explanation?: string; attribution?: string | null }[];
+    questions?: { textMl?: string; textEn?: string; options?: string[]; answerIndex?: number; explanation?: string; attribution?: string | null; topicId?: string }[];
+    questionSource?: 'BANK' | 'CUSTOM';
     serverTime?: string;
     mode?: 'QUICK' | 'TOPIC_DUEL' | 'BATTLE_ROOM';
   },
@@ -343,6 +344,7 @@ export function matchEnded(
       answerIndex: q.answerIndex ?? 0,
       explanation: q.explanation ?? `വിശദീകരണം ${i + 1}`,
       ...(attribution === null ? {} : { attribution }),
+      ...(q.topicId === undefined ? {} : { topicId: q.topicId }),
     };
   });
   return {
@@ -352,7 +354,7 @@ export function matchEnded(
     payload: {
       matchId,
       mode: o.mode ?? 'QUICK',
-      questionSource: 'BANK',
+      questionSource: o.questionSource ?? 'BANK',
       participants: o.participants.map((p) => ({ ...p, forfeited: p.forfeited ?? false })),
       questions,
       breakdown: o.participants.map((p) => ({

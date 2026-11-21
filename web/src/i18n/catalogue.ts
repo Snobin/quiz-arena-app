@@ -17,6 +17,7 @@
  */
 
 import type { PracticeKey } from '../screens/practice/practiceCatalogue.ts';
+import type { PractiseKey } from '../screens/results/practiseCatalogue.ts';
 import { LANGUAGES, type Language } from './language.ts';
 
 export { LANGUAGES, type Language } from './language.ts';
@@ -920,6 +921,6 @@ declare module 'i18next' {
   interface CustomTypeOptions {
     keySeparator: false;
     nsSeparator: false;
-    resources: { translation: Record<CatalogueKey | PracticeKey, string> };
+    resources: { translation: Record<CatalogueKey | PracticeKey | PractiseKey, string> };
   }
 }
