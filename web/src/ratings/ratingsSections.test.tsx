@@ -107,6 +107,22 @@ describe('Me: rating trio and match history', () => {
     expect(within(rows[2]!).queryByTestId('history-delta')).toBeNull();
   });
 
+  it('lists a Battle Room match with its mode and rating delta (placement "#N" in the row is deferred from Story 5.5)', async () => {
+    core({
+      matches: () =>
+        jsonResponse({
+          matches: [{ matchId: 'r', mode: 'BATTLE_ROOM', result: 'LOSS', score: 3960, placement: 3, rated: true, ratingDelta: -5, endedAt: '2026-11-20T10:00:00Z' }],
+        }),
+    });
+    await boot();
+    renderApp('/me');
+    const rows = await screen.findAllByTestId('history-row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent('Battle Room');
+    expect(within(rows[0]!).getByTestId('history-delta')).toHaveTextContent('-5');
+    expect(within(rows[0]!).queryByTestId('history-unrated')).toBeNull();
+  });
+
   it('with no matches shows one plain line and a primary action that starts a Quick Match', async () => {
     const user = userEvent.setup();
     core({ matches: () => jsonResponse({ matches: [] }) });
