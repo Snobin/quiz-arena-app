@@ -10,6 +10,7 @@ import type {
   QuestionRevealedPayload,
   QuestionStartedPayload,
   QuestionSource,
+  RoomSucceededPayload,
   TopicInfo,
 } from './protocol.ts';
 
@@ -154,6 +155,8 @@ export type LiveGameState = {
   rejoin: LiveRejoin | null;
   /** The rematch of the last ended match; null when none was asked for. */
   rematch: RematchState | null;
+  /** The successor room of the last ended room match (ROOM_SUCCEEDED, Story 5.6); null when none has been announced. */
+  succeeded: { matchId: string; payload: RoomSucceededPayload } | null;
 };
 
 export const INITIAL_LIVE_GAME: LiveGameState = {
@@ -164,6 +167,7 @@ export const INITIAL_LIVE_GAME: LiveGameState = {
   live: null,
   rejoin: null,
   rematch: null,
+  succeeded: null,
 };
 
 /** Whether the match is a Battle Room's (a room has a mode, or, after a rejoin, more than two players). */

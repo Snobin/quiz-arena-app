@@ -34,7 +34,7 @@ public enum ErrorCode {
     SOURCE_NOT_AVAILABLE,
     /** Only the room's host may do this. */
     NOT_HOST,
-    /** The room action exists in the protocol but is not built yet (a valid start until Story 5.4, play again until 5.6). */
+    /** The room action exists in the protocol but is not built yet (a configure outside the lobby). */
     NOT_AVAILABLE_YET,
     /** A join for a code that no live room has and no tombstone remembers (Story 5.3). */
     ROOM_NOT_FOUND,

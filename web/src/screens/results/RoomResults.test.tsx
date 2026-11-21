@@ -8,6 +8,9 @@ import i18n from '../../i18n.ts';
 import { PROFILE_PATH, resetProfile } from '../../profile/profileStore.ts';
 import { MATCH_PATH } from '../../ratings/ratingsApi.ts';
 import { resetRealtime } from '../../realtime/connection.ts';
+import { liveGameStore } from '../../realtime/liveGameStore.ts';
+import { resetRoomClient } from '../rooms/roomClient.ts';
+import { SERVER_TIME, useFakeRealtime, type FakeStomp } from '../../test-utils/realtime.ts';
 import * as lastResult from '../../realtime/lastResult.ts';
 import { parseMatchEnded } from '../../realtime/protocol.ts';
 import { resetAnnouncements } from '../../shell/announce.ts';
@@ -160,5 +163,194 @@ describe('Battle Room results', () => {
     await open(2, rated(-6));
     expect(await screen.findByTestId('dot-strip')).toBeInTheDocument();
     expect(within(screen.getByTestId('dot-strip')).getAllByRole('listitem')).toHaveLength(2);
+  });
+});
+
+/** Story 5.6: Play again for the host, the Join button for everyone else, and New room after the window. */
+describe('Battle Room play again', () => {
+  const SUCCEEDED = {
+    code: 'K7M2QX',
+    hostDisplayName: 'Fathima S',
+    source: { type: 'BANK' as const, topicId: 't1' },
+    questionCount: 2,
+  };
+  const joinedMessage = (role: string) => ({
+    type: 'ROOM_JOINED',
+    roomId: 'room-2',
+    refSeq: 1,
+    serverTime: SERVER_TIME,
+    payload: {
+      roomId: 'room-2',
+      code: 'K7M2QX',
+      role,
+      selfParticipantId: 'p0',
+      room: {
+        hostParticipantId: 'p0',
+        source: { type: 'BANK', topicId: 't1' },
+        questionCount: 2,
+        rated: true,
+        expiresAt: '2026-11-13T10:15:30.123Z',
+        participants: [{ participantId: 'p0', displayName: 'Fathima S', kind: 'USER' }],
+        humanCount: 1,
+      },
+    },
+  });
+  let clients: FakeStomp[];
+
+  beforeEach(() => {
+    clients = useFakeRealtime();
+  });
+
+  afterEach(() => {
+    resetRoomClient();
+    liveGameStore.setState({ succeeded: null });
+  });
+
+  /** Moves the stored MATCH_ENDED back in time, as a reload after the window would find it. */
+  function ageStored(ms: number) {
+    const entry = JSON.parse(window.sessionStorage.getItem(lastResult.LAST_RESULT_KEY)!) as Record<string, number>;
+    entry.endedAt = Date.now() - ms;
+    window.sessionStorage.setItem(lastResult.LAST_RESULT_KEY, JSON.stringify(entry));
+  }
+
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it('the host sees Play again (primary) and Home; a player sees Home alone until the successor arrives', async () => {
+    await open(0, rated(11));
+    const bar = await screen.findByTestId('results-actions');
+    expect(within(bar).getAllByRole('button').map((b) => b.textContent)).toEqual(['Play again', 'Home']);
+    expect(screen.queryByTestId('room-join-new')).toBeNull();
+    expect(screen.queryByTestId('rematch-button')).toBeNull();
+  });
+
+  it('Play again sends playAgain for the finished room, opens the new lobby and refreshes the recent rooms', async () => {
+    await open(0, rated(11));
+    await screen.findByTestId('room-play-again');
+    act(() => void screen.getByTestId('room-play-again').click());
+    await act(flush);
+    const socket = clients[clients.length - 1]!;
+    socket.open();
+    await act(flush);
+    expect(socket.sentTo('/app/room/room-1/playAgain')).toBe(1);
+    expect(screen.getByTestId('room-play-again')).toHaveAttribute('aria-busy', 'true');
+    act(() => socket.deliver(joinedMessage('HOST')));
+    await waitFor(() => expect(window.location.pathname).toBe('/r/K7M-2QX'));
+    const stored = Object.entries(window.localStorage).find(([key]) => key.startsWith('minnal.recentRooms.'));
+    expect(JSON.parse(stored![1])[0]).toMatchObject({ source: { topicId: 't1' }, topicName: 'Kerala Renaissance', questionCount: 2 });
+  });
+
+  it('after the window the host sees New room, which opens Create with the topic and count and tells no one', async () => {
+    stubCore(rated(11));
+    storeRoom(0);
+    ageStored(61_000);
+    session.start();
+    await session.ready();
+    renderApp('/results');
+    const button = await screen.findByTestId('room-new-room');
+    expect(button).toHaveTextContent('New room');
+    expect(screen.queryByTestId('room-play-again')).toBeNull();
+    act(() => button.click());
+    await waitFor(() => expect(window.location.pathname).toBe('/rooms/create'));
+    expect(window.location.search).toBe('?topicId=t1&count=2');
+    expect(clients.every((c) => c.published.length === 0)).toBe(true);
+  });
+
+  it('a Play again refused as late turns into New room', async () => {
+    await open(0, rated(11));
+    await screen.findByTestId('room-play-again');
+    act(() => void screen.getByTestId('room-play-again').click());
+    await act(flush);
+    const socket = clients[clients.length - 1]!;
+    socket.open();
+    await act(flush);
+    act(() => socket.deliver({ type: 'ERROR', serverTime: SERVER_TIME, payload: { code: 'ROOM_NOT_FOUND' } }));
+    expect(await screen.findByTestId('room-new-room')).toBeInTheDocument();
+    expect(screen.queryByTestId('room-play-again')).toBeNull();
+  });
+
+  /** The host taps Play again and the server answers with `code`; the socket is returned. */
+  async function playAgainRefusedWith(code: string) {
+    await open(0, rated(11));
+    await screen.findByTestId('room-play-again');
+    act(() => void screen.getByTestId('room-play-again').click());
+    await act(flush);
+    const socket = clients[clients.length - 1]!;
+    socket.open();
+    await act(flush);
+    act(() => socket.deliver({ type: 'ERROR', serverTime: SERVER_TIME, payload: { code } }));
+    return socket;
+  }
+
+  it('a Play again refused as busy shows the message in the action bar and keeps Play again', async () => {
+    await playAgainRefusedWith('ALREADY_IN_MATCH');
+    const bar = screen.getByTestId('results-actions');
+    expect(await within(bar).findByText(/already in a match or a room/)).toBeInTheDocument();
+    expect(within(bar).getByTestId('room-play-again')).not.toHaveAttribute('aria-busy');
+    expect(screen.queryByTestId('room-new-room')).toBeNull();
+    expect(window.location.pathname).toBe('/results');
+  });
+
+  it('a Play again whose successor already closed (ROOM_EXPIRED) turns into New room', async () => {
+    await playAgainRefusedWith('ROOM_EXPIRED');
+    expect(await screen.findByTestId('room-new-room')).toBeInTheDocument();
+    expect(screen.queryByTestId('room-play-again')).toBeNull();
+  });
+
+  it('a player gets "Join <host>\'s new room" beside Home when ROOM_SUCCEEDED arrives, announced once, and one tap joins', async () => {
+    await open(2, rated(-6));
+    await screen.findByTestId('results-actions');
+    expect(screen.queryByTestId('room-join-new')).toBeNull();
+    act(() => liveGameStore.setState({ succeeded: { matchId: MATCH_ID, payload: SUCCEEDED } }));
+    const join = await screen.findByTestId('room-join-new');
+    expect(join).toHaveTextContent("Join Fathima S's new room");
+    expect(within(screen.getByTestId('results-actions')).getAllByRole('button')).toHaveLength(2);
+    // The topic's copy of the same message changes nothing.
+    act(() => liveGameStore.setState({ succeeded: { matchId: MATCH_ID, payload: { ...SUCCEEDED } } }));
+    act(() => join.click());
+    await act(flush);
+    const socket = clients[clients.length - 1]!;
+    socket.open();
+    await act(flush);
+    expect(socket.bodiesTo('/app/room/join')).toEqual([{ code: 'K7M2QX' }]);
+    act(() => socket.deliver(joinedMessage('MEMBER')));
+    await waitFor(() => expect(window.location.pathname).toBe('/r/K7M-2QX'));
+  });
+
+  it('a full successor shows the Story 5.3 message in the action bar and keeps the button', async () => {
+    await open(2, rated(-6));
+    await screen.findByTestId('results-actions');
+    act(() => liveGameStore.setState({ succeeded: { matchId: MATCH_ID, payload: SUCCEEDED } }));
+    act(() => screen.getByTestId('room-join-new').click());
+    await act(flush);
+    const socket = clients[clients.length - 1]!;
+    socket.open();
+    await act(flush);
+    act(() => socket.deliver({ type: 'ERROR', serverTime: SERVER_TIME, payload: { code: 'ROOM_FULL' } }));
+    const bar = screen.getByTestId('results-actions');
+    expect(await within(bar).findByText(/Room is full/)).toBeInTheDocument();
+    expect(within(bar).getByTestId('room-join-new')).toBeInTheDocument();
+  });
+
+  it('a reload within the window restores the Join button from the stored message; after the window it is gone', async () => {
+    stubCore(rated(-6));
+    storeRoom(2);
+    lastResult.saveSucceeded(MATCH_ID, SUCCEEDED);
+    session.start();
+    await session.ready();
+    renderApp('/results');
+    expect(await screen.findByTestId('room-join-new')).toHaveTextContent("Join Fathima S's new room");
+  });
+
+  it('after the window the stored successor is dropped and a player has Home alone', async () => {
+    stubCore(rated(-6));
+    storeRoom(2);
+    lastResult.saveSucceeded(MATCH_ID, SUCCEEDED);
+    ageStored(61_000);
+    session.start();
+    await session.ready();
+    renderApp('/results');
+    const bar = await screen.findByTestId('results-actions');
+    expect(within(bar).getAllByRole('button')).toHaveLength(1);
+    expect(screen.queryByTestId('room-join-new')).toBeNull();
   });
 });

@@ -110,6 +110,7 @@ final class RoomActor {
     private final LinkedHashSet<UUID> left = new LinkedHashSet<>();
     private Future<?> flushTimer;
     private boolean closed;
+    private Succession succession;
 
     private record Grace(long epoch, Future<?> timer) {
     }
@@ -188,7 +189,7 @@ final class RoomActor {
             case RoomEvent.Expire expire -> onExpire();
             case RoomEvent.Drain drain -> onDrain();
             case RoomEvent.StartFetched fetched -> onStartFetched(fetched);
-            case RoomEvent.MatchEnded ended -> finish(RoomClosedReason.MATCH_ENDED, false);
+            case RoomEvent.MatchEnded ended -> onMatchEnded(ended);
         }
     }
 
@@ -342,7 +343,7 @@ final class RoomActor {
         MatchSetup setup = new MatchSetup(matchId, MatchMode.BATTLE_ROOM, participants, state.humans(), set.questions(),
                 Map.of(), Map.of(), now, QuestionSource.BANK, topicInfo,
                 new MatchEndedRoom(roomId(), state.humans().get(state.hostSub())));
-        if (matches.start(setup, firstQuestionAt, match -> actor.tell(new RoomEvent.MatchEnded())).isEmpty()) {
+        if (matches.start(setup, firstQuestionAt, match -> actor.tell(new RoomEvent.MatchEnded(matchId))).isEmpty()) {
             log.atWarn().addKeyValue("roomId", roomId()).log("match not started: draining");
             finish(RoomClosedReason.SERVER_DRAINING);
             return;
@@ -363,6 +364,23 @@ final class RoomActor {
         broadcaster.broadcast(roomId(), ServerMessage.roomBroadcast(MessageType.ROOM_MATCH_STARTED, roomId(),
                 state.nextSeq(), now, new RoomMatchStartedPayload(roomId(), matchId, MatchMode.BATTLE_ROOM,
                         participants, state.config().questionCount(), topicInfo, firstQuestionAt)));
+    }
+
+    private void onMatchEnded(RoomEvent.MatchEnded ended) {
+        // Kept for the registry, which reads it as the room closes (on this thread) to remember the match for play again.
+        succession = new Succession(ended.matchId(), state.hostSub(), state.participants().get(0).displayName(),
+                state.config().source(), state.config().questionCount(), Set.copyOf(state.memberSubs()));
+        finish(RoomClosedReason.MATCH_ENDED, false);
+    }
+
+    /** What play again (Story 5.6) needs of a finished room match; the registry keeps it for 60 s. */
+    record Succession(UUID matchId, String hostSub, String hostName, in.minnal.contracts.realtime.RoomSource source,
+            int questionCount, Set<String> participants) {
+    }
+
+    /** The finished match's succession data; read by the registry from {@code onClosed}, on this actor's thread. */
+    Succession succession() {
+        return succession;
     }
 
     /** A lobby (or a start in progress) closes with the service; a room whose match runs plays on. */

@@ -723,6 +723,7 @@ export function createRealtime(env: RealtimeEnv): Realtime {
           clockOffsetMs,
           live: liveMatchFor(incoming.payload),
           rematch: null,
+          succeeded: null,
         });
         subscribeTopic(incoming.payload.matchId);
         return;
@@ -777,6 +778,18 @@ export function createRealtime(env: RealtimeEnv): Realtime {
         } else {
           set({ clockOffsetMs });
         }
+        return;
+      }
+      case 'ROOM_SUCCEEDED': {
+        // The host played again (Story 5.6): from the private queue and the match topic alike, kept once per match.
+        const { matchId } = incoming.message;
+        const known = live()?.matchId === matchId || lastResult.load()?.matchId === matchId;
+        if (!known) {
+          set({ clockOffsetMs });
+          return;
+        }
+        lastResult.saveSucceeded(matchId, incoming.payload);
+        set({ clockOffsetMs, succeeded: { matchId, payload: incoming.payload } });
         return;
       }
       case 'MATCHMAKING_CANCELLED':
@@ -963,6 +976,7 @@ export function createRealtime(env: RealtimeEnv): Realtime {
         clockOffsetMs,
         live: liveMatchFor(found, firstQuestionAt),
         rematch: null,
+        succeeded: null,
       });
       send(() => subscribeTopic(found.matchId));
     },

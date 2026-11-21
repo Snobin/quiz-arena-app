@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { matchEnded } from '../test-utils/realtime.ts';
-import { clear, LAST_RESULT_KEY, load, save } from './lastResult.ts';
+import { clear, LAST_RESULT_KEY, load, PLAY_AGAIN_WINDOW_MS, save, saveSucceeded } from './lastResult.ts';
 import { parseMatchEnded } from './protocol.ts';
 
 const payload = () =>
@@ -22,7 +22,7 @@ describe('lastResult', () => {
     expect(load()).toBeNull();
     save({ matchId: 'm-1', selfId: 'me', payload: payload(), guest: false });
     expect(JSON.parse(window.sessionStorage.getItem(LAST_RESULT_KEY)!)).toMatchObject({ matchId: 'm-1', selfId: 'me' });
-    expect(load()).toEqual({ matchId: 'm-1', selfId: 'me', payload: payload(), guest: false });
+    expect(load()).toEqual({ matchId: 'm-1', selfId: 'me', payload: payload(), guest: false, endedAt: expect.any(Number), succeeded: null });
     save({ matchId: 'm-1', selfId: 'me', payload: payload(), guest: true });
     expect(load()?.guest).toBe(true);
     // An entry from before the flag existed is unknown (null), not silently a registered match.
@@ -32,6 +32,29 @@ describe('lastResult', () => {
     expect(load()?.guest).toBeNull();
     clear();
     expect(load()).toBeNull();
+  });
+
+  it('keeps a ROOM_SUCCEEDED with its match for the 60 s window only (Story 5.6)', () => {
+    const succeeded = { code: 'K7M2QX', hostDisplayName: 'Rajeev', source: { type: 'BANK' as const, topicId: 't1' }, questionCount: 10 };
+    vi.useFakeTimers();
+    try {
+      save({ matchId: 'm-1', selfId: 'me', payload: payload(), guest: false });
+      // Another match's notice is ignored.
+      saveSucceeded('m-other', succeeded);
+      expect(load()?.succeeded).toBeNull();
+      saveSucceeded('m-1', succeeded);
+      expect(load()?.succeeded).toEqual(succeeded);
+      // The same MATCH_ENDED again keeps it, and keeps the first time.
+      save({ matchId: 'm-1', selfId: 'me', payload: payload(), guest: false });
+      expect(load()?.succeeded).toEqual(succeeded);
+      vi.advanceTimersByTime(PLAY_AGAIN_WINDOW_MS - 1);
+      expect(load()?.succeeded).toEqual(succeeded);
+      vi.advanceTimersByTime(1);
+      expect(load()?.succeeded).toBeNull();
+      expect(load()?.matchId).toBe('m-1');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it.each([

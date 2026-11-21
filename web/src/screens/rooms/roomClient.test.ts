@@ -5,7 +5,7 @@ import { matchTopic, USER_PRIVATE_QUEUE } from '../../realtime/protocol.ts';
 import { syncFromLocation } from '../../shell/router.ts';
 import { FakeStomp, SERVER_TIME } from '../../test-utils/realtime.ts';
 import { CREATE_TIMEOUT_MS, JOIN_TIMEOUT_MS, RESYNC_RETRY_MS, resetRoomClient, roomClient, useRoom } from './roomClient.ts';
-import { ROOM_CREATE, ROOM_JOIN, roomConfigure, roomLeave, roomResync, roomStart, roomTopic } from './roomProtocol.ts';
+import { ROOM_CREATE, ROOM_JOIN, roomConfigure, roomLeave, roomPlayAgain, roomResync, roomStart, roomTopic } from './roomProtocol.ts';
 
 const ROOM_ID = '8e9f0a1b-2c3d-4e5f-a6b7-c8d9e0f1a2b3';
 const TOPIC = '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d';
@@ -63,6 +63,34 @@ async function createAndOpen() {
   socket().open();
   return result;
 }
+
+describe('play again (Story 5.6)', () => {
+  const OLD_ROOM = 'old-room-id';
+
+  it('sends playAgain for the finished room and settles on the host lobby with the same source and count', async () => {
+    const result = roomClient().playAgain(OLD_ROOM, CONFIG);
+    await flush();
+    socket().open();
+    await flush();
+    expect(socket().subscribed[0]).toBe(USER_PRIVATE_QUEUE);
+    expect(socket().sentTo(roomPlayAgain(OLD_ROOM))).toBe(1);
+    expect(socket().sentTo(ROOM_CREATE)).toBe(0);
+    socket().deliver(joined());
+    const outcome = await result;
+    expect(outcome.ok && outcome.session).toMatchObject({ roomId: ROOM_ID, code: 'K7MQ2X', role: 'HOST' });
+    expect(useRoom.getState().phase).toBe('lobby');
+  });
+
+  it('settles with the server error (late: ROOM_NOT_FOUND) and holds no session', async () => {
+    const result = roomClient().playAgain(OLD_ROOM, CONFIG);
+    await flush();
+    socket().open();
+    await flush();
+    socket().deliver(error('ROOM_NOT_FOUND'));
+    expect(await result).toEqual({ ok: false, error: { code: 'ROOM_NOT_FOUND', roomId: undefined, matchId: undefined } });
+    expect(useRoom.getState().session).toBeNull();
+  });
+});
 
 describe('the room client', () => {
   it('subscribes to the private queue before it publishes create, with the bearer token', async () => {

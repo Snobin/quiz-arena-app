@@ -1,6 +1,10 @@
 package in.minnal.game.room.application;
 
+import in.minnal.contracts.realtime.MessageType;
 import in.minnal.contracts.realtime.RoomClosedReason;
+import in.minnal.contracts.realtime.RoomSucceededPayload;
+import in.minnal.contracts.realtime.ServerMessage;
+import in.minnal.game.platform.session.MatchBroadcaster;
 import in.minnal.game.match.application.MatchRegistry;
 import in.minnal.game.matchmaking.application.QuestionSetClient;
 import in.minnal.game.platform.drain.DrainState;
@@ -76,6 +80,52 @@ public class RoomRegistry implements RoomAccess, DisposableBean {
     record Tombstone(String code, RoomClosedReason reason, Instant until) {
     }
 
+    /** How long a finished room match can be played again (the match's 60 s post-match window). */
+    static final Duration PLAY_AGAIN_TTL = Duration.ofSeconds(60);
+
+    /**
+     * The link from a finished room to its successor (Story 5.6): who may play again, what with, who to tell, and the
+     * successor once there is one. The old room's actor is gone by then, so the registry holds it.
+     */
+    record Link(UUID matchId, String hostSub, String hostName, in.minnal.contracts.realtime.RoomSource source,
+            int questionCount, Set<String> participants, Instant until, UUID successorRoomId) {
+
+        Link withSuccessor(UUID roomId) {
+            return new Link(matchId, hostSub, hostName, source, questionCount, participants, until, roomId);
+        }
+    }
+
+    /** What {@link #playAgain} did. */
+    sealed interface Succeeding {
+        /** The successor lobby exists (new, or the one a repeat finds) and its code. */
+        record Opened(String code) implements Succeeding {
+        }
+
+        /** No finished room match is remembered for this room id (unknown, or its 60 s passed). */
+        record NotFound() implements Succeeding {
+        }
+
+        /** Someone other than the host asked. */
+        record NotHost() implements Succeeding {
+        }
+
+        /** The successor already closed again. */
+        record Expired() implements Succeeding {
+        }
+
+        /** The host already holds another activity. */
+        record Busy(Activity held) implements Succeeding {
+        }
+
+        /** {@code max-live} rooms are open. */
+        record Full() implements Succeeding {
+        }
+
+        /** The service is draining. */
+        record Draining() implements Succeeding {
+        }
+    }
+
     /** What {@link #join} did. */
     sealed interface Joining {
         /** The room has the join on its queue (it answers {@code ROOM_JOINED}, {@code ROOM_FULL} or {@code ROOM_STARTED}). */
@@ -127,6 +177,8 @@ public class RoomRegistry implements RoomAccess, DisposableBean {
     /** Every {@code sub} claimed for a room (members and joins on its queue), until released or the room closes. */
     private final Map<UUID, Set<String>> claims = new HashMap<>();
     private final Map<String, Tombstone> tombstones = new HashMap<>();
+    /** Finished room id to the link to its successor, for {@link #PLAY_AGAIN_TTL} after the match ended. */
+    private final Map<UUID, Link> successions = new HashMap<>();
     private final Map<String, Deque<Instant>> failedLookups = new HashMap<>();
     private final DrainState drain;
     private final ParticipationRegistry participation;
@@ -140,10 +192,13 @@ public class RoomRegistry implements RoomAccess, DisposableBean {
     private final RoomMetrics metrics;
     private final QuestionSetClient questions;
     private final MatchRegistry matches;
+    private final MatchBroadcaster matchBroadcaster;
 
     public RoomRegistry(DrainState drain, ParticipationRegistry participation, PlayerSessions sessions,
             PlayerChannel channel, RoomBroadcaster broadcaster, Clock clock, RoomTimers timers, RoomSettings settings,
-            RoomCodes roomCodes, MeterRegistry meters, QuestionSetClient questions, MatchRegistry matches) {
+            RoomCodes roomCodes, MeterRegistry meters, QuestionSetClient questions, MatchRegistry matches,
+            MatchBroadcaster matchBroadcaster) {
+        this.matchBroadcaster = matchBroadcaster;
         this.questions = questions;
         this.matches = matches;
         this.drain = drain;
@@ -195,6 +250,73 @@ public class RoomRegistry implements RoomAccess, DisposableBean {
         log.atInfo().addKeyValue("roomId", roomId).addKeyValue("userId", host.sub()).log("room created");
         room.tell(new RoomEvent.Begin());
         return new Opening.Opened(roomId);
+    }
+
+    /**
+     * Play again (Story 5.6): {@code player} asks for the successor of the finished room {@code oldRoomId}. Within
+     * {@link #PLAY_AGAIN_TTL} of the match's end the host gets a new lobby through {@link #open} (same source and count)
+     * and every participant is told; a repeat finds the same lobby again and creates nothing.
+     */
+    synchronized Succeeding playAgain(MinnalPrincipal player, String sessionId, UUID oldRoomId) {
+        Instant now = clock.instant();
+        successions.values().removeIf(l -> !now.isBefore(l.until()));
+        Link link = successions.get(oldRoomId);
+        if (link == null) {
+            return new Succeeding.NotFound();
+        }
+        if (!link.hostSub().equals(player.sub())) {
+            return new Succeeding.NotHost();
+        }
+        if (link.successorRoomId() != null) {
+            RoomActor successor = rooms.get(link.successorRoomId());
+            if (successor == null) {
+                return new Succeeding.Expired();
+            }
+            successor.tell(new RoomEvent.Announce(player.sub(), sessionId)); // the host's lobby again, on this session too
+            return new Succeeding.Opened(successor.code());
+        }
+        switch (open(player, new RoomConfigRules.Config(link.source(), link.questionCount()))) {
+            case Opening.Busy busy -> {
+                return new Succeeding.Busy(busy.held());
+            }
+            case Opening.Full full -> {
+                return new Succeeding.Full();
+            }
+            case Opening.Draining draining -> {
+                return new Succeeding.Draining();
+            }
+            case Opening.Opened opened -> {
+                String code = rooms.get(opened.roomId()).code();
+                successions.put(oldRoomId, link.withSuccessor(opened.roomId()));
+                announceSuccessor(oldRoomId, link, code, now);
+                return new Succeeding.Opened(code);
+            }
+        }
+    }
+
+    /** Tells every participant but the host: privately (reliable) and best effort on the match topic. The code is not logged. */
+    private void announceSuccessor(UUID oldRoomId, Link link, String code, Instant now) {
+        ServerMessage<RoomSucceededPayload> message = ServerMessage.aboutRoomMatch(MessageType.ROOM_SUCCEEDED,
+                link.matchId(), oldRoomId, now,
+                new RoomSucceededPayload(code, link.hostName(), link.source(), link.questionCount()));
+        for (String sub : link.participants()) {
+            if (sub.equals(link.hostSub())) {
+                continue;
+            }
+            try {
+                channel.toPlayer(sub, message);
+            } catch (RuntimeException e) {
+                log.atWarn().addKeyValue("roomId", oldRoomId).addKeyValue("userId", sub).setCause(e)
+                        .log("could not tell a player about the successor room");
+            }
+        }
+        try {
+            matchBroadcaster.broadcast(link.matchId(), message);
+        } catch (RuntimeException e) {
+            log.atWarn().addKeyValue("roomId", oldRoomId).setCause(e).log("could not broadcast the successor room");
+        }
+        log.atInfo().addKeyValue("roomId", oldRoomId).addKeyValue("userId", link.hostSub())
+                .log("room match played again with {} players told", link.participants().size() - 1);
     }
 
     synchronized Optional<RoomActor> find(UUID roomId) {
@@ -314,6 +436,13 @@ public class RoomRegistry implements RoomAccess, DisposableBean {
                 tombstones.put(room.code(), new Tombstone(room.code(), reason, clock.instant().plus(TOMBSTONE_TTL)));
             }
             claimed = claims.remove(room.roomId());
+            RoomActor.Succession ended = reason == RoomClosedReason.MATCH_ENDED ? room.succession() : null;
+            if (ended != null) {
+                Instant now = clock.instant();
+                successions.values().removeIf(l -> !now.isBefore(l.until()));
+                successions.put(room.roomId(), new Link(ended.matchId(), ended.hostSub(), ended.hostName(),
+                        ended.source(), ended.questionCount(), ended.participants(), now.plus(PLAY_AGAIN_TTL), null));
+            }
             notifyAll();
         }
         metrics.closed();
@@ -393,6 +522,7 @@ public class RoomRegistry implements RoomAccess, DisposableBean {
             rooms.clear();
             codes.clear();
             claims.clear();
+            successions.clear();
         }
         open.forEach(RoomActor::close);
     }
