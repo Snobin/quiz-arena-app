@@ -1,8 +1,12 @@
 package in.minnal.game.room.domain;
 
-/** A room's life: {@code LOBBY -> IN_MATCH -> ENDED}. Story 5.1 builds the lobby and its end; matches are Story 5.4. */
+/**
+ * A room's life: {@code LOBBY -> STARTING -> IN_MATCH -> ENDED}. {@code STARTING} is a step of the lobby (the host's
+ * start is fetching the question set) and falls back to {@code LOBBY} when the start does not go ahead (Story 5.4).
+ */
 public enum RoomPhase {
     LOBBY,
+    STARTING,
     IN_MATCH,
     ENDED
 }

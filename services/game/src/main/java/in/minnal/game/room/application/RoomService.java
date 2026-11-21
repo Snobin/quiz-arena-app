@@ -30,8 +30,9 @@ import org.springframework.stereotype.Service;
  * <p>Join (Story 5.3), in order: draining, deleted, guest and profile as for create; then the registry (see
  * {@link RoomRegistry#join}): a repeat join of her own room, busy elsewhere → {@code ALREADY_IN_MATCH}, too many failed
  * lookups → {@code RATE_LIMITED}, the lookup → {@code ROOM_NOT_FOUND} or {@code ROOM_EXPIRED}; the room itself answers
- * {@code ROOM_FULL}, {@code ROOM_STARTED} or {@code ROOM_JOINED}. The code is never logged. Start checks the host and the
- * player count and is otherwise still the {@code NOT_AVAILABLE_YET} stub until Story 5.4; play again until Story 5.6.
+ * {@code ROOM_FULL}, {@code ROOM_STARTED} or {@code ROOM_JOINED}. The code is never logged. Start (Story 5.4) is the room's
+ * own step: it checks the host, the player count and draining, then fetches the set and starts the match; play again
+ * waits for Story 5.6.
  */
 @Service
 public class RoomService {
@@ -135,7 +136,7 @@ public class RoomService {
         room.get().tell(new RoomEvent.Configure(player.sub(), sessionId, input));
     }
 
-    /** The room checks the host and the player count; a valid start is still {@code NOT_AVAILABLE_YET} (Story 5.4). */
+    /** The room checks the host, the player count and draining, then starts the match (Story 5.4). */
     public void start(MinnalPrincipal player, String sessionId, String roomIdText) {
         UUID roomId = parse(roomIdText);
         if (roomId == null) {

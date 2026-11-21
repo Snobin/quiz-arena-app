@@ -78,8 +78,16 @@ export type RematchDeclineReason = (typeof REMATCH_DECLINE_REASONS)[number];
 export const ROOM_ROLES = ['HOST', 'MEMBER'] as const;
 export type RoomRole = (typeof ROOM_ROLES)[number];
 
-export const ROOM_CLOSED_REASONS = ['HOST_LEFT', 'HOST_DISCONNECTED', 'EXPIRED', 'SERVER_DRAINING'] as const;
+export const ROOM_CLOSED_REASONS = ['HOST_LEFT', 'HOST_DISCONNECTED', 'EXPIRED', 'SERVER_DRAINING', 'MATCH_ENDED'] as const;
 export type RoomClosedReason = (typeof ROOM_CLOSED_REASONS)[number];
+
+/** The phase a lobby update reports: open, or `STARTING` while the host's start fetches the question set (Story 5.4). */
+export const ROOM_LOBBY_PHASES = ['LOBBY', 'STARTING'] as const;
+export type RoomLobbyPhase = (typeof ROOM_LOBBY_PHASES)[number];
+
+/** Why a start did not go ahead (ROOM_START_FAILED). */
+export const ROOM_START_FAILED_REASONS = ['TOPIC_UNAVAILABLE', 'UNAVAILABLE'] as const;
+export type RoomStartFailedReason = (typeof ROOM_START_FAILED_REASONS)[number];
 
 /** The enum lists by their Java names, as `contracts/samples/enums.json` has them. */
 export const ENUMS = {
@@ -93,6 +101,8 @@ export const ENUMS = {
   RematchDeclineReason: REMATCH_DECLINE_REASONS,
   RoomRole: ROOM_ROLES,
   RoomClosedReason: ROOM_CLOSED_REASONS,
+  RoomLobbyPhase: ROOM_LOBBY_PHASES,
+  RoomStartFailedReason: ROOM_START_FAILED_REASONS,
 } as const;
 
 /** The envelope: `{type, matchId?, roomId?, seq?, refSeq?, serverTime, payload?}`. */
@@ -149,7 +159,24 @@ export type RoomJoinedPayload = { roomId: string; code: string; role: RoomRole; 
  * ROOM_LOBBY_UPDATED (broadcast on `/topic/room/{roomId}`): the whole lobby, and the participant ids that joined and
  * left since the previous broadcast (Story 5.3; membership changes are coalesced, at most one broadcast per 250 ms).
  */
-export type RoomLobbyUpdatedPayload = { room: RoomView; joined: string[]; left: string[] };
+export type RoomLobbyUpdatedPayload = { room: RoomView; joined: string[]; left: string[]; phase: RoomLobbyPhase };
+
+/** ROOM_START_FAILED (broadcast): the room is back in the lobby. */
+export type RoomStartFailedPayload = { reason: RoomStartFailedReason };
+
+/**
+ * ROOM_MATCH_STARTED (broadcast on `/topic/room/{roomId}`, Story 5.4): the room's match exists. `firstQuestionAt` is the
+ * server instant Q1 opens (and Q1's `startedAt`): every client counts 3-2-1 down to it with the server clock offset.
+ */
+export type RoomMatchStartedPayload = {
+  roomId: string;
+  matchId: string;
+  mode: MatchMode;
+  participants: Participant[];
+  questionCount: number;
+  topic?: TopicInfo;
+  firstQuestionAt: string;
+};
 
 /** ROOM_CLOSED (broadcast, and private to each member). */
 export type RoomClosedPayload = { reason: RoomClosedReason };
@@ -371,7 +398,7 @@ export function parseParticipant(value: unknown): Participant | null {
 }
 
 /** The optional `topic`: undefined when absent, null when malformed. */
-function parseTopic(value: unknown): TopicInfo | undefined | null {
+export function parseTopic(value: unknown): TopicInfo | undefined | null {
   if (value === undefined) return undefined;
   if (!isObject(value) || !isString(value.topicId) || !isString(value.name) || !isString(value.subjectName)) return null;
   return { topicId: value.topicId, name: value.name, subjectName: value.subjectName };

@@ -1,5 +1,6 @@
 package in.minnal.game.room.application;
 
+import in.minnal.contracts.internal.QuestionSetResponse;
 import in.minnal.game.room.domain.RoomConfigInput;
 
 /** Everything that can happen to a room: each is one event on its actor's queue (AD-4). */
@@ -54,5 +55,13 @@ sealed interface RoomEvent {
 
     /** game-service is draining: close at once. */
     record Drain() implements RoomEvent {
+    }
+
+    /** The question-set fetch of a start came back: {@code set} on success, else {@code failure} (Story 5.4). */
+    record StartFetched(QuestionSetResponse set, Throwable failure) implements RoomEvent {
+    }
+
+    /** The room's match ended: finished, aborted or failed (Story 5.4). */
+    record MatchEnded() implements RoomEvent {
     }
 }

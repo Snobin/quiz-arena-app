@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import tools.jackson.databind.JsonNode;
@@ -47,6 +48,11 @@ class RoomFlowTest extends GameIntegrationTest {
 
     final List<StompTestClient> clients = new ArrayList<>();
     final List<String> subs = new ArrayList<>();
+
+    @BeforeEach
+    void coreIsQuiet() {
+        CORE.reset();
+    }
 
     @AfterEach
     void closeEveryRoom() {
@@ -521,10 +527,9 @@ class RoomFlowTest extends GameIntegrationTest {
         stranger.send("/app/room/" + roomId + "/leave");
         stranger.expectNothing(Duration.ofMillis(200));
 
-        // Two humans: the start is valid, and still the Story 5.4 stub.
-        anju.send("/app/room/" + roomId + "/start");
-        anju.error("NOT_AVAILABLE_YET");
-        assertThat(nextLobbyUpdate(anju).get("seq").asLong()).isEqualTo(1); // only the join was broadcast
+        // Refused starts changed nothing: only the join was broadcast (the valid start is RoomMatchFlowTest's).
+        assertThat(nextLobbyUpdate(anju).get("seq").asLong()).isEqualTo(1);
+        assertThat(CORE.calls()).isEmpty();
     }
 
     @Test

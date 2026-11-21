@@ -27,6 +27,7 @@ import {
   parseIncoming,
   USER_PRIVATE_QUEUE,
   type Incoming,
+  type MatchFoundPayload,
   type MatchMode,
   type SnapshotPayload,
 } from './protocol.ts';
@@ -149,6 +150,12 @@ export type Realtime = {
    * store's `rejoin` is cleared, and the stored id is kept. Does nothing for any other match.
    */
   cancelRejoin: (matchId: string) => void;
+  /**
+   * A Battle Room's match has started (ROOM_MATCH_STARTED, Story 5.4): seeds the live match as MATCH_FOUND does, with
+   * the countdown's `firstQuestionAt`, and subscribes to its topic on this socket (opening it if need be). The room
+   * client, which heard the start, then closes its own socket.
+   */
+  startRoomMatch: (found: MatchFoundPayload, firstQuestionAt: string, clockOffsetMs: number) => void;
   /** 'sent': wait for MATCHMAKING_CANCELLED; 'closed': the attempt is gone, go Home now; 'none': not searching. */
   cancelMatchmaking: () => CancelResult;
   /** Asks for a rematch of the ended `matchId` (or accepts the opponent's). False when one is already under way. */
@@ -942,6 +949,23 @@ export function createRealtime(env: RealtimeEnv): Realtime {
       const mode = queuedMode;
       send((c) => c.publish({ destination: matchmakingJoin(mode), body: topicId !== undefined ? JSON.stringify({ topicId }) : '{}' }));
     },
+    startRoomMatch(found, firstQuestionAt, clockOffsetMs) {
+      // A new match replaces the last stored result and any match that ended here.
+      lastResult.clear();
+      endRejoin(null);
+      dropTopic();
+      resetResilience();
+      liveMatchId.save({ matchId: found.matchId });
+      set({
+        phase: 'found',
+        match: found,
+        problem: null,
+        clockOffsetMs,
+        live: liveMatchFor(found, firstQuestionAt),
+        rematch: null,
+      });
+      send(() => subscribeTopic(found.matchId));
+    },
     requestRematch(matchId) {
       const current = rematch();
       if (current?.matchId === matchId && (current.state === 'starting' || current.state === 'waiting')) return false;
@@ -1079,6 +1103,11 @@ export function rejoinMatch(matchId: string): void {
 /** Stops a pending rejoin. See `Realtime.cancelRejoin`. */
 export function cancelRejoin(matchId: string): void {
   instance().cancelRejoin(matchId);
+}
+
+/** A Battle Room's match started: seeds the live match and subscribes to it. See `Realtime.startRoomMatch`. */
+export function startRoomMatch(found: MatchFoundPayload, firstQuestionAt: string, clockOffsetMs: number): void {
+  instance().startRoomMatch(found, firstQuestionAt, clockOffsetMs);
 }
 
 /** Asks for (or accepts) a rematch of the ended match. See `Realtime.requestRematch`. */

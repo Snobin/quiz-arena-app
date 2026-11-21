@@ -50,7 +50,15 @@ const SERVER_MESSAGES = ALL_SERVER_MESSAGES.filter((file) => !file.startsWith('r
 
 describe('contracts/samples', () => {
   it('has the room samples, which parse at the envelope and carry the room fields', () => {
-    expect(ROOM_MESSAGES).toEqual(['room-closed.json', 'room-joined-member.json', 'room-joined.json', 'room-lobby-updated.json']);
+    expect(ROOM_MESSAGES).toEqual([
+      'room-closed.json',
+      'room-joined-member.json',
+      'room-joined.json',
+      'room-lobby-updated-starting.json',
+      'room-lobby-updated.json',
+      'room-match-started.json',
+      'room-start-failed.json',
+    ]);
     for (const file of ROOM_MESSAGES) {
       const json = read(file);
       expect(parseServerMessage(json)).toEqual(json);

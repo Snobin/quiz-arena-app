@@ -252,19 +252,29 @@ function CloseRoomDialog({ onStay, onClose }: { onStay: () => void; onClose: () 
   );
 }
 
-/** The host's fixed start bar: disabled below 2 humans, enabled at 2 or more (the start itself is Story 5.4's). */
-function StartBar({ session, barRef }: { session: RoomSession; barRef: React.RefObject<HTMLDivElement | null> }) {
+/**
+ * The host's fixed start bar: disabled below 2 humans, enabled at 2 or more. A tap shows "…" until the room is
+ * `STARTING` (then "Starting…" under it, for every lobby); a failed start leaves the lobby with the epic's two lines:
+ * too few questions (a "Change topic" action, which opens the picker for the room) or "Couldn't start. Try again."
+ */
+function StartBar({ session, barRef, leaveForPicker }: { session: RoomSession; barRef: React.RefObject<HTMLDivElement | null>; leaveForPicker: () => void }) {
   const { t } = useTranslation();
   const starting = useRoom((s) => s.starting);
+  const lobbyPhase = useRoom((s) => s.lobbyPhase);
   const startError = useRoom((s) => s.startError);
+  const startFailure = useRoom((s) => s.startFailure);
   const count = session.room.humanCount;
   const label = <span className="tabular-nums">{t('rooms.start.label', { count })}</span>;
+  const busy = starting || lobbyPhase === 'STARTING';
   let caption: string | null = null;
-  if (startError) caption = startError.code === 'NOT_AVAILABLE_YET' ? t('rooms.start.soon') : t('rooms.start.failed');
+  if (busy) caption = t('rooms.lobby.starting');
+  else if (startFailure === 'TOPIC_UNAVAILABLE') caption = t('rooms.start.topicUnavailable');
+  else if (startFailure === 'UNAVAILABLE') caption = t('rooms.start.failed');
+  else if (startError) caption = startError.code === 'SERVER_DRAINING' ? t('rooms.start.draining') : t('rooms.start.failed');
   useEffect(() => {
     if (caption) announce(caption);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startError]);
+  }, [startError, startFailure, busy]);
   return (
     <div ref={barRef} className="fixed inset-x-[0] bottom-[0] z-10 border-t border-hairline bg-card pb-[env(safe-area-inset-bottom)]">
       <div className="mx-auto flex w-full max-w-[480px] flex-col gap-1 px-gutter-card py-3">
@@ -272,9 +282,9 @@ function StartBar({ session, barRef }: { session: RoomSession; barRef: React.Ref
           <Button className="w-full" disabled disabledReason={t('rooms.start.waiting')}>
             {label}
           </Button>
-        ) : starting ? (
-          <Button className="w-full" disabled disabledReason={t('rooms.start.sending')}>
-            {label}
+        ) : busy ? (
+          <Button className="w-full" disabled disabledReason={t('rooms.lobby.starting')}>
+            {t('rooms.start.pending')}
           </Button>
         ) : (
           <Button className="w-full" onClick={() => roomClient().start()}>
@@ -282,6 +292,17 @@ function StartBar({ session, barRef }: { session: RoomSession; barRef: React.Ref
           </Button>
         )}
         {caption ? <p className="text-caption text-muted">{caption}</p> : null}
+        {!busy && startFailure === 'TOPIC_UNAVAILABLE' ? (
+          <Link
+            to={pickerPath({ roomId: session.roomId, count: session.room.questionCount })}
+            onClick={(event) => {
+              if (isPlainLeftClick(event)) leaveForPicker();
+            }}
+            className={TEXT_LINK}
+          >
+            {t('rooms.start.changeTopic')}
+          </Link>
+        ) : null}
         <p className="text-caption text-muted">{t('rooms.start.leaveCloses')}</p>
       </div>
     </div>
@@ -303,6 +324,7 @@ export default function Lobby({ session }: { session: RoomSession }) {
   useDocumentTitle(t('rooms.lobby.title', { code }));
   useHideTabBar();
   const reconnecting = useRoom((s) => s.reconnecting);
+  const lobbyPhase = useRoom((s) => s.lobbyPhase);
   const isHost = session.role === 'HOST';
   const barRef = useRef<HTMLDivElement>(null);
   useFixedBarHeight(barRef);
@@ -376,14 +398,24 @@ export default function Lobby({ session }: { session: RoomSession }) {
 
         <JoinedChips session={session} />
 
-        {!isHost && hostName ? (
+        {!isHost && lobbyPhase === 'STARTING' ? (
+          <p className="text-body text-muted">{t('rooms.lobby.starting')}</p>
+        ) : !isHost && hostName ? (
           <p className="text-body text-muted">
             {t('rooms.lobby.waitingFor', { host: hostName })}
           </p>
         ) : null}
       </main>
 
-      {isHost ? <StartBar session={session} barRef={barRef} /> : null}
+      {isHost ? (
+        <StartBar
+          session={session}
+          barRef={barRef}
+          leaveForPicker={() => {
+            keepRoom.current = true;
+          }}
+        />
+      ) : null}
       {confirming ? <CloseRoomDialog onStay={() => setConfirming(false)} onClose={leaveNow} /> : null}
     </PageColumn>
   );

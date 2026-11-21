@@ -85,12 +85,35 @@ class RoomRegistryTest {
     final RoomConfigRules.Config config =
             new RoomConfigRules.Config(new RoomSource(QuestionSource.BANK, UUID.randomUUID()), 10);
 
+    final SimpleMeterRegistry meters = new SimpleMeterRegistry();
+    final List<in.minnal.contracts.internal.QuestionSetRequest> requests = new CopyOnWriteArrayList<>();
+    final List<ServerMessage<?>> matchBroadcasts = new CopyOnWriteArrayList<>();
+    /** The set a start fetches: tests complete or fail it. */
+    final List<java.util.concurrent.CompletableFuture<in.minnal.contracts.internal.QuestionSetResponse>> fetches =
+            new CopyOnWriteArrayList<>();
+    final in.minnal.game.matchmaking.application.QuestionSetClient questions = request -> {
+        java.util.concurrent.CompletableFuture<in.minnal.contracts.internal.QuestionSetResponse> fetch =
+                new java.util.concurrent.CompletableFuture<>();
+        fetches.add(fetch);
+        requests.add(request);
+        return fetch;
+    };
+    final in.minnal.game.match.application.ScheduledMatchTimers matchTimers = new in.minnal.game.match.application.ScheduledMatchTimers();
+    final in.minnal.game.match.application.MatchRegistry matches = new in.minnal.game.match.application.MatchRegistry(
+            participation, sessions, channel, (matchId, message) -> matchBroadcasts.add(message), clock, matchTimers,
+            new in.minnal.game.match.application.MatchSettings(Duration.ofMillis(10), Duration.ofMillis(200),
+                    Duration.ofMillis(50), Duration.ofMillis(10), Duration.ofSeconds(10), Duration.ofMillis(10),
+                    Duration.ofMillis(250)),
+            new in.minnal.game.match.application.BotBrain(new in.minnal.game.match.application.BotSettings(
+                    Duration.ofMillis(5), Duration.ofMillis(20), 0.65, 0.1), new java.util.Random(7)),
+            drain, meters, event -> { });
+
     RoomRegistry registry;
 
     RoomRegistry registry(int maxLive, int... script) {
         registry = new RoomRegistry(drain, participation, sessions, channel, (roomId, message) -> broadcasts.add(message), clock,
                 timers, new RoomSettings(Duration.ofHours(24), Duration.ofSeconds(10), maxLive),
-                new RoomCodes(new Scripted(script)), new SimpleMeterRegistry());
+                new RoomCodes(new Scripted(script)), meters, questions, matches);
         return registry;
     }
 
@@ -99,6 +122,8 @@ class RoomRegistryTest {
         if (registry != null) {
             registry.destroy();
         }
+        matches.destroy();
+        matchTimers.destroy();
     }
 
     static MinnalPrincipal host(String sub) {
@@ -437,5 +462,207 @@ class RoomRegistryTest {
         assertThat(broadcasts.get(1).seq()).isEqualTo(2L);
         assertThat(lobbyUpdates().get(1).joined()).isEmpty();
         assertThat(lobbyUpdates().get(1).room().questionCount()).isEqualTo(13);
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Story 5.4: the start step
+
+    /** A set of {@code count} questions with a topic block, as core answers a bank room's fetch. */
+    static in.minnal.contracts.internal.QuestionSetResponse set(int count) {
+        List<in.minnal.contracts.internal.InternalQuestion> questions = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            questions.add(new in.minnal.contracts.internal.InternalQuestion(UUID.randomUUID(), 1, "ചോദ്യം " + i, "Question " + i,
+                    List.of("a", "b", "c", "d"), i % 4, "x", null));
+        }
+        return new in.minnal.contracts.internal.QuestionSetResponse(questions,
+                new in.minnal.contracts.internal.QuestionSetTopic(UUID.randomUUID(), "Kerala History", UUID.randomUUID(), "History"));
+    }
+
+    /** A lobby of the host "h" and "p1".. players, all with a session; returns the room's id. */
+    UUID lobbyOf(int humans) {
+        registry(10, 0, 0, 0, 0, 0, 0);
+        UUID id = opened(registry.open(host("h"), config)).roomId();
+        sessions.connected("h", "s-h");
+        for (int i = 1; i < humans; i++) {
+            sessions.connected("p" + i, "s-p" + i);
+            assertThat(registry.join(player("p" + i), "s", "AAAAAA")).isEqualTo(new RoomRegistry.Joining.Sent(id));
+        }
+        await().atMost(Duration.ofSeconds(5)).until(() -> registry.find(id).orElseThrow().members().size() == humans);
+        return id;
+    }
+
+    List<ServerMessage<?>> broadcastsOf(MessageType type) {
+        return broadcasts.stream().filter(m -> m.type() == type).toList();
+    }
+
+    @Test
+    void aStartFetchesOffThreadBroadcastsStartingThenStartsTheMatchForEveryHuman() {
+        UUID id = lobbyOf(3);
+        RoomActor room = registry.find(id).orElseThrow();
+
+        room.tell(new RoomEvent.Start("h", "s"));
+        await().atMost(Duration.ofSeconds(5)).until(() -> fetches.size() == 1);
+        // Repeat starts while STARTING are ignored: still one fetch, no error to the host.
+        room.tell(new RoomEvent.Start("h", "s"));
+        room.tell(new RoomEvent.Start("p1", "s")); // not the host
+        await().atMost(Duration.ofSeconds(5)).until(() -> !sentTo("p1", MessageType.ERROR).isEmpty());
+        assertThat(fetches).hasSize(1);
+        assertThat(sentTo("h", MessageType.ERROR)).isEmpty();
+        var request = requests.getFirst();
+        assertThat(request.source()).isEqualTo(QuestionSource.BANK);
+        assertThat(request.filters().category()).isEqualTo("KERALA_PSC");
+        assertThat(request.filters().topicId()).isEqualTo(config.source().topicId());
+        assertThat(request.count()).isEqualTo(10);
+        assertThat(request.requesterId()).isEqualTo("h");
+        var starting = (RoomLobbyUpdatedPayload) broadcastsOf(MessageType.ROOM_LOBBY_UPDATED).getLast().payload();
+        assertThat(starting.phase()).isEqualTo(in.minnal.contracts.realtime.RoomLobbyPhase.STARTING);
+        // A join while STARTING gets ROOM_STARTED and claims nothing.
+        sessions.connected("late", "s-late");
+        assertThat(registry.join(player("late"), "s", "AAAAAA")).isEqualTo(new RoomRegistry.Joining.Sent(id));
+        await().atMost(Duration.ofSeconds(5)).until(() -> !sentTo("late", MessageType.ERROR).isEmpty());
+        assertThat(((in.minnal.contracts.realtime.ErrorPayload) sentTo("late", MessageType.ERROR).getFirst().payload()).code())
+                .isEqualTo(ErrorCode.ROOM_STARTED);
+        assertThat(participation.activityOf("late")).isEmpty();
+
+        fetches.getFirst().complete(set(10));
+        await().atMost(Duration.ofSeconds(5)).until(() -> !broadcastsOf(MessageType.ROOM_MATCH_STARTED).isEmpty());
+        var started = (in.minnal.contracts.realtime.RoomMatchStartedPayload) broadcastsOf(MessageType.ROOM_MATCH_STARTED)
+                .getFirst().payload();
+        assertThat(started.participants()).hasSize(3).allSatisfy(p ->
+                assertThat(p.kind()).isEqualTo(in.minnal.contracts.realtime.ParticipantKind.USER));
+        assertThat(started.mode()).isEqualTo(in.minnal.contracts.realtime.MatchMode.BATTLE_ROOM);
+        assertThat(started.topic().name()).isEqualTo("Kerala History");
+        assertThat(started.firstQuestionAt()).isEqualTo(clock.instant().plusMillis(3500));
+        assertThat(started.matchId()).isNotEqualTo(id);
+        assertThat(participation.activityOf("p1")).contains(new Activity.InMatch(started.matchId()));
+        assertThat(meters.get(RoomMetrics.STARTED).counter().count()).isEqualTo(1);
+        assertThat(meters.get(RoomMetrics.HUMANS).summary().totalAmount()).isEqualTo(3);
+        assertThat(registry.find(id).orElseThrow().inMatch()).isTrue();
+    }
+
+    @Test
+    void aFailedOrShortFetchGoesBackToTheLobbyWithTheReason() {
+        UUID id = lobbyOf(2);
+        RoomActor room = registry.find(id).orElseThrow();
+
+        room.tell(new RoomEvent.Start("h", "s"));
+        await().atMost(Duration.ofSeconds(5)).until(() -> fetches.size() == 1);
+        fetches.getFirst().completeExceptionally(new java.util.concurrent.CompletionException(
+                new in.minnal.game.matchmaking.application.QuestionSetClient.TopicUnavailableException("422")));
+        await().atMost(Duration.ofSeconds(5)).until(() -> broadcastsOf(MessageType.ROOM_START_FAILED).size() == 1);
+        assertThat(((in.minnal.contracts.realtime.RoomStartFailedPayload) broadcastsOf(MessageType.ROOM_START_FAILED).getFirst()
+                .payload()).reason()).isEqualTo(in.minnal.contracts.realtime.RoomStartFailedReason.TOPIC_UNAVAILABLE);
+
+        room.tell(new RoomEvent.Start("h", "s"));
+        await().atMost(Duration.ofSeconds(5)).until(() -> fetches.size() == 2);
+        fetches.get(1).completeExceptionally(new java.util.concurrent.TimeoutException("slow"));
+        await().atMost(Duration.ofSeconds(5)).until(() -> broadcastsOf(MessageType.ROOM_START_FAILED).size() == 2);
+        assertThat(((in.minnal.contracts.realtime.RoomStartFailedPayload) broadcastsOf(MessageType.ROOM_START_FAILED).get(1)
+                .payload()).reason()).isEqualTo(in.minnal.contracts.realtime.RoomStartFailedReason.UNAVAILABLE);
+
+        // A short set (a topic that ran out) is TOPIC_UNAVAILABLE; a set with no topic block cannot start either.
+        room.tell(new RoomEvent.Start("h", "s"));
+        await().atMost(Duration.ofSeconds(5)).until(() -> fetches.size() == 3);
+        fetches.get(2).complete(set(4));
+        await().atMost(Duration.ofSeconds(5)).until(() -> broadcastsOf(MessageType.ROOM_START_FAILED).size() == 3);
+        assertThat(((in.minnal.contracts.realtime.RoomStartFailedPayload) broadcastsOf(MessageType.ROOM_START_FAILED).get(2)
+                .payload()).reason()).isEqualTo(in.minnal.contracts.realtime.RoomStartFailedReason.TOPIC_UNAVAILABLE);
+        assertThat(broadcastsOf(MessageType.ROOM_MATCH_STARTED)).isEmpty();
+        assertThat(registry.find(id).orElseThrow().inMatch()).isFalse();
+        // The room is a lobby again, everyone still in it.
+        assertThat(registry.find(id).orElseThrow().members()).containsExactlyInAnyOrder("h", "p1");
+    }
+
+    @Test
+    void aStartIsRefusedWhileDrainingAndLeavesTheLobbyAlone() {
+        // The registry closes lobbies when a drain begins, so the actor is driven directly with the flag already up.
+        registry(10);
+        var state = new in.minnal.game.room.domain.RoomState(UUID.randomUUID(), "AAAAAA", "h", "Rajeev", config, clock.instant(),
+                clock.instant().plus(Duration.ofHours(24)));
+        state.add("p1", "Biju");
+        RoomActor room = new RoomActor(state, new RoomSettings(Duration.ofHours(24), Duration.ofSeconds(10), 10), clock, timers,
+                channel, (roomId, message) -> broadcasts.add(message), sub -> true, (r, sub) -> { }, (r, reason) -> { },
+                questions, matches, new RoomMetrics(meters, () -> 0), () -> true);
+        try {
+            room.tell(new RoomEvent.Start("h", "s"));
+            await().atMost(Duration.ofSeconds(5)).until(() -> !sentTo("h", MessageType.ERROR).isEmpty());
+            assertThat(((in.minnal.contracts.realtime.ErrorPayload) sentTo("h", MessageType.ERROR).getFirst().payload()).code())
+                    .isEqualTo(ErrorCode.SERVER_DRAINING);
+            assertThat(fetches).isEmpty();
+            assertThat(broadcasts).isEmpty();
+        } finally {
+            room.close();
+        }
+    }
+
+    @Test
+    void aRoomWhoseMatchRunsPlaysOnThroughADrainAndEndsWithItsMatchLeavingATombstone() {
+        UUID id = lobbyOf(2);
+        RoomActor room = registry.find(id).orElseThrow();
+        room.tell(new RoomEvent.Start("h", "s"));
+        await().atMost(Duration.ofSeconds(5)).until(() -> fetches.size() == 1);
+        fetches.getFirst().complete(set(10));
+        await().atMost(Duration.ofSeconds(5)).until(() -> !broadcastsOf(MessageType.ROOM_MATCH_STARTED).isEmpty());
+
+        long begun = System.nanoTime();
+        drain.begin(); // closes lobbies; a room in its match is not closed, and the drain does not wait on it
+        assertThat(Duration.ofNanos(System.nanoTime() - begun)).isLessThan(Duration.ofSeconds(1));
+        assertThat(registry.liveCount()).isEqualTo(1);
+        assertThat(broadcastsOf(MessageType.ROOM_CLOSED)).isEmpty();
+        // The 24 h expiry waits for the match too.
+        timers.fire(d -> d.equals(Duration.ofHours(24)));
+        assertThat(registry.liveCount()).isEqualTo(1);
+
+        // Everyone leaves the running match: it aborts (before Q1's reveal) and the room ends with it.
+        var started = (in.minnal.contracts.realtime.RoomMatchStartedPayload) broadcastsOf(MessageType.ROOM_MATCH_STARTED)
+                .getFirst().payload();
+        matches.leave("h", started.matchId().toString());
+        matches.leave("p1", started.matchId().toString());
+        await().atMost(Duration.ofSeconds(5)).until(() -> registry.liveCount() == 0);
+        assertThat(registry.tombstone("AAAAAA")).hasValueSatisfying(t -> assertThat(t.reason()).isEqualTo(RoomClosedReason.MATCH_ENDED));
+        assertThat(broadcastsOf(MessageType.ROOM_CLOSED)).as("the players learn of the end from the match").isEmpty();
+        assertThat(participation.activityOf("h")).isEmpty();
+        assertThat(participation.activityOf("p1")).isEmpty();
+    }
+
+    @Test
+    void aHostWhoLeavesWhileStartingClosesTheRoomAndALateFetchStartsNoMatch() {
+        UUID id = lobbyOf(2);
+        RoomActor room = registry.find(id).orElseThrow();
+        room.tell(new RoomEvent.Start("h", "s"));
+        await().atMost(Duration.ofSeconds(5)).until(() -> fetches.size() == 1);
+
+        room.tell(new RoomEvent.Leave("h", "s"));
+        await().atMost(Duration.ofSeconds(5)).until(() -> registry.liveCount() == 0);
+        fetches.getFirst().complete(set(10));
+
+        // The late result lands on a closed room: nothing starts.
+        org.junit.jupiter.api.Assertions.assertThrows(org.awaitility.core.ConditionTimeoutException.class,
+                () -> await().during(Duration.ofMillis(400)).atMost(Duration.ofMillis(500))
+                        .until(() -> !broadcastsOf(MessageType.ROOM_MATCH_STARTED).isEmpty()));
+        assertThat(matches.liveCount()).isZero();
+        assertThat(participation.activityOf("h")).isEmpty();
+        assertThat(participation.activityOf("p1")).isEmpty();
+        assertThat(((in.minnal.contracts.realtime.RoomClosedPayload) broadcastsOf(MessageType.ROOM_CLOSED).getFirst().payload())
+                .reason()).isEqualTo(RoomClosedReason.HOST_LEFT);
+    }
+
+    @Test
+    void aDrainBeginningWhileStartingClosesTheRoomForItsMembersAndALateFetchStartsNoMatch() {
+        UUID id = lobbyOf(2);
+        RoomActor room = registry.find(id).orElseThrow();
+        room.tell(new RoomEvent.Start("h", "s"));
+        await().atMost(Duration.ofSeconds(5)).until(() -> fetches.size() == 1);
+
+        drain.begin();
+
+        assertThat(registry.liveCount()).isZero();
+        var closed = (in.minnal.contracts.realtime.RoomClosedPayload) broadcastsOf(MessageType.ROOM_CLOSED).getFirst().payload();
+        assertThat(closed.reason()).isEqualTo(RoomClosedReason.SERVER_DRAINING);
+        assertThat(sentTo("p1", MessageType.ROOM_CLOSED)).hasSize(1);
+        assertThat(sentTo("h", MessageType.ROOM_CLOSED)).hasSize(1);
+        fetches.getFirst().complete(set(10));
+        assertThat(matches.liveCount()).isZero();
+        assertThat(broadcastsOf(MessageType.ROOM_MATCH_STARTED)).isEmpty();
     }
 }

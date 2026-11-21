@@ -215,8 +215,45 @@ export const roomCatalogue = {
   'rooms.close.stay': { ml: 'തുടരാം', en: 'Stay', signoff: both },
   'rooms.close.confirm': { ml: 'റൂം അടയ്ക്കുക', en: 'Close room', signoff: both },
   'rooms.start.sending': { ml: 'തുടങ്ങുന്നു…', en: 'Starting…', signoff: both },
-  'rooms.start.soon': { ml: 'മാച്ച് തുടങ്ങുന്നത് ഉടൻ വരുന്നു', en: 'Starting a match arrives soon', signoff: both },
   'rooms.start.failed': { ml: 'തുടങ്ങാനായില്ല. വീണ്ടും ശ്രമിക്കൂ.', en: "Couldn't start. Try again.", signoff: both },
+
+  // Starting a match (Story 5.4). Every Malayalam line here awaits voice sign-off.
+  'rooms.start.pending': { ml: '…', en: '…', signoff: both },
+  'rooms.lobby.starting': { ml: 'തുടങ്ങുകയാണ്…', en: 'Starting…', signoff: both },
+  'rooms.start.topicUnavailable': {
+    ml: 'ഈ ടോപ്പിക്കിൽ ഇപ്പോൾ ആവശ്യത്തിന് ചോദ്യങ്ങൾ ഇല്ല. മറ്റൊന്ന് തിരഞ്ഞെടുക്കൂ.',
+    en: 'That topic has too few questions right now. Pick another.',
+    signoff: both,
+  },
+  'rooms.start.changeTopic': { ml: 'ടോപ്പിക് മാറ്റാം', en: 'Change topic', signoff: both },
+  'rooms.start.draining': {
+    ml: 'മിന്നൽ അപ്ഡേറ്റ് ചെയ്യുകയാണ്. അൽപ്പം കഴിഞ്ഞ് വീണ്ടും ശ്രമിക്കൂ.',
+    en: 'Minnal is updating. Try again in a moment.',
+    signoff: both,
+  },
+
+  // The Battle Room live screen (Story 5.4): the countdown, the plain standings and the interim final list.
+  'room.countdown.label': {
+    ml: 'തുടങ്ങാൻ {{n, number}}',
+    en: 'Starting in {{n, number}}',
+    signoff: both,
+    params: { ml: { n: 3 }, en: { n: 3 } },
+  },
+  'room.standings.heading': { ml: 'സ്കോർ നില', en: 'Standings', signoff: both },
+  'room.standings.row': {
+    ml: '{{rank, number}}-ാം സ്ഥാനം, {{name}}, {{score, number}} പോയിന്റ്, {{status}}',
+    en: 'Place {{rank, number}}, {{name}}, {{score, number}} points, {{status}}',
+    signoff: both,
+    params: { ml: { rank: 1, name: 'Anju', score: 1200, status: 'ഉത്തരം നൽകി' }, en: { rank: 1, name: 'Anju', score: 1200, status: 'answered' } },
+  },
+  'room.standings.notAnswered': { ml: 'ഇതുവരെ ഉത്തരം നൽകിയില്ല', en: 'not answered yet', signoff: both },
+  'room.final.heading': { ml: 'അവസാന സ്കോർ നില', en: 'Final standings', signoff: both },
+  'room.final.row': {
+    ml: '{{rank, number}}-ാം സ്ഥാനം, {{name}}, {{score, number}} പോയിന്റ്',
+    en: 'Place {{rank, number}}, {{name}}, {{score, number}} points',
+    signoff: both,
+    params: { ml: { rank: 1, name: 'Anju', score: 1200 }, en: { rank: 1, name: 'Anju', score: 1200 } },
+  },
 
   // Notices on the Rooms tab
   'rooms.notice.expired': { ml: 'ആ റൂമിന്റെ സമയം കഴിഞ്ഞു.', en: 'That room expired.', signoff: both },

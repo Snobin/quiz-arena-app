@@ -1,0 +1,31 @@
+{
+  "type" : "ROOM_LOBBY_UPDATED",
+  "roomId" : "8e9f0a1b-2c3d-4e5f-a6b7-c8d9e0f1a2b3",
+  "seq" : 3,
+  "serverTime" : "2026-11-12T10:15:30.123Z",
+  "payload" : {
+    "room" : {
+      "hostParticipantId" : "0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+      "source" : {
+        "type" : "BANK",
+        "topicId" : "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+      },
+      "questionCount" : 10,
+      "rated" : true,
+      "expiresAt" : "2026-11-13T10:15:30.123Z",
+      "participants" : [ {
+        "participantId" : "0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+        "displayName" : "Anju",
+        "kind" : "USER"
+      }, {
+        "participantId" : "9d8c7b6a-5f4e-4d3c-b2a1-0f9e8d7c6b5a",
+        "displayName" : "ബിജു",
+        "kind" : "USER"
+      } ],
+      "humanCount" : 2
+    },
+    "joined" : [ ],
+    "left" : [ ],
+    "phase" : "STARTING"
+  }
+}

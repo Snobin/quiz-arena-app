@@ -75,6 +75,34 @@ public final class RoomState {
         phase = RoomPhase.ENDED;
     }
 
+    /** The host's start is fetching the set (a step of the lobby). */
+    public void starting() {
+        phase = RoomPhase.STARTING;
+    }
+
+    /** The start did not go ahead: the lobby is open again. */
+    public void backToLobby() {
+        phase = RoomPhase.LOBBY;
+    }
+
+    public void inMatch() {
+        phase = RoomPhase.IN_MATCH;
+    }
+
+    /** Every human's {@code sub} to her participant id, host first (the match's human map). */
+    public Map<String, UUID> humans() {
+        Map<String, UUID> humans = new LinkedHashMap<>();
+        members.forEach((sub, member) -> humans.put(sub, member.participantId()));
+        return humans;
+    }
+
+    /** Every human as a {@code USER} participant, host first. */
+    public List<Participant> participants() {
+        List<Participant> participants = new ArrayList<>();
+        members.values().forEach(m -> participants.add(new Participant(m.participantId(), m.displayName(), ParticipantKind.USER)));
+        return participants;
+    }
+
     public boolean isHost(String sub) {
         return hostSub.equals(sub);
     }
@@ -151,8 +179,7 @@ public final class RoomState {
     }
 
     public RoomView view() {
-        List<Participant> participants = new ArrayList<>();
-        members.values().forEach(m -> participants.add(new Participant(m.participantId(), m.displayName(), ParticipantKind.USER)));
+        List<Participant> participants = participants();
         return new RoomView(participantIdOf(hostSub), source, questionCount, source.rated(), expiresAt, participants,
                 participants.size());
     }

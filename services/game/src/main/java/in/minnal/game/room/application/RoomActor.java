@@ -1,7 +1,21 @@
 package in.minnal.game.room.application;
 
+import in.minnal.contracts.internal.QuestionSetFilters;
+import in.minnal.contracts.internal.QuestionSetRequest;
+import in.minnal.contracts.internal.QuestionSetResponse;
+import in.minnal.contracts.internal.QuestionSetTopic;
+import in.minnal.contracts.internal.QuestionSource;
 import in.minnal.contracts.realtime.ErrorCode;
+import in.minnal.contracts.realtime.MatchMode;
 import in.minnal.contracts.realtime.MessageType;
+import in.minnal.contracts.realtime.RoomLobbyPhase;
+import in.minnal.contracts.realtime.RoomMatchStartedPayload;
+import in.minnal.contracts.realtime.RoomStartFailedPayload;
+import in.minnal.contracts.realtime.RoomStartFailedReason;
+import in.minnal.contracts.realtime.TopicInfo;
+import in.minnal.game.match.application.MatchRegistry;
+import in.minnal.game.match.domain.MatchSetup;
+import in.minnal.game.matchmaking.application.QuestionSetClient;
 import in.minnal.contracts.realtime.RoomClosedPayload;
 import in.minnal.contracts.realtime.RoomClosedReason;
 import in.minnal.contracts.realtime.RoomJoinedPayload;
@@ -24,8 +38,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.Future;
 import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,8 +51,15 @@ import org.slf4j.LoggerFactory;
  * One Battle Room (AD-4): its {@link RoomState} lives on this actor's own thread, and every lobby change is an event on
  * its queue. In the lobby it answers a host's {@code configure} (validated as on create, then a
  * {@code ROOM_LOBBY_UPDATED} with the next {@code seq} at once), a join (Story 5.3: up to {@value RoomState#MAX_HUMANS}
- * humans, the host included), a member's leave, and a start (still the {@code NOT_AVAILABLE_YET} stub once the host and
- * player-count checks pass, until Story 5.4).
+ * humans, the host included), a member's leave, and a start.
+ *
+ * <p>Start (Story 5.4): the host's start, with at least 2 humans and the service not draining, moves the room to
+ * {@code STARTING} (a step of the lobby: {@code ROOM_LOBBY_UPDATED {phase: STARTING}}) and fetches the question set off
+ * this thread; the result comes back as a {@link RoomEvent.StartFetched}. A failure returns the room to {@code LOBBY}
+ * with {@code ROOM_START_FAILED}; a success with the host and 2 humans still here starts the match actor (a fresh
+ * {@code matchId}, every human a {@code USER}, no bot) and broadcasts {@code ROOM_MATCH_STARTED}. From then on the
+ * match runs the show; the room only waits for it to end, then ends itself (its code expires at once). A running room
+ * match is not cut short by the 24 h expiry or by a drain.
  *
  * <p>Joins and leaves are coalesced: the first one arms a {@value #COALESCE_MS} ms timer, and when it fires one
  * {@code ROOM_LOBBY_UPDATED {room, joined[], left[]}} goes out with the next {@code seq}; a configure in between flushes
@@ -53,6 +77,9 @@ final class RoomActor {
     /** At most one membership broadcast per this window (Story 5.3). */
     static final long COALESCE_MS = 250;
     static final Duration COALESCE = Duration.ofMillis(COALESCE_MS);
+    /** A 3 s countdown plus a 0.5 s subscription buffer (Story 5.4). */
+    static final Duration FIRST_QUESTION_DELAY = Duration.ofMillis(3500);
+    static final String CATEGORY = "KERALA_PSC";
 
     private final RoomState state;
     private final RoomSettings settings;
@@ -63,10 +90,16 @@ final class RoomActor {
     private final Predicate<String> hasSession;
     private final BiConsumer<RoomActor, String> onRelease;
     private final BiConsumer<RoomActor, RoomClosedReason> onClosed;
+    private final QuestionSetClient questions;
+    private final MatchRegistry matches;
+    private final RoomMetrics metrics;
+    private final BooleanSupplier draining;
     private final Actor<RoomEvent> actor;
 
     /** Other threads read it (subscription checks): replaced whole by the actor. */
     private volatile Set<String> members;
+    /** Whether the match runs (read by the registry while draining). */
+    private volatile boolean inMatch;
 
     private Future<?> expiryTimer;
     /** One armed grace per dropped member: its timer and the epoch it was armed with. */
@@ -82,7 +115,12 @@ final class RoomActor {
 
     RoomActor(RoomState state, RoomSettings settings, Clock clock, RoomTimers timers, PlayerChannel channel,
             RoomBroadcaster broadcaster, Predicate<String> hasSession, BiConsumer<RoomActor, String> onRelease,
-            BiConsumer<RoomActor, RoomClosedReason> onClosed) {
+            BiConsumer<RoomActor, RoomClosedReason> onClosed, QuestionSetClient questions, MatchRegistry matches,
+            RoomMetrics metrics, BooleanSupplier draining) {
+        this.questions = questions;
+        this.matches = matches;
+        this.metrics = metrics;
+        this.draining = draining;
         this.state = state;
         this.settings = settings;
         this.clock = clock;
@@ -108,6 +146,11 @@ final class RoomActor {
     /** The humans in the room (a snapshot, safe from any thread). */
     Set<String> members() {
         return members;
+    }
+
+    /** Whether the room's match is running: a drain lets such a room play on. */
+    boolean inMatch() {
+        return inMatch;
     }
 
     boolean isMember(String sub) {
@@ -142,7 +185,9 @@ final class RoomActor {
             case RoomEvent.GraceExpired expired -> onGraceExpired(expired.sub(), expired.epoch());
             case RoomEvent.Flush flush -> onFlush();
             case RoomEvent.Expire expire -> onExpire();
-            case RoomEvent.Drain drain -> finish(RoomClosedReason.SERVER_DRAINING);
+            case RoomEvent.Drain drain -> onDrain();
+            case RoomEvent.StartFetched fetched -> onStartFetched(fetched);
+            case RoomEvent.MatchEnded ended -> finish(RoomClosedReason.MATCH_ENDED, false);
         }
     }
 
@@ -157,6 +202,9 @@ final class RoomActor {
     }
 
     private void onExpire() {
+        if (state.phase() == RoomPhase.IN_MATCH) {
+            return; // not cut short: the room ends when its match does
+        }
         if (clock.instant().isBefore(state.expiresAt())) {
             armExpiry(); // fired early (timer and wall clock disagree): wait out the rest
             return;
@@ -222,15 +270,113 @@ final class RoomActor {
             refuse(start.sub(), start.sessionId(), ErrorCode.NOT_HOST);
             return;
         }
-        if (state.phase() == RoomPhase.LOBBY && state.humanCount() < 2) {
+        if (state.phase() != RoomPhase.LOBBY) {
+            return; // already starting or playing: a repeat start changes nothing
+        }
+        if (state.humanCount() < 2) {
             refuse(start.sub(), start.sessionId(), ErrorCode.NOT_ENOUGH_PLAYERS);
             return;
         }
-        // Story 5.4 builds the start itself.
-        refuse(start.sub(), start.sessionId(), ErrorCode.NOT_AVAILABLE_YET);
+        if (draining.getAsBoolean()) {
+            refuse(start.sub(), start.sessionId(), ErrorCode.SERVER_DRAINING);
+            return;
+        }
+        state.starting();
+        broadcastLobby(); // {phase: STARTING}, carrying any joins and leaves still waiting in the window
+        fetchSet();
+    }
+
+    /** Asks core for the set, off this thread; the answer comes back as an event (a failure to ask is one too). */
+    private void fetchSet() {
+        RoomConfigRules.Config config = state.config();
+        QuestionSetRequest request = new QuestionSetRequest(QuestionSource.BANK,
+                new QuestionSetFilters(CATEGORY, null, config.source().topicId(), null), null, config.questionCount(),
+                state.hostSub());
+        CompletableFuture<QuestionSetResponse> fetch;
+        try {
+            fetch = questions.fetch(request);
+        } catch (RuntimeException e) {
+            actor.tell(new RoomEvent.StartFetched(null, e));
+            return;
+        }
+        fetch.whenComplete((set, failure) -> actor.tell(new RoomEvent.StartFetched(set, failure)));
+    }
+
+    private void onStartFetched(RoomEvent.StartFetched fetched) {
+        if (state.phase() != RoomPhase.STARTING) {
+            return;
+        }
+        QuestionSetResponse set = fetched.set();
+        int count = state.config().questionCount();
+        if (fetched.failure() != null || set == null || set.questions().size() != count || set.topic() == null) {
+            Throwable cause = fetched.failure() instanceof CompletionException && fetched.failure().getCause() != null
+                    ? fetched.failure().getCause() : fetched.failure();
+            // A short set is a topic with too few questions, like core's own 422.
+            boolean topicGone = cause instanceof QuestionSetClient.TopicUnavailableException
+                    || (cause == null && set != null && set.questions().size() < count);
+            log.atWarn().addKeyValue("roomId", roomId())
+                    .log("question set unavailable, room start failed: {}", cause == null ? "short or empty set"
+                            : cause.getClass().getSimpleName());
+            state.backToLobby();
+            broadcaster.broadcast(roomId(), ServerMessage.roomBroadcast(MessageType.ROOM_START_FAILED, roomId(),
+                    state.nextSeq(), clock.instant(), new RoomStartFailedPayload(topicGone
+                            ? RoomStartFailedReason.TOPIC_UNAVAILABLE : RoomStartFailedReason.UNAVAILABLE)));
+            return;
+        }
+        if (state.humanCount() < 2) {
+            state.backToLobby(); // players left meanwhile: the "Waiting for 1 more player" lobby (the host cannot be gone)
+            broadcastLobby();
+            return;
+        }
+        startMatch(set);
+    }
+
+    private void startMatch(QuestionSetResponse set) {
+        Instant now = clock.instant();
+        UUID matchId = UUID.randomUUID();
+        QuestionSetTopic topic = set.topic();
+        TopicInfo topicInfo = new TopicInfo(topic.topicId(), topic.name(), topic.subjectName());
+        List<in.minnal.contracts.realtime.Participant> participants = state.participants();
+        Map<String, Long> waits = new HashMap<>();
+        state.memberSubs().forEach(sub -> waits.put(sub, 0L));
+        Instant firstQuestionAt = now.plus(FIRST_QUESTION_DELAY);
+        MatchSetup setup = new MatchSetup(matchId, MatchMode.BATTLE_ROOM, participants, state.humans(), set.questions(),
+                waits, Map.of(), now, QuestionSource.BANK, topicInfo);
+        if (matches.start(setup, firstQuestionAt, match -> actor.tell(new RoomEvent.MatchEnded())).isEmpty()) {
+            log.atWarn().addKeyValue("roomId", roomId()).log("match not started: draining");
+            finish(RoomClosedReason.SERVER_DRAINING);
+            return;
+        }
+        state.inMatch();
+        inMatch = true;
+        joined.clear();
+        left.clear();
+        if (flushTimer != null) {
+            flushTimer.cancel(false);
+            flushTimer = null;
+        }
+        // The match owns each player's connection from here on (Story 1.9); the 24 h expiry waits for its end.
+        List.copyOf(graces.keySet()).forEach(this::cancelGrace);
+        metrics.started(participants.size());
+        log.atInfo().addKeyValue("roomId", roomId()).addKeyValue("matchId", matchId)
+                .addKeyValue("userId", state.hostSub()).log("room match started with {} humans", participants.size());
+        broadcaster.broadcast(roomId(), ServerMessage.roomBroadcast(MessageType.ROOM_MATCH_STARTED, roomId(),
+                state.nextSeq(), now, new RoomMatchStartedPayload(roomId(), matchId, MatchMode.BATTLE_ROOM,
+                        participants, state.config().questionCount(), topicInfo, firstQuestionAt)));
+    }
+
+    /** A lobby (or a start in progress) closes with the service; a room whose match runs plays on. */
+    private void onDrain() {
+        if (state.phase() == RoomPhase.IN_MATCH) {
+            return;
+        }
+        finish(RoomClosedReason.SERVER_DRAINING);
     }
 
     private void onLeave(RoomEvent.Leave leave) {
+        if (state.phase() == RoomPhase.IN_MATCH) {
+            return; // in a match a player leaves through the match (Story 1.9)
+        }
         if (state.isHost(leave.sub())) {
             finish(RoomClosedReason.HOST_LEFT); // the client confirmed first when others were in the lobby
             return;
@@ -256,7 +402,7 @@ final class RoomActor {
 
     /** A member's last session closed: she has the grace to come back, and stays listed meanwhile. */
     private void onDisconnected(String sub) {
-        if (!state.isMember(sub) || hasSession.test(sub)) {
+        if (state.phase() == RoomPhase.IN_MATCH || !state.isMember(sub) || hasSession.test(sub)) {
             return; // a reconnect raced the disconnect
         }
         armGrace(sub);
@@ -283,7 +429,7 @@ final class RoomActor {
             return; // stale: she came back (or dropped again) since it was armed
         }
         graces.remove(sub);
-        if (hasSession.test(sub) || !state.isMember(sub)) {
+        if (state.phase() == RoomPhase.IN_MATCH || hasSession.test(sub) || !state.isMember(sub)) {
             return;
         }
         if (state.isHost(sub)) {
@@ -325,7 +471,8 @@ final class RoomActor {
         joined.clear();
         left.clear();
         broadcaster.broadcast(roomId(), ServerMessage.roomBroadcast(MessageType.ROOM_LOBBY_UPDATED, roomId(),
-                state.nextSeq(), clock.instant(), new RoomLobbyUpdatedPayload(state.view(), came, went)));
+                state.nextSeq(), clock.instant(), new RoomLobbyUpdatedPayload(state.view(), came, went,
+                        state.phase() == RoomPhase.STARTING ? RoomLobbyPhase.STARTING : RoomLobbyPhase.LOBBY)));
     }
 
     private ServerMessage<RoomJoinedPayload> joinedFor(String sub) {
@@ -340,6 +487,14 @@ final class RoomActor {
 
     /** Closes the room: tells every member, then hands the code and the players back to the registry. */
     private void finish(RoomClosedReason reason) {
+        finish(reason, true);
+    }
+
+    /**
+     * As above; {@code tellMembers} is false when the match ended: the players are in the match and learn of its end there
+     * (Story 5.4), so no {@code ROOM_CLOSED} goes out.
+     */
+    private void finish(RoomClosedReason reason, boolean tellMembers) {
         closed = true;
         state.end();
         List.copyOf(graces.keySet()).forEach(this::cancelGrace);
@@ -352,6 +507,9 @@ final class RoomActor {
         }
         Instant now = clock.instant();
         try {
+            if (!tellMembers) {
+                return;
+            }
             broadcaster.broadcast(roomId(), ServerMessage.roomBroadcast(MessageType.ROOM_CLOSED, roomId(),
                     state.nextSeq(), now, new RoomClosedPayload(reason)));
             // Also private, so a member who has not subscribed to the topic yet still learns it.

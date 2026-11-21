@@ -10,7 +10,18 @@ import {
   type RealtimeClient,
   type RealtimeEnv,
 } from '../../realtime/connection.ts';
-import { USER_PRIVATE_QUEUE, type ErrorCode, type RoomClosedReason, type RoomConfigRequest, type RoomRole, type RoomView } from '../../realtime/protocol.ts';
+import { startRoomMatch } from '../../realtime/liveGameStore.ts';
+import {
+  USER_PRIVATE_QUEUE,
+  type ErrorCode,
+  type RoomClosedReason,
+  type RoomConfigRequest,
+  type RoomLobbyPhase,
+  type RoomRole,
+  type RoomStartFailedReason,
+  type RoomView,
+} from '../../realtime/protocol.ts';
+import { navigate } from '../../shell/router.ts';
 import {
   configBody,
   joinBody,
@@ -37,6 +48,11 @@ import {
  *   1.9 rules): one at or below the last seen is dropped; a gap (`seq > lastSeq + 1`) sends one lobby `resync` (again
  *   every `RESYNC_RETRY_MS` while unanswered) and holds the frames until the fresh `ROOM_JOINED`, after which the held
  *   frames above its `refSeq` apply in order.
+ * - Start (Story 5.4): the host's start sends `/app/room/{roomId}/start`; `ROOM_LOBBY_UPDATED {phase: STARTING}` marks every
+ *   lobby as starting, `ROOM_START_FAILED` returns it to the lobby with the reason, and `ROOM_MATCH_STARTED` hands the match
+ *   to the match connection (`startRoomMatch`, which subscribes to `/topic/match/{matchId}`), opens `/match` and closes
+ *   this socket. `ROOM_LOBBY_UPDATED`, `ROOM_START_FAILED` and `ROOM_MATCH_STARTED` share the room's `seq`, so they apply
+ *   in order together.
  * - A join (Story 5.3) sends `/app/room/join {code}`; the `ROOM_JOINED` with that code, or an `ERROR`, settles it.
  * - A socket that drops while she is in a room is reopened with backoff; game-service keeps her room for its 10 s
  *   grace and answers the new subscription with a fresh `ROOM_JOINED`. If none comes the room is gone.
@@ -74,9 +90,13 @@ export type RoomState = {
   /** The host's name for a `HOST_CLOSED` notice (inserted unchanged). */
   noticeHost: string | null;
   reconnecting: boolean;
-  /** A start sent and not yet answered, and the last start's answer (still `NOT_AVAILABLE_YET` until Story 5.4). */
+  /** A start sent and not yet answered, and the last start's refusal (`SERVER_DRAINING`, a timeout...). */
   starting: boolean;
   startError: RoomError | null;
+  /** `STARTING` while the host's start fetches the set (every lobby shows it), else `LOBBY` (Story 5.4). */
+  lobbyPhase: RoomLobbyPhase;
+  /** Why the last start did not go ahead (ROOM_START_FAILED); cleared by the next start or a change of topic. */
+  startFailure: RoomStartFailedReason | null;
   lobbyEvent: LobbyEvent | null;
   joinFailure: JoinFailure | null;
 };
@@ -91,6 +111,8 @@ export const INITIAL_ROOM_STATE: RoomState = {
   reconnecting: false,
   starting: false,
   startError: null,
+  lobbyPhase: 'LOBBY',
+  startFailure: null,
   lobbyEvent: null,
   joinFailure: null,
 };
@@ -118,7 +140,7 @@ export type RoomClient = {
   join(code: string): Promise<JoinResult>;
   /** Re-reads a room she is already in. Resolves false when there is none. */
   resume(): Promise<boolean>;
-  /** The host asks to start (answered with an `ERROR` until Story 5.4). */
+  /** The host asks to start: STARTING follows, then the match (or a failure back in the lobby). */
   start(): void;
   /** Hands a link's failed join to the Rooms tab; `clearJoinFailure` once shown. */
   setJoinFailure(failure: JoinFailure): void;
@@ -139,7 +161,12 @@ const NOTICES: Record<RoomClosedReason, RoomNotice> = {
   HOST_LEFT: 'CLOSED',
   HOST_DISCONNECTED: 'DISCONNECTED',
   SERVER_DRAINING: 'DRAINING',
+  // Never sent to a player (she is in the match by then); read as a plain close should one arrive.
+  MATCH_ENDED: 'CLOSED',
 };
+
+/** The broadcasts on the room topic: numbered by one `seq`, applied in order. */
+type Ordered = Extract<RoomIncoming, { type: 'ROOM_LOBBY_UPDATED' | 'ROOM_START_FAILED' | 'ROOM_MATCH_STARTED' }>;
 
 export function createRoomClient(env: RealtimeEnv): RoomClient {
   let client: RealtimeClient | null = null;
@@ -160,8 +187,8 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
   let resyncTimer: ReturnType<typeof setTimeout> | undefined;
   let creating: { request: Required<RoomConfigRequest>; resolve: (result: CreateResult) => void } | null = null;
   let joining: { code: string; promise: Promise<JoinResult>; resolve: (result: JoinResult) => void } | null = null;
-  /** Lobby frames held while a resync is out (a seq gap). */
-  let held: Array<Extract<RoomIncoming, { type: 'ROOM_LOBBY_UPDATED' }>> = [];
+  /** Room broadcast frames held while a resync is out (a seq gap). */
+  let held: Ordered[] = [];
   let awaitingResync = false;
   let resuming: ((found: boolean) => void) | null = null;
   let resumePromise: Promise<boolean> | null = null;
@@ -226,20 +253,57 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
     current.resolve(result);
   }
 
-  /** Applies one lobby frame (in order). */
-  function applyLobby(incoming: Extract<RoomIncoming, { type: 'ROOM_LOBBY_UPDATED' }>): void {
+  /** Applies one room broadcast (in order). */
+  function applyLobby(incoming: Ordered): void {
     const { session, configuring } = get();
     if (!session) return;
-    const { room, joined, left } = incoming.payload;
     const seq = incoming.message.seq ?? session.lastSeq;
+    if (incoming.type === 'ROOM_START_FAILED') {
+      startTimer = clearTimer(startTimer);
+      set({ session: { ...session, lastSeq: seq }, starting: false, lobbyPhase: 'LOBBY', startFailure: incoming.payload.reason });
+      return;
+    }
+    if (incoming.type === 'ROOM_MATCH_STARTED') {
+      const { payload } = incoming;
+      const offset = Date.parse(incoming.message.serverTime) - env.now();
+      // The match connection takes over: seeded and subscribed first, then this socket goes and `/match` opens.
+      startRoomMatch(
+        {
+          matchId: payload.matchId,
+          mode: payload.mode,
+          participants: payload.participants,
+          questionCount: payload.questionCount,
+          questionSource: 'BANK',
+          selfParticipantId: session.selfParticipantId,
+          ...(payload.topic && { topic: payload.topic }),
+        },
+        payload.firstQuestionAt,
+        Number.isFinite(offset) ? offset : 0,
+      );
+      navigate('/match', { replace: true });
+      end(null);
+      return;
+    }
+    const { room, joined, left, phase } = incoming.payload;
     const before = session.room;
     const configChanged = before.questionCount !== room.questionCount || before.source.topicId !== room.source.topicId;
-    const patch: Partial<RoomState> = { session: { ...session, room, lastSeq: seq }, lobbyEvent: { seq, joined, left } };
+    const patch: Partial<RoomState> = {
+      session: { ...session, room, lastSeq: seq },
+      lobbyEvent: { seq, joined, left },
+      lobbyPhase: phase,
+    };
+    if (phase === 'STARTING') {
+      // Her own start (or the host's, for a player) is under way: nothing is waiting on an answer any more.
+      startTimer = clearTimer(startTimer);
+      Object.assign(patch, { starting: false, startError: null, startFailure: null });
+    }
     // A membership-only frame neither closes an open configure nor clears its inline error.
     if (configChanged || (joined.length === 0 && left.length === 0)) {
       if (configuring) configureTimer = clearTimer(configureTimer);
       Object.assign(patch, { configuring: false, error: null });
     }
+    // A new topic or count answers the "too few questions" line.
+    if (configChanged) Object.assign(patch, { startFailure: null });
     set(patch);
   }
 
@@ -343,7 +407,9 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
         }
         return;
       }
-      case 'ROOM_LOBBY_UPDATED': {
+      case 'ROOM_LOBBY_UPDATED':
+      case 'ROOM_START_FAILED':
+      case 'ROOM_MATCH_STARTED': {
         const { session } = get();
         if (!session || message.roomId !== session.roomId) return;
         if (message.seq === undefined) {
@@ -564,7 +630,7 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
     start() {
       const { session, starting } = get();
       if (!session || session.role !== 'HOST' || starting) return;
-      set({ starting: true, startError: null });
+      set({ starting: true, startError: null, startFailure: null });
       startTimer = clearTimer(startTimer);
       startTimer = setTimeout(() => {
         startTimer = undefined;

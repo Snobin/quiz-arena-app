@@ -20,8 +20,10 @@ class MatchConfiguration {
             @Value("${minnal.match.window:15s}") Duration window,
             @Value("${minnal.match.close-grace:50ms}") Duration closeGrace,
             @Value("${minnal.match.reveal-hold:2s}") Duration revealHold,
-            @Value("${minnal.match.grace:10s}") Duration grace) {
-        return new MatchSettings(leadIn, window, closeGrace, revealHold, grace);
+            @Value("${minnal.match.grace:10s}") Duration grace,
+            @Value("${minnal.match.room-reveal-hold:3s}") Duration roomRevealHold,
+            @Value("${minnal.match.room-scoreboard-coalesce:250ms}") Duration scoreboardCoalesce) {
+        return new MatchSettings(leadIn, window, closeGrace, revealHold, grace, roomRevealHold, scoreboardCoalesce);
     }
 
     /** Thread-safe: every match actor draws from it. Tests replace it with a seeded one. */
