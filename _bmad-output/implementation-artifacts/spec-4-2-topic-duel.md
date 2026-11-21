@@ -73,6 +73,23 @@ context:
 
 ## Spec Change Log
 
+## Review Triage Log
+
+| Finding | Verdict | Route | Evidence |
+|---|---|---|---|
+| Join body now deserialized: malformed frame drops the join, Quick Match regresses | medium | patch | Fixed: body read leniently; bad body means no topic; tests for both modes. |
+| Empty or non-UUID Duel URL silently joins the Quick queue | medium | patch | Fixed: UUID check redirects to the picker; `!== undefined` in connection. |
+| reapIdle exception in the shared tick cancels all ticks | medium | patch | Fixed: tick body wrapped in try/catch with logging. |
+| Unbounded topic actors from random UUIDs | medium | patch | Fixed: cap `minnal.matchmaking.max-topic-actors` (200), test added. |
+| Disconnect while queued on a topic untested | medium | patch | Fixed: new test. |
+| Draining row for Topic Duel untested | low | patch | Fixed: new test. |
+| `RematchRequests.request` default overload skips the guest rule | low | patch | Fixed: overload removed. |
+| Queue-depth gauge registered per mode, shared by topic actors | low | defer | Metrics only; a per-topic gauge needs a tag the spec forbids. |
+| Guest rematch test uses a non-participant | low | defer | Defence in depth for a state that cannot occur. |
+| Cancel during the rematch fetch window returns NOT_IN_QUEUE | low | defer | Narrow window; no actor exists for the claim. |
+| Topic name single-language, unknown topic reads "too few questions", topic missing from event, guest Ranks button, UUID forms, busy-flag race, wrapped-cause depth, stale `queuedMode`, test hygiene, docs | low | rejected | Epic keeps names single-language and the event topic-free; the rest are cosmetic or unlikely. |
+| Core-returned topic id differs from the request | false | rejected | Core is a trusted internal service. |
+
 ## Design Notes
 
 - The epic says `reason: UNAVAILABLE` for other failures, but the code's constant is `QUESTION_SET_UNAVAILABLE`; keep the existing value and add `TOPIC_UNAVAILABLE`, so Quick Match payloads do not change.

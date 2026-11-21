@@ -67,6 +67,20 @@ context: ['{project-root}/_bmad-output/implementation-artifacts/epic-4-context.m
 - Given the production build, when `check:dist` runs, then the entry chunk is no larger than before and the practice screen is a separate chunk.
 - Given the repository after this story, when migrations are listed, then V9 is still the last.
 
+## Review Triage Log
+
+| Finding | Verdict | Route | Evidence |
+|---|---|---|---|
+| `GET /next` rewrites the session with no rate limit | medium | patch | Fixed: `next` uses the SOLO_ANSWER bucket. |
+| 429 and Retry-After for start and next untested | medium | patch | Fixed: new per-player test. |
+| Offline Stop leaves the Back guard blocking the player | medium | patch | Fixed: network failure clears storage and leaves to the picker; test added. |
+| Valkey `create` not atomic; CAS compares re-serialized JSON; CAS retry untested; pool scan reads all published questions | low | defer | See deferred-work.md; orphan expires with its 2 h TTL, CAS drift only affects live sessions at deploy. |
+| Ratings tables and board keys not asserted unchanged | low | defer | Core has no ratings tables; test checks outbox, recent topics and key prefix. |
+| `optionIndex` limited to 0 to 3 | false | rejected | The validator requires exactly four options. |
+| Reports endpoint may not accept `SOLO` | false | rejected | Accepted since Story 3.5. |
+| Practice strings outside `catalogue.ts` | false | rejected | Loaded with the lazy chunk; `check:i18n` and a new test cover both languages. |
+| Lost answer response, retried Stop 404, stale tally on resume, orphan on early Stop, raw error bodies and similar | low | rejected | Cosmetic or narrow. |
+
 ## Design Notes
 
 The unanswered `current` pointer is what makes `next` idempotent across reloads; `answered` is flipped in the same Valkey write that stores the counts, so a double tap yields 409 rather than a double count. Pool rebuild reuses the latest-`PUBLISHED` query, so a question published mid-session joins on the next cycle only. The existing live-match option list marks the correct option with volt; UX-DR3 forbids volt here, so the practice reveal uses the ink tile specified in the epic.

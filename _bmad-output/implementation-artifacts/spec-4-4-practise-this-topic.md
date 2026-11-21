@@ -63,6 +63,17 @@ context: ['{project-root}/_bmad-output/implementation-artifacts/epic-4-context.m
 - Given the entry chunk before and after, when `build:check` runs, then initial JS is at most 150 kB gzipped and the new link ships as a separate chunk.
 - Given Quick Match and Topic Duel `MATCH_ENDED`, when they serialize, then each BANK question carries `topicId`.
 
+## Review Triage Log
+
+| Finding | Verdict | Route | Evidence |
+|---|---|---|---|
+| Nothing proves `MatchOutcome.questionOf` carries `topicId` into MATCH_ENDED | medium | patch | Fixed: `MatchTestKit.withTopic` and an assertion in `MatchActorTest`. |
+| `ResultsScreen` wiring `practise={ratedForHer}` untested | medium | patch | Fixed: three cases (registered BANK, guest, CUSTOM). |
+| Vacuous `getByTestId ?? getByTestId` assertion | low | patch | Fixed. |
+| Retry succeeding after a failure untested | low | patch | Fixed. |
+| Starting practice resets the stored tally; 409 on start has no branch; 404 shows the "small topic" notice | false | rejected | Start ends the old session (4.3); start has no 409; the spec routes 404 and 422 to the picker. |
+| Rematch cancelled before a failed start, stale navigation after unmount, no error boundary on the lazy chunk, `topicId` shape validation, unlogged `markTopicUsed` failure, sign-off, naming | low | rejected | Cosmetic or narrow. |
+
 ## Design Notes
 
 `BreakdownRow` is in the entry chunk with about 0.4 KB headroom, so it renders only a `lazy()` boundary plus props; the link, its strings and the start logic live in the new chunk. Rendering nothing for the Suspense fallback avoids layout shift. Start order: cancel rematch, POST, then `saveStored(topicId, ...)`, PUT recent topic (best effort, a failure never blocks), `navigate`. Core holds the per-question topic because game-service has no catalogue.
