@@ -31,6 +31,9 @@ import {
 
 // Peaks: requests are recorded and run on demand, so tests see exactly what was scheduled.
 const flashes = vi.hoisted(() => ({ queue: [] as Array<{ run: (t: number) => void; cancelled: boolean }>, requested: 0 }));
+const preload = vi.hoisted(() => ({ preloadLiveMatch: vi.fn(), preloadResults: vi.fn() }));
+vi.mock('../preload.ts', () => preload);
+
 vi.mock('../../motion/flashScheduler.ts', () => ({
   requestFlash: (run: (t: number) => void) => {
     const entry = { run, cancelled: false };
@@ -168,12 +171,21 @@ afterEach(async () => {
 });
 
 describe('subscribe and lead-in', () => {
+  it('starts fetching the Results chunk when the live screen mounts', async () => {
+    preload.preloadResults.mockClear();
+    const m = await found();
+    start(m, 0);
+    renderApp('/match');
+    await screen.findByTestId('progress');
+    expect(preload.preloadResults).toHaveBeenCalledTimes(1);
+  });
+
   it('MATCH_FOUND subscribes before /match opens, so a Q1 that arrives first is not missed', async () => {
     const m = await found();
     expect(socket().isSubscribed(matchTopic(m.matchId))).toBe(true);
     start(m, 0);
     renderApp('/match');
-    expect(screen.getByTestId('progress')).toHaveTextContent('Q 1/10');
+    expect(await screen.findByTestId('progress')).toHaveTextContent('Q 1/10');
     expect(heading()).toHaveTextContent('Which is the longest river in Kerala?');
   });
 

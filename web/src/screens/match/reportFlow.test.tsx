@@ -121,7 +121,7 @@ describe('report link on the live reveal', () => {
     expect(screen.queryByTestId('report-link')).toBeNull();
     revealQuestion(m, 0);
     const calls = fetchSpy.mock.calls.length;
-    fireEvent.click(screen.getByTestId('report-link'));
+    fireEvent.click(await screen.findByTestId('report-link'));
     expect(screen.getByTestId('report-marked')).toHaveTextContent('Marked · add a note on results');
     expect(lastResult.loadMarks(m.matchId)).toEqual(['q-0:1']);
     expect(fetchSpy.mock.calls.length).toBe(calls);

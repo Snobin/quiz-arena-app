@@ -3,6 +3,7 @@ import { LiveRegions } from './LiveRegions.tsx';
 import { OfflineBanner } from './OfflineBanner.tsx';
 import { usePathname, useRouter } from './router.ts';
 import { consumeReturnFocus } from './returnFocus.ts';
+import { deferScreenFocus, pendingAttr, screenHeading } from './ScreenReady.tsx';
 import { recallScroll, rememberScroll } from './scrollMemory.ts';
 import { TabBar } from './TabBar.tsx';
 
@@ -29,8 +30,10 @@ export function AppShell({ children }: { children: ReactNode }) {
     window.scrollTo(0, recallScroll(pathname));
     if (shownPath.current === pathname) return;
     shownPath.current = pathname;
-    const target = consumeReturnFocus(pathname) ?? document.querySelector<HTMLElement>('main h1');
-    target?.focus({ preventScroll: true });
+    const target = consumeReturnFocus(pathname) ?? document.querySelector<HTMLElement>(screenHeading);
+    if (target) target.focus({ preventScroll: true });
+    // A lazy screen still loading shows only its fallback: ScreenReady finishes the move once it mounts.
+    else if (document.querySelector(`main h1[${pendingAttr}]`)) deferScreenFocus();
   }, [pathname]);
 
   return (

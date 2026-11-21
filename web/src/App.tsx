@@ -4,23 +4,28 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { useSession } from './auth/session.ts';
 import { ensureProfileLoaded, resetProfile, useProfile } from './profile/profileStore.ts';
-import { ProfileSetup } from './screens/profile/ProfileSetup.tsx';
 import { PageColumn } from './design/PageColumn.tsx';
-import { AuthReturn } from './screens/AuthReturn.tsx';
-import { MeScreen } from './screens/MeScreen.tsx';
 import { GuestHome } from './screens/home/GuestHome.tsx';
 import { RegisteredHome } from './screens/home/RegisteredHome.tsx';
-import { LiveMatchScreen } from './screens/match/LiveMatchScreen.tsx';
-import { MatchmakingScreen } from './screens/matchmaking/MatchmakingScreen.tsx';
-import { RanksScreen } from './screens/RanksScreen.tsx';
-import { ResultsScreen } from './screens/results/ResultsScreen.tsx';
-import { RoomsScreen } from './screens/RoomsScreen.tsx';
-import { SettingsScreen } from './screens/SettingsScreen.tsx';
-import { SignInPrompt } from './screens/SignInPrompt.tsx';
 import { AppShell } from './shell/AppShell.tsx';
+import { pendingAttr, ScreenReady } from './shell/ScreenReady.tsx';
 import { navigate, usePathname, useRouterSync } from './shell/router.ts';
 import { AdminRoute } from './screens/admin/AdminRoute.tsx';
 import { safeReturnPath } from './screens/home/signInPath.ts';
+
+// Screens reached after first paint load on demand (entry budget).
+const LiveMatchScreen = lazy(() => import('./screens/match/LiveMatchScreen.tsx').then((m) => ({ default: m.LiveMatchScreen })));
+const MatchmakingScreen = lazy(() => import('./screens/matchmaking/MatchmakingScreen.tsx').then((m) => ({ default: m.MatchmakingScreen })));
+const RanksScreen = lazy(() => import('./screens/RanksScreen.tsx').then((m) => ({ default: m.RanksScreen })));
+const ResultsScreen = lazy(() => import('./screens/results/ResultsScreen.tsx').then((m) => ({ default: m.ResultsScreen })));
+const RoomsScreen = lazy(() => import('./screens/RoomsScreen.tsx').then((m) => ({ default: m.RoomsScreen })));
+const SettingsScreen = lazy(() => import('./screens/SettingsScreen.tsx').then((m) => ({ default: m.SettingsScreen })));
+const MeScreen = lazy(() => import('./screens/MeScreen.tsx').then((m) => ({ default: m.MeScreen })));
+const SignInPrompt = lazy(() => import('./screens/SignInPrompt.tsx').then((m) => ({ default: m.SignInPrompt })));
+
+const ProfileSetup = lazy(() => import('./screens/profile/ProfileSetup.tsx').then((m) => ({ default: m.ProfileSetup })));
+
+const AuthReturn = lazy(() => import('./screens/AuthReturn.tsx').then((m) => ({ default: m.AuthReturn })));
 
 // The topic picker and the Duel and Solo stubs load only when opened (entry budget). Paths are matched by prefix.
 const TopicsRoutes = lazy(() => import('./screens/topics/TopicsRoutes.tsx'));
@@ -43,6 +48,21 @@ function HomePending() {
     <PageColumn className="py-4">
       <main className="flex flex-col gap-3">
         <h1 tabIndex={-1} className="sr-only">
+          {t('common.loading')}
+        </h1>
+      </main>
+    </PageColumn>
+  );
+}
+
+/** Suspense fallback while a screen's chunk loads: heading only (no flash), not a focus target. */
+function ScreenPending() {
+  const { t } = useTranslation();
+  const pending = { [pendingAttr]: '' };
+  return (
+    <PageColumn className="py-4">
+      <main className="flex flex-col gap-3">
+        <h1 tabIndex={-1} className="sr-only" {...pending}>
           {t('common.loading')}
         </h1>
       </main>
@@ -128,10 +148,14 @@ export function App() {
     profileLoading ? (
       <HomePending />
     ) : needsSetup || (pathname === '/profile/setup' && !setupNotNeeded) ? (
-      <ProfileSetup to={pathname === '/profile/setup' ? (new URLSearchParams(window.location.search).get('to') ?? '/') : `${pathname}${window.location.search}`} />
+      <Suspense fallback={<ScreenPending />}>
+        <ProfileSetup to={pathname === '/profile/setup' ? (new URLSearchParams(window.location.search).get('to') ?? '/') : `${pathname}${window.location.search}`} />
+        <ScreenReady />
+      </Suspense>
     ) : (
-      <Suspense fallback={<HomePending />}>
+      <Suspense key={pathname} fallback={<ScreenPending />}>
         <Screen />
+        <ScreenReady />
       </Suspense>
     );
   return (

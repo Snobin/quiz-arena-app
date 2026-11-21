@@ -202,7 +202,7 @@ afterEach(async () => {
 describe('the guest prompt on a live arrival (Story 2.4)', () => {
   it('a guest sees the prompt right after her match, with that match as its hook', async () => {
     await liveResults({ self: { score: 2980, placement: 2 }, opponent: { score: 3140, placement: 1 } });
-    expect(screen.getByTestId('results-sign-in-prompt')).toHaveTextContent(
+    expect(await screen.findByTestId('results-sign-in-prompt')).toHaveTextContent(
       'Vishnu R won this one. You scored 2,980. Sign in and your next match can move your Quick Match rating.',
     );
     expect(lastResult.load()?.guest).toBe(true);

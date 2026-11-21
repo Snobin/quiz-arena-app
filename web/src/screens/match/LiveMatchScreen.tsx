@@ -13,6 +13,7 @@ import * as liveMatchId from '../../realtime/liveMatchId.ts';
 import { announce } from '../../shell/announce.ts';
 import { Link } from '../../shell/Link.tsx';
 import { navigate, searchParam } from '../../shell/router.ts';
+import { preloadResults } from '../preload.ts';
 import { useHideTabBar } from '../../shell/useHideTabBar.ts';
 import { LeaveDialog } from './LeaveDialog.tsx';
 import { OptionList, type OptionReveal } from './OptionList.tsx';
@@ -69,6 +70,8 @@ export const MATCH_ENDED_WAIT_MS = 3_000;
 export function LiveMatchScreen() {
   const { t } = useTranslation();
   useHideTabBar();
+  // Results open when the match ends: fetch that chunk while it is played.
+  useEffect(preloadResults, []);
   const stored = useLiveGame((s) => s.live);
   const wanted = searchParam('matchId');
   const live = stored && (wanted === null || wanted === stored.matchId) ? stored : null;

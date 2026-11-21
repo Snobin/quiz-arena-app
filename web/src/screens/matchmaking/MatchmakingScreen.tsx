@@ -17,6 +17,7 @@ import {
 import { announce } from '../../shell/announce.ts';
 import { navigate } from '../../shell/router.ts';
 import { useHideTabBar } from '../../shell/useHideTabBar.ts';
+import { preloadLiveMatch } from '../preload.ts';
 import { OpponentNames, opponentsOf } from '../match/opponents.tsx';
 
 /** How long the found state stays up (with the BOT badge readable) before the match opens. */
@@ -73,6 +74,9 @@ export function MatchmakingScreen({
   const phase = useLiveGame((s) => s.phase);
   const match = useLiveGame((s) => s.match);
   const problem = useLiveGame((s) => s.problem);
+
+  // The live match opens next: fetch its chunk now so match start never waits on the network.
+  useEffect(preloadLiveMatch, []);
 
   const [joinedAt, setJoinedAt] = useState(() => Date.now());
   /** The match in the store before this visit's join: a stale one must not open /match. */
