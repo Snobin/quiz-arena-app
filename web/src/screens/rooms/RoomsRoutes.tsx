@@ -1,14 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSession } from '../../auth/session.ts';
 import { PageColumn } from '../../design/PageColumn.tsx';
-import { Link } from '../../shell/Link.tsx';
 import { navigate, usePathname } from '../../shell/router.ts';
 import { signInPath } from '../home/signInPath.ts';
 import CreateRoom from './CreateRoom.tsx';
-import HostLobby from './HostLobby.tsx';
-import { formatCode } from './roomCode.ts';
-import { roomClient, useRoom } from './roomClient.ts';
+import Lobby from './HostLobby.tsx';
+import { normalizeCode } from './roomCode.ts';
+import { roomClient, useRoom, type RoomError } from './roomClient.ts';
 import './roomCatalogue.ts';
 
 export const CREATE_PATH = '/rooms/create';
@@ -28,61 +27,62 @@ function Pending({ text }: { text?: string }) {
 }
 
 /**
- * `/r/<code>`: the host's lobby. The room lives in the room client, so a reload finds it again through the socket
- * (game-service answers the private subscription with `ROOM_JOINED` while she is still in it); no room means the Rooms tab.
- * Joining someone else's room by link arrives with Story 5.3.
+ * `/r/<code>` (Stories 5.2 and 5.3): the lobby. The room lives in the room client; without it (a shared link, a reload)
+ * the route normalises the code and sends the join at once, with no confirmation: game-service answers a member (the
+ * host's own reload, a second tap on the link) with `ROOM_JOINED` again, so one path serves everyone. A bad code, or a
+ * join that fails, opens the Rooms tab with the code prefilled and the error under the field.
  */
 function LobbyRoute({ code }: { code: string }) {
   const { t } = useTranslation();
   const room = useRoom((s) => s.session);
-  const phase = useRoom((s) => s.phase);
   const had = useRef(false);
   const tried = useRef(false);
-  const [failed, setFailed] = useState(false);
+  const typed = safeDecode(code);
+  const canonical = normalizeCode(typed);
+  const mine = room !== null && canonical !== null && room.code === canonical;
   useEffect(() => {
-    if (room) had.current = true;
-  }, [room]);
-  const mine = room !== null && formatCode(room.code) === formatCode(code);
+    if (room && mine) had.current = true;
+  }, [room, mine]);
   useEffect(() => {
-    if (room) return;
+    if (room && mine) return;
     if (had.current) {
       // The room ended (leave, expiry, closed): back to the Rooms tab, whose notice says why.
       navigate('/rooms', { replace: true });
       return;
     }
-    // Once per mount: a failed resume sets the phase back to idle, which must not start another socket.
-    if (phase === 'idle' && !tried.current) {
-      tried.current = true;
-      void roomClient()
-        .resume()
-        .then((found) => {
-          if (!found && !useRoom.getState().session) setFailed(true);
-        });
+    // Once per mount: a failed join must not start another.
+    if (tried.current) return;
+    tried.current = true;
+    const fail = (error: RoomError) => {
+      roomClient().setJoinFailure({ typed, error });
+      navigate('/rooms', { replace: true });
+    };
+    if (!canonical) {
+      fail({ code: 'BAD_CODE' });
+      return;
     }
-  }, [room, phase]);
-  // Not her own room (a shared link, until Story 5.3 joins): say so at once.
-  if ((room && !mine) || failed) {
-    return (
-      <PageColumn className="py-4">
-        <main className="flex flex-col items-start gap-3">
-          <h1 tabIndex={-1} className="font-title text-title">
-            {t('rooms.lobby.heading')}
-          </h1>
-          <p className="text-body">{t('rooms.joinLink.soon')}</p>
-          <Link to="/rooms" className="hit-target inline-flex min-h-target-min items-center text-body font-semibold text-ink underline">
-            {t('rooms.create.back')}
-          </Link>
-        </main>
-      </PageColumn>
-    );
+    void roomClient()
+      .join(canonical)
+      .then((result) => {
+        if (!result.ok) fail(result.error);
+      });
+  }, [room, mine, canonical, typed]);
+  if (!room || !mine) return <Pending text={t('rooms.lobby.joining')} />;
+  return <Lobby session={room} />;
+}
+
+function safeDecode(text: string): string {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
   }
-  if (!room) return <Pending text={t('rooms.lobby.connecting')} />;
-  return <HostLobby session={room} />;
 }
 
 /**
  * The lazy chunk behind `/rooms/create` and `/r/<code>`. A guest is sent to the Sign-in prompt with this route as
- * `returnTo`; no room code is requested for a guest.
+ * `returnTo`; no join is ever sent for a guest (the lobby route only mounts for a registered player, and App shows
+ * profile setup first to one whose profile is not finished).
  */
 export default function RoomsRoutes() {
   const status = useSession((s) => s.status);

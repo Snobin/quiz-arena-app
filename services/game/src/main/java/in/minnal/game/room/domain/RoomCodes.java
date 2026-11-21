@@ -1,7 +1,9 @@
 package in.minnal.game.room.domain;
 
+import java.text.Normalizer;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import java.util.function.Predicate;
 import java.util.random.RandomGenerator;
 
@@ -43,12 +45,24 @@ public final class RoomCodes {
         throw new IllegalStateException("no free room code after " + MAX_DRAWS + " draws");
     }
 
-    /** The canonical form of what a player typed (any case, optional hyphen and spaces), or empty when it is no code. */
+    /**
+     * What is stripped from a typed code: every hyphen-minus and every space, Unicode included (the web app's {@code \s}:
+     * ASCII whitespace, the space separators {@code \p{Z}} such as no-break space, and {@code U+FEFF}).
+     */
+    private static final Pattern STRIP = Pattern.compile("[\\s\\p{Z}\\uFEFF-]+");
+
+    /**
+     * The canonical form of what a player typed or a link carried (Story 5.3), or empty when it is no code: NFC, spaces
+     * and hyphens stripped, upper-cased, then exactly 6 characters of {@link #ALPHABET}. Look-alikes ({@code 0 O 1 I L})
+     * are rejected, never mapped. The web app's {@code canonicalCode} follows the same table
+     * ({@code contracts/samples/code-normalisation.json}).
+     */
     public static Optional<String> normalize(String typed) {
         if (typed == null) {
             return Optional.empty();
         }
-        String canonical = typed.replace("-", "").replace(" ", "").toUpperCase(Locale.ROOT);
+        String nfc = Normalizer.normalize(typed, Normalizer.Form.NFC);
+        String canonical = STRIP.matcher(nfc).replaceAll("").toUpperCase(Locale.ROOT);
         if (canonical.length() != LENGTH) {
             return Optional.empty();
         }

@@ -18,6 +18,11 @@ describe('room parsers over the golden samples', () => {
     const lobby = parseRoomIncoming(text('room-lobby-updated.json'));
     expect(lobby?.type).toBe('ROOM_LOBBY_UPDATED');
     expect(lobby?.message.seq).toBe(2);
+    if (lobby?.type !== 'ROOM_LOBBY_UPDATED') return;
+    expect(lobby.payload.joined).toEqual(['9d8c7b6a-5f4e-4d3c-b2a1-0f9e8d7c6b5a']);
+    expect(lobby.payload.left).toEqual([]);
+    const member = parseRoomIncoming(text('room-joined-member.json'));
+    expect(member).toMatchObject({ type: 'ROOM_JOINED', payload: { role: 'MEMBER', room: { humanCount: 2 } } });
     const closed = parseRoomIncoming(text('room-closed.json'));
     expect(closed).toMatchObject({ type: 'ROOM_CLOSED', payload: { reason: 'EXPIRED' } });
   });
@@ -27,6 +32,9 @@ describe('room parsers over the golden samples', () => {
     expect(busy).toMatchObject({ type: 'ERROR', payload: { code: 'ALREADY_IN_MATCH' } });
     expect(busy?.type === 'ERROR' && busy.payload.roomId).toBeTruthy();
     expect(parseRoomIncoming(text('error-room-invalid-config.json'))).toMatchObject({ type: 'ERROR', payload: { code: 'INVALID_ROOM_CONFIG' } });
+    for (const code of ['not-found', 'expired', 'full', 'started', 'not-enough-players']) {
+      expect(parseRoomIncoming(text(`error-room-${code}.json`))?.type).toBe('ERROR');
+    }
   });
 
   it('reject a malformed room, and leave other message types as OTHER', () => {
@@ -35,6 +43,9 @@ describe('room parsers over the golden samples', () => {
     expect(parseRoomJoined({ ...sample.payload, room: { ...sample.payload.room, humanCount: 'one' } })).toBeNull();
     expect(parseRoomJoined({ ...sample.payload, room: { ...sample.payload.room, source: { type: 'BANK', topicId: 7 } } })).toBeNull();
     expect(parseRoomIncoming('not json')).toBeNull();
+    const lobby = JSON.parse(text('room-lobby-updated.json')) as { payload: Record<string, unknown> };
+    expect(parseRoomIncoming(JSON.stringify({ ...lobby, payload: { ...lobby.payload, joined: [7] } }))).toBeNull();
+    expect(parseRoomIncoming(JSON.stringify({ ...lobby, payload: { room: lobby.payload.room } }))).toMatchObject({ payload: { joined: [], left: [] } });
     expect(parseRoomIncoming(text('match-found.json'))?.type).toBe('OTHER');
   });
 });

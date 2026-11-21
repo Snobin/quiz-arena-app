@@ -291,3 +291,31 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-2-create-a-room-and-share-it.md`
   summary: Add a close-reason table test and a no-reply reconnect case to the room client, and decide whether guests may load the rooms chunk.
   evidence: only `EXPIRED` and the happy reconnect are tested; `/rooms/create` and `/r/<code>` lazy-load the chunk for guests before redirecting to sign-in.
+
+- source_spec: none
+  summary: Build story 5.4 (play a room match) after 5.3 ships.
+  evidence: Split from a request to build 5.3, 5.4 and 5.5 together; each is an independently shippable story, built in order.
+
+- source_spec: none
+  summary: Build story 5.5 (battle room results and podium) after 5.4 ships.
+  evidence: Split from a request to build 5.3, 5.4 and 5.5 together; each is an independently shippable story, built in order.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-3-join-a-room-and-the-live-lobby.md`
+  summary: Close-confirm alertdialog needs a focus trap and focus restore to the Leave trigger.
+  evidence: `CloseRoomDialog` sets `aria-modal` but Tab can still reach the page behind it; Esc works only with focus inside.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-3-join-a-room-and-the-live-lobby.md`
+  summary: Add fake-timer tests for the room client's resync retry, join timeout and `LOST` notice.
+  evidence: Removing any of the three leaves every current test green.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-3-join-a-room-and-the-live-lobby.md`
+  summary: Cancel a pending rematch only when the actor admits the joiner, not when the registry accepts the join.
+  evidence: `RoomService.join` calls `rematches.joinedMatchmaking` on `Sent`; a later `ROOM_FULL` or `ROOM_STARTED` refusal still cancels it.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-3-join-a-room-and-the-live-lobby.md`
+  summary: Show a specific start error for `NOT_ENOUGH_PLAYERS` and `NOT_HOST` instead of the generic retry caption (Story 5.4).
+  evidence: `StartBar` maps every start error except `NOT_AVAILABLE_YET` to "Couldn't start. Try again."
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-3-join-a-room-and-the-live-lobby.md`
+  summary: Widen the code-normalisation fixture with non-ASCII case-folding and zero-width rows, and get Malayalam sign-off on the TBD strings.
+  evidence: No fixture rows for `ſ`, the Kelvin sign or U+200B; several ML strings are flagged awaiting sign-off.

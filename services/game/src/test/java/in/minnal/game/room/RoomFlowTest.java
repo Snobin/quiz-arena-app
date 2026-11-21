@@ -23,8 +23,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Story 5.1 between real STOMP clients: create, the gate, configure, leave, the host's grace, expiry, the stubs and the
- * member-only room topic. Room timers are {@link ManualRoomTimers}, so a 24 h expiry and a 10 s grace need no sleeps.
+ * Stories 5.1 and 5.3 between real STOMP clients: create, join, the gate, configure, leave, the graces, expiry, the
+ * start checks and the member-only room topic. Room timers are {@link ManualRoomTimers}, so a 24 h expiry and a 10 s grace need no sleeps.
  */
 class RoomFlowTest extends GameIntegrationTest {
 
@@ -377,27 +377,193 @@ class RoomFlowTest extends GameIntegrationTest {
         assertThat(live()).isEqualTo(liveBefore);
     }
 
-    @Test
-    void joinStartAndPlayAgainAreStubsAndTheBeforeStoryLeavesAreRefused() {
-        StompTestClient anju = host(newSub());
-        String roomId = roomIdOf(create(anju));
-        anju.subscribe(Destinations.roomTopic(UUID.fromString(roomId)));
-        StompTestClient other = host(newSub());
+    /** A registered player with a profile joins {@code code} (as typed): returns her ROOM_JOINED. */
+    JsonNode join(StompTestClient player, String code) {
+        player.send("/app/room/join", "{\"code\":\"" + code + "\"}");
+        return player.next("ROOM_JOINED");
+    }
 
-        other.send("/app/room/join", "{\"code\":\"ABC-234\"}");
-        other.error("NOT_AVAILABLE_YET");
+    static String codeOf(JsonNode joined) {
+        return joined.get("payload").get("code").asString();
+    }
+
+    /** Fires the 250 ms coalescing window until {@code watcher} sees the next lobby broadcast. */
+    JsonNode nextLobbyUpdate(StompTestClient watcher) {
+        JsonNode[] update = new JsonNode[1];
+        await().atMost(WAIT).until(() -> {
+            timers.fire(d -> d.equals(Duration.ofMillis(250)));
+            update[0] = watcher.nextBroadcast(Duration.ofMillis(100));
+            return update[0] != null;
+        });
+        return update[0];
+    }
+
+    @Test
+    void aPlayerJoinsByCodeInAnyFormAndTheLobbySeesHerOnce() {
+        StompTestClient anju = host(newSub());
+        JsonNode created = create(anju);
+        String roomId = roomIdOf(created);
+        String code = codeOf(created);
+        anju.subscribe(Destinations.roomTopic(UUID.fromString(roomId)));
+        String bijuSub = newSub();
+        StompTestClient biju = host(bijuSub);
+
+        JsonNode joined = join(biju, " " + code.substring(0, 3).toLowerCase() + "-" + code.substring(3).toLowerCase() + " ");
+
+        assertThat(roomIdOf(joined)).isEqualTo(roomId);
+        JsonNode payload = joined.get("payload");
+        assertThat(payload.get("role").asString()).isEqualTo("MEMBER");
+        assertThat(payload.get("code").asString()).isEqualTo(code);
+        assertThat(payload.get("room").get("humanCount").asInt()).isEqualTo(2);
+        assertThat(payload.get("selfParticipantId").asString()).isNotEqualTo(bijuSub);
+        assertThat(participation.activityOf(bijuSub)).contains(new Activity.InRoom(UUID.fromString(roomId)));
+
+        JsonNode update = nextLobbyUpdate(anju);
+        assertThat(update.get("seq").asLong()).isEqualTo(1);
+        assertThat(update.get("payload").get("joined").get(0).asString()).isEqualTo(payload.get("selfParticipantId").asString());
+        assertThat(update.get("payload").get("left")).isEmpty();
+        assertThat(update.get("payload").get("room").get("humanCount").asInt()).isEqualTo(2);
+
+        // A second tap on the link: ROOM_JOINED again, no second participant, no broadcast.
+        JsonNode again = join(biju, code);
+        assertThat(again.get("payload").get("room").get("humanCount").asInt()).isEqualTo(2);
+        assertThat(again.get("payload").get("selfParticipantId").asString()).isEqualTo(payload.get("selfParticipantId").asString());
+
+        // Now a member, she may watch the topic; her leave frees her at once and the others see her go.
+        biju.subscribe(Destinations.roomTopic(UUID.fromString(roomId)));
+        biju.send("/app/room/" + roomId + "/leave");
+        await().atMost(WAIT).until(() -> participation.activityOf(bijuSub).isEmpty());
+        JsonNode gone = nextLobbyUpdate(anju);
+        assertThat(gone.get("seq").asLong()).isEqualTo(2);
+        assertThat(gone.get("payload").get("left").get(0).asString()).isEqualTo(payload.get("selfParticipantId").asString());
+        assertThat(gone.get("payload").get("room").get("humanCount").asInt()).isEqualTo(1);
+    }
+
+    @Test
+    void aJoinThatCannotSucceedGetsItsErrorAndChangesNothing() {
+        String hostSub = newSub();
+        StompTestClient anju = host(hostSub);
+        JsonNode created = create(anju);
+        String code = codeOf(created);
+        String guestSub = newSub();
+        String freshSub = newSub();
+        String strangerSub = newSub();
+        subs.addAll(List.of(guestSub, freshSub));
+        StompTestClient guest = connect(guestToken(guestSub));
+        StompTestClient fresh = connect(userToken(freshSub, "Biju"));
+        clients.addAll(List.of(guest, fresh));
+        StompTestClient stranger = host(strangerSub);
+
+        guest.send("/app/room/join", "{\"code\":\"" + code + "\"}");
+        guest.error("FORBIDDEN_MODE");
+        fresh.send("/app/room/join", "{\"code\":\"" + code + "\"}");
+        fresh.error("PROFILE_REQUIRED");
+        stranger.send("/app/room/join", "{\"code\":\"" + (code.equals("ABC234") ? "ABC235" : "ABC234") + "\"}");
+        JsonNode notFound = stranger.error("ROOM_NOT_FOUND");
+        assertThat(notFound.has("roomId")).isFalse();
+        stranger.send("/app/room/join", "{\"code\":\"K7M-Q2O\"}");
+        stranger.error("ROOM_NOT_FOUND");
+        stranger.send("/app/room/join", "not json");
+        stranger.error("ROOM_NOT_FOUND");
+        for (String sub : List.of(guestSub, freshSub, strangerSub)) {
+            assertThat(participation.activityOf(sub)).isEmpty();
+        }
+
+        // A player who is in another room: ALREADY_IN_MATCH with that room.
+        StompTestClient chitra = host(newSub());
+        String hers = roomIdOf(create(chitra));
+        chitra.send("/app/room/join", "{\"code\":\"" + code + "\"}");
+        assertThat(chitra.error("ALREADY_IN_MATCH").get("payload").get("roomId").asString()).isEqualTo(hers);
+
+        // The host leaves: the code is tombstoned and a late join reads ROOM_EXPIRED.
+        anju.send("/app/room/" + roomIdOf(created) + "/leave");
+        await().atMost(WAIT).until(() -> participation.activityOf(hostSub).isEmpty());
+        try (StompTestClient late = connect(profiledToken(newSub(), "Devi"))) {
+            late.send("/app/room/join", "{\"code\":\"" + code + "\"}");
+            late.error("ROOM_EXPIRED");
+        }
+    }
+
+    @Test
+    void aDeletedAccountsJoinIsUnauthenticatedAndDoesNotEnterTheRoom() {
+        StompTestClient anju = host(newSub());
+        JsonNode created = create(anju);
+        String goneSub = newSub();
+        StompTestClient gone = host(goneSub);
+        deleted.add(goneSub);
+
+        gone.send("/app/room/join", "{\"code\":\"" + codeOf(created) + "\"}");
+        gone.error("UNAUTHENTICATED");
+        assertThat(participation.activityOf(goneSub)).isEmpty();
+        assertThat(rooms.isMember(UUID.fromString(roomIdOf(created)), goneSub)).isFalse();
+    }
+
+    @Test
+    void startChecksTheHostAndThePlayerCountAndPlayAgainIsAStub() {
+        StompTestClient anju = host(newSub());
+        JsonNode created = create(anju);
+        String roomId = roomIdOf(created);
+        anju.subscribe(Destinations.roomTopic(UUID.fromString(roomId)));
+
         anju.send("/app/room/" + roomId + "/start");
-        assertThat(anju.error("NOT_AVAILABLE_YET").get("roomId").asString()).isEqualTo(roomId);
+        assertThat(anju.error("NOT_ENOUGH_PLAYERS").get("roomId").asString()).isEqualTo(roomId);
         anju.send("/app/room/" + roomId + "/playAgain");
         anju.error("NOT_AVAILABLE_YET");
-        other.send("/app/room/" + roomId + "/leave");
-        other.error("NOT_AVAILABLE_YET");
-        other.send("/app/room/" + roomId + "/start");
-        other.error("NOT_AVAILABLE_YET");
 
-        // Nothing changed: the room is open, with its host, and no broadcast went out.
-        anju.send("/app/room/" + roomId + "/configure", "{\"questionCount\":12}");
-        assertThat(anju.nextBroadcast("ROOM_LOBBY_UPDATED").get("seq").asLong()).isEqualTo(1);
+        StompTestClient biju = host(newSub());
+        join(biju, codeOf(created));
+        biju.send("/app/room/" + roomId + "/start");
+        biju.error("NOT_HOST");
+        StompTestClient stranger = host(newSub());
+        stranger.send("/app/room/" + roomId + "/start");
+        stranger.error("NOT_HOST");
+        // A stranger's leave of a room she is not in is ignored.
+        stranger.send("/app/room/" + roomId + "/leave");
+        stranger.expectNothing(Duration.ofMillis(200));
+
+        // Two humans: the start is valid, and still the Story 5.4 stub.
+        anju.send("/app/room/" + roomId + "/start");
+        anju.error("NOT_AVAILABLE_YET");
+        assertThat(nextLobbyUpdate(anju).get("seq").asLong()).isEqualTo(1); // only the join was broadcast
+    }
+
+    @Test
+    void theHostLeavingClosesTheRoomForEveryMemberWithHostLeft() {
+        String hostSub = newSub();
+        String bijuSub = newSub();
+        StompTestClient anju = host(hostSub);
+        JsonNode created = create(anju);
+        String roomId = roomIdOf(created);
+        StompTestClient biju = host(bijuSub);
+        join(biju, codeOf(created));
+        biju.subscribe(Destinations.roomTopic(UUID.fromString(roomId)));
+
+        anju.send("/app/room/" + roomId + "/leave");
+
+        assertThat(biju.next("ROOM_CLOSED").get("payload").get("reason").asString()).isEqualTo("HOST_LEFT");
+        await().atMost(WAIT).until(() -> participation.activityOf(bijuSub).isEmpty() && participation.activityOf(hostSub).isEmpty());
+    }
+
+    @Test
+    void aDroppedMemberIsKeptForTheGraceAndAReconnectGetsRoomJoinedThenAResyncAnswersToo() {
+        String bijuSub = newSub();
+        StompTestClient anju = host(newSub());
+        JsonNode created = create(anju);
+        String roomId = roomIdOf(created);
+        StompTestClient biju = host(bijuSub);
+        join(biju, codeOf(created));
+        biju.close();
+        await().atMost(WAIT).until(() -> timers.pending().stream().anyMatch(t -> t.delay().equals(GRACE)));
+        assertThat(rooms.isMember(UUID.fromString(roomId), bijuSub)).isTrue();
+
+        StompTestClient back = host(bijuSub);
+        JsonNode again = back.next("ROOM_JOINED");
+        assertThat(again.get("payload").get("role").asString()).isEqualTo("MEMBER");
+        timers.fire(GRACE::equals); // cancelled: nothing happens
+        assertThat(rooms.isMember(UUID.fromString(roomId), bijuSub)).isTrue();
+
+        back.send("/app/room/" + roomId + "/resync");
+        assertThat(roomIdOf(back.next("ROOM_JOINED"))).isEqualTo(roomId);
     }
 
     @Test

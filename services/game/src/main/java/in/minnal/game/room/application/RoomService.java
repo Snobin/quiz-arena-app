@@ -9,6 +9,7 @@ import in.minnal.game.platform.infrastructure.security.MinnalPrincipal;
 import in.minnal.game.platform.session.Activity;
 import in.minnal.game.platform.session.DeletedUsers;
 import in.minnal.game.platform.session.PlayerChannel;
+import in.minnal.game.room.domain.RoomCodes;
 import in.minnal.game.room.domain.RoomConfigInput;
 import in.minnal.game.room.domain.RoomConfigRules;
 import java.time.Clock;
@@ -24,8 +25,13 @@ import org.springframework.stereotype.Service;
  * matchmaking); a guest → {@code FORBIDDEN_MODE}; a token without {@code profileComplete} → {@code PROFILE_REQUIRED};
  * a bad source or count (see {@link RoomConfigRules}; core is never asked: AD-2); {@code max-live} rooms → {@code
  * MODE_UNAVAILABLE}; a {@code sub} already queued, in a room or in a match → {@code ALREADY_IN_MATCH} with the
- * {@code matchId} or {@code roomId}. Join, start and play again are stubs ({@code NOT_AVAILABLE_YET}) until Stories
- * 5.3 to 5.6.
+ * {@code matchId} or {@code roomId}.
+ *
+ * <p>Join (Story 5.3), in order: draining, deleted, guest and profile as for create; then the registry (see
+ * {@link RoomRegistry#join}): a repeat join of her own room, busy elsewhere → {@code ALREADY_IN_MATCH}, too many failed
+ * lookups → {@code RATE_LIMITED}, the lookup → {@code ROOM_NOT_FOUND} or {@code ROOM_EXPIRED}; the room itself answers
+ * {@code ROOM_FULL}, {@code ROOM_STARTED} or {@code ROOM_JOINED}. The code is never logged. Start checks the host and the
+ * player count and is otherwise still the {@code NOT_AVAILABLE_YET} stub until Story 5.4; play again until Story 5.6.
  */
 @Service
 public class RoomService {
@@ -81,9 +87,37 @@ public class RoomService {
         }
     }
 
-    /** Story 5.3 builds join. */
-    public void join(MinnalPrincipal player, String sessionId) {
-        reject(player, sessionId, ErrorCode.NOT_AVAILABLE_YET, null, null);
+    /** {@code /app/room/join {code}}: {@code typedCode} as the player typed it or the link carried it (may be null). */
+    public void join(MinnalPrincipal player, String sessionId, String typedCode) {
+        if (drain.isDraining()) {
+            reject(player, sessionId, ErrorCode.SERVER_DRAINING, null, null);
+            return;
+        }
+        if (deleted.contains(player.sub())) {
+            reject(player, sessionId, ErrorCode.UNAUTHENTICATED, null, null);
+            return;
+        }
+        if (!player.hasRole(Role.USER)) {
+            reject(player, sessionId, ErrorCode.FORBIDDEN_MODE, null, null);
+            return;
+        }
+        if (!player.profileComplete()) {
+            reject(player, sessionId, ErrorCode.PROFILE_REQUIRED, null, null);
+            return;
+        }
+        String code = RoomCodes.normalize(typedCode).orElse(null);
+        switch (rooms.join(player, sessionId, code)) {
+            case RoomRegistry.Joining.Sent sent ->
+                // In a room now: a pending rematch with her can no longer happen (Story 1.10).
+                rematches.joinedMatchmaking(player.sub());
+            case RoomRegistry.Joining.Busy busy -> reject(player, sessionId, ErrorCode.ALREADY_IN_MATCH,
+                    busy.held() instanceof Activity.InMatch(var matchId) ? matchId : null,
+                    busy.held() instanceof Activity.InRoom(var roomId) ? roomId : null);
+            case RoomRegistry.Joining.NotFound notFound -> reject(player, sessionId, ErrorCode.ROOM_NOT_FOUND, null, null);
+            case RoomRegistry.Joining.Expired expired -> reject(player, sessionId, ErrorCode.ROOM_EXPIRED, null, null);
+            case RoomRegistry.Joining.RateLimited limited -> reject(player, sessionId, ErrorCode.RATE_LIMITED, null, null);
+            case RoomRegistry.Joining.Draining draining -> reject(player, sessionId, ErrorCode.SERVER_DRAINING, null, null);
+        }
     }
 
     public void configure(MinnalPrincipal player, String sessionId, String roomIdText, RoomConfigInput input) {
@@ -101,9 +135,30 @@ public class RoomService {
         room.get().tell(new RoomEvent.Configure(player.sub(), sessionId, input));
     }
 
-    /** Story 5.4 builds start. */
+    /** The room checks the host and the player count; a valid start is still {@code NOT_AVAILABLE_YET} (Story 5.4). */
     public void start(MinnalPrincipal player, String sessionId, String roomIdText) {
-        reject(player, sessionId, ErrorCode.NOT_AVAILABLE_YET, null, parse(roomIdText));
+        UUID roomId = parse(roomIdText);
+        if (roomId == null) {
+            reject(player, sessionId, ErrorCode.BAD_REQUEST, null, null);
+            return;
+        }
+        Optional<RoomActor> room = rooms.find(roomId);
+        if (room.isEmpty()) {
+            reject(player, sessionId, ErrorCode.NOT_HOST, null, roomId);
+            return;
+        }
+        room.get().tell(new RoomEvent.Start(player.sub(), sessionId));
+    }
+
+    /** A member's lobby {@code resync} (a {@code seq} gap): the room answers with a fresh {@code ROOM_JOINED}. */
+    public void resync(MinnalPrincipal player, String sessionId, String roomIdText) {
+        UUID roomId = parse(roomIdText);
+        if (roomId == null) {
+            reject(player, sessionId, ErrorCode.BAD_REQUEST, null, null);
+            return;
+        }
+        // A room that is gone answers nothing: the client gives up after its retries and returns to the Rooms tab.
+        rooms.find(roomId).ifPresent(room -> room.tell(new RoomEvent.Announce(player.sub(), sessionId)));
     }
 
     public void leave(MinnalPrincipal player, String sessionId, String roomIdText) {

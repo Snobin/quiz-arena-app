@@ -34,6 +34,16 @@ public enum ErrorCode {
     SOURCE_NOT_AVAILABLE,
     /** Only the room's host may do this. */
     NOT_HOST,
-    /** The room action exists in the protocol but is not built yet (join, start, and the leave and play-again cases of later stories). */
-    NOT_AVAILABLE_YET
+    /** The room action exists in the protocol but is not built yet (a valid start until Story 5.4, play again until 5.6). */
+    NOT_AVAILABLE_YET,
+    /** A join for a code that no live room has and no tombstone remembers (Story 5.3). */
+    ROOM_NOT_FOUND,
+    /** A join for a code whose room closed, expired or ended (a tombstone, kept 24 h). */
+    ROOM_EXPIRED,
+    /** A join for a room that already holds 50 humans, the host included. */
+    ROOM_FULL,
+    /** A join for a room that is starting or in a match. */
+    ROOM_STARTED,
+    /** A start from the host while fewer than 2 humans (the host counts) are in the lobby. */
+    NOT_ENOUGH_PLAYERS
 }

@@ -274,3 +274,40 @@
 @utility skeleton-shimmer {
   animation: skeleton-shimmer 1.6s var(--motion-easing-default) infinite;
 }
+
+/*
+ * Lobby joined chips (Story 5.3, UX-DR52/84): a new joiner pops in (fade + scale .92 to 1, chip-pop); five or more
+ * joins within a second fade in together with no pop; on the reduced path every chip only fades (reduced-chip-fade).
+ * Transform and opacity only. JoinedChips picks the class (useReducedEffects is the single switch).
+ */
+@keyframes chip-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes chip-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@utility chip-pop {
+  animation: chip-pop var(--motion-chip-pop) var(--motion-easing-default) both;
+}
+
+@utility chip-batch-fade {
+  animation: chip-fade-in var(--motion-chip-pop) var(--motion-easing-default) both;
+}
+
+@utility chip-reduced-fade {
+  animation: chip-fade-in var(--motion-reduced-chip-fade) linear both;
+}

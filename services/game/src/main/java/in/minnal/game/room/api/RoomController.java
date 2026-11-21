@@ -15,7 +15,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * {@code /app/room/create|join} and {@code /app/room/{roomId}/configure|start|leave|playAgain} (AD-10). Identity comes
+ * {@code /app/room/create|join} and {@code /app/room/{roomId}/configure|start|leave|playAgain|resync} (AD-10). Identity comes
  * only from the CONNECT token. A config body is read leniently into a {@link RoomConfigInput}: a malformed, non-object
  * or absent body, or a field of the wrong type, reads as that field not being sent or invalid, and the room's rules
  * answer with the matching {@code ERROR}.
@@ -37,8 +37,13 @@ class RoomController {
     }
 
     @MessageMapping("/room/join")
-    void join(Principal user, SimpMessageHeaderAccessor headers) {
-        rooms.join(principal(user), headers.getSessionId());
+    void join(Message<?> message, Principal user, SimpMessageHeaderAccessor headers) {
+        rooms.join(principal(user), headers.getSessionId(), codeOf(message.getPayload()));
+    }
+
+    @MessageMapping("/room/{roomId}/resync")
+    void resync(@DestinationVariable String roomId, Principal user, SimpMessageHeaderAccessor headers) {
+        rooms.resync(principal(user), headers.getSessionId(), roomId);
     }
 
     @MessageMapping("/room/{roomId}/configure")
@@ -62,14 +67,23 @@ class RoomController {
         rooms.playAgain(principal(user), headers.getSessionId(), roomId);
     }
 
-    static RoomConfigInput configOf(Object payload) {
-        JsonNode body;
+    /** The {@code code} of a join body, read leniently: anything else reads as no code (a failed lookup). */
+    static String codeOf(Object payload) {
+        JsonNode body = bodyOf(payload);
+        return body != null && body.isObject() ? text(body.get("code")) : null;
+    }
+
+    private static JsonNode bodyOf(Object payload) {
         try {
             byte[] bytes = payload instanceof byte[] raw ? raw : String.valueOf(payload).getBytes(StandardCharsets.UTF_8);
-            body = JSON.readTree(bytes);
+            return JSON.readTree(bytes);
         } catch (RuntimeException e) {
-            body = null;
+            return null;
         }
+    }
+
+    static RoomConfigInput configOf(Object payload) {
+        JsonNode body = bodyOf(payload);
         if (body == null || !body.isObject()) {
             return new RoomConfigInput(false, null, null, false, null);
         }

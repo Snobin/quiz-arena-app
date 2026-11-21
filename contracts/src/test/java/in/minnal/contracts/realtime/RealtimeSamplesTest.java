@@ -58,6 +58,10 @@ class RealtimeSamplesTest {
     record RoomCreateSample(RoomSource source, Integer questionCount) {
     }
 
+    /** The body of {@code /app/room/join} (Story 5.3; a client send). */
+    record RoomJoinSample(String code) {
+    }
+
     record Sample(String file, Object value, TypeReference<?> type) {
     }
 
@@ -67,14 +71,21 @@ class RealtimeSamplesTest {
                 new Participant(BOT, "Minnal Bot", ParticipantKind.BOT));
         RoomView lobby = new RoomView(ANJU, new RoomSource(QuestionSource.BANK, TOPIC_ID), 10, true,
                 Instant.parse("2026-11-13T10:15:30.123Z"), List.of(new Participant(ANJU, "Anju", ParticipantKind.USER)), 1);
+        RoomView joinedLobby = new RoomView(ANJU, new RoomSource(QuestionSource.BANK, TOPIC_ID), 10, true,
+                Instant.parse("2026-11-13T10:15:30.123Z"), List.of(new Participant(ANJU, "Anju", ParticipantKind.USER),
+                        new Participant(BOT, "ബിജു", ParticipantKind.USER)), 2);
         return List.of(
                 new Sample("room-joined.json",
                         ServerMessage.roomReply(MessageType.ROOM_JOINED, ROOM_ID, 1, SERVER_TIME,
                                 new RoomJoinedPayload(ROOM_ID, "K7MQ2X", RoomRole.HOST, ANJU, lobby)),
                         new TypeReference<ServerMessage<RoomJoinedPayload>>() { }),
+                new Sample("room-joined-member.json",
+                        ServerMessage.roomReply(MessageType.ROOM_JOINED, ROOM_ID, 1, SERVER_TIME,
+                                new RoomJoinedPayload(ROOM_ID, "K7MQ2X", RoomRole.MEMBER, BOT, joinedLobby)),
+                        new TypeReference<ServerMessage<RoomJoinedPayload>>() { }),
                 new Sample("room-lobby-updated.json",
                         ServerMessage.roomBroadcast(MessageType.ROOM_LOBBY_UPDATED, ROOM_ID, 2, SERVER_TIME,
-                                new RoomLobbyUpdatedPayload(lobby)),
+                                new RoomLobbyUpdatedPayload(joinedLobby, List.of(BOT), List.of())),
                         new TypeReference<ServerMessage<RoomLobbyUpdatedPayload>>() { }),
                 new Sample("room-closed.json",
                         ServerMessage.roomBroadcast(MessageType.ROOM_CLOSED, ROOM_ID, 3, SERVER_TIME,
@@ -89,6 +100,22 @@ class RealtimeSamplesTest {
                 new Sample("error-room-invalid-config.json",
                         ServerMessage.error(ErrorCode.INVALID_ROOM_CONFIG, null, SERVER_TIME),
                         new TypeReference<ServerMessage<ErrorPayload>>() { }),
+                new Sample("error-room-not-found.json",
+                        ServerMessage.error(ErrorCode.ROOM_NOT_FOUND, null, SERVER_TIME),
+                        new TypeReference<ServerMessage<ErrorPayload>>() { }),
+                new Sample("error-room-expired.json",
+                        ServerMessage.error(ErrorCode.ROOM_EXPIRED, null, SERVER_TIME),
+                        new TypeReference<ServerMessage<ErrorPayload>>() { }),
+                new Sample("error-room-full.json",
+                        ServerMessage.error(ErrorCode.ROOM_FULL, null, SERVER_TIME),
+                        new TypeReference<ServerMessage<ErrorPayload>>() { }),
+                new Sample("error-room-started.json",
+                        ServerMessage.error(ErrorCode.ROOM_STARTED, null, SERVER_TIME),
+                        new TypeReference<ServerMessage<ErrorPayload>>() { }),
+                new Sample("error-room-not-enough-players.json",
+                        ServerMessage.roomError(ErrorCode.NOT_ENOUGH_PLAYERS, ROOM_ID, SERVER_TIME),
+                        new TypeReference<ServerMessage<ErrorPayload>>() { }),
+                new Sample("client-room-join.json", new RoomJoinSample("K7M-Q2X"), new TypeReference<RoomJoinSample>() { }),
                 new Sample("client-room-create.json",
                         new RoomCreateSample(new RoomSource(QuestionSource.BANK, TOPIC_ID), 10),
                         new TypeReference<RoomCreateSample>() { }),
@@ -374,6 +401,10 @@ class RealtimeSamplesTest {
         assertThat(room.propertyNames()).containsExactly("hostParticipantId", "source", "questionCount", "rated",
                 "expiresAt", "participants", "humanCount");
         assertThat(room.get("source").propertyNames()).containsExactly("type", "topicId");
+        JsonNode updated = ContractJson.MAPPER.valueToTree(samples().stream()
+                .filter(s -> s.file().equals("room-lobby-updated.json")).findFirst().orElseThrow().value());
+        assertThat(updated.get("payload").propertyNames()).containsExactly("room", "joined", "left");
+        assertThat(ContractJson.MAPPER.valueToTree(new RoomLobbyUpdatedPayload(null, null, null)).get("joined").isArray()).isTrue();
         JsonNode busy = ContractJson.MAPPER.valueToTree(ServerMessage.error(ErrorCode.ALREADY_IN_MATCH, null, ROOM_ID, null, SERVER_TIME));
         assertThat(busy.get("roomId").asString()).isEqualTo(ROOM_ID.toString());
         assertThat(busy.get("payload").get("roomId").asString()).isEqualTo(ROOM_ID.toString());

@@ -35,7 +35,9 @@ class RoomDrainAndCapTest extends GameIntegrationTest {
         String b = newSub();
         try (StompTestClient anju = connect(profiledToken(a, "Rajeev")); StompTestClient biju = connect(profiledToken(b, "Biju"))) {
             anju.send("/app/room/create", CREATE);
-            String roomId = anju.next("ROOM_JOINED").get("payload").get("roomId").asString();
+            JsonNode joined = anju.next("ROOM_JOINED");
+            String roomId = joined.get("payload").get("roomId").asString();
+            String code = joined.get("payload").get("code").asString();
             anju.subscribe(Destinations.roomTopic(UUID.fromString(roomId)));
 
             drain.begin();
@@ -46,6 +48,10 @@ class RoomDrainAndCapTest extends GameIntegrationTest {
             await().atMost(Duration.ofSeconds(5)).until(() -> participation.activityOf(a).isEmpty());
             assertThat(rooms.liveCount()).isZero();
             biju.send("/app/room/create", CREATE);
+            biju.error("SERVER_DRAINING");
+            assertThat(participation.activityOf(b)).isEmpty();
+            // Story 5.3: a join while draining is refused too and claims nothing.
+            biju.send("/app/room/join", "{\"code\":\"" + code + "\"}");
             biju.error("SERVER_DRAINING");
             assertThat(participation.activityOf(b)).isEmpty();
         }

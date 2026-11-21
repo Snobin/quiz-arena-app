@@ -11,32 +11,56 @@ import {
   type RealtimeEnv,
 } from '../../realtime/connection.ts';
 import { USER_PRIVATE_QUEUE, type ErrorCode, type RoomClosedReason, type RoomConfigRequest, type RoomRole, type RoomView } from '../../realtime/protocol.ts';
-import { configBody, parseRoomIncoming, roomConfigure, roomLeave, roomTopic, ROOM_CREATE, type RoomIncoming } from './roomProtocol.ts';
+import {
+  configBody,
+  joinBody,
+  parseRoomIncoming,
+  roomConfigure,
+  roomLeave,
+  roomResync,
+  roomStart,
+  roomTopic,
+  ROOM_CREATE,
+  ROOM_JOIN,
+  type RoomIncoming,
+} from './roomProtocol.ts';
 
 /**
- * The Battle Room client (Story 5.2): the host's own STOMP connection to game-service, opened by the rooms chunk and
- * closed when the room ends. It shares the factory, token and URL of `realtime/connection.ts` (`realtimeEnv`) but
+ * The Battle Room client (Stories 5.2 and 5.3): the player's own STOMP connection to game-service, opened by the rooms
+ * chunk and closed when the room ends. It shares the factory, token and URL of `realtime/connection.ts` (`realtimeEnv`) but
  * none of its match state, so the entry chunk grows by nothing.
  *
  * - The private queue is subscribed before anything is published: game-service answers a subscription with
  *   `ROOM_JOINED` when the player is already in a room (a reload, a dropped socket), and a create reply is the same
  *   message, so nothing may be missed.
- * - `/topic/room/{roomId}` is subscribed once `ROOM_JOINED` names the room. Broadcasts apply in `seq` order; one at or
- *   below the last seen is dropped.
+ * - `/topic/room/{roomId}` is subscribed once `ROOM_JOINED` names the room. Broadcasts apply in `seq` order (the Story
+ *   1.9 rules): one at or below the last seen is dropped; a gap (`seq > lastSeq + 1`) sends one lobby `resync` (again
+ *   every `RESYNC_RETRY_MS` while unanswered) and holds the frames until the fresh `ROOM_JOINED`, after which the held
+ *   frames above its `refSeq` apply in order.
+ * - A join (Story 5.3) sends `/app/room/join {code}`; the `ROOM_JOINED` with that code, or an `ERROR`, settles it.
  * - A socket that drops while she is in a room is reopened with backoff; game-service keeps her room for its 10 s
  *   grace and answers the new subscription with a fresh `ROOM_JOINED`. If none comes the room is gone.
  */
 
 export type RoomSession = { roomId: string; code: string; role: RoomRole; selfParticipantId: string; room: RoomView; lastSeq: number };
 
-/** Why a create, configure or resume failed: a server `ERROR` code, or a local reason. */
-export type RoomErrorCode = ErrorCode | 'CONNECTION' | 'TIMEOUT';
+/** Why a create, join, configure or resume failed: a server `ERROR` code, or a local reason (`BAD_CODE`: never sent). */
+export type RoomErrorCode = ErrorCode | 'CONNECTION' | 'TIMEOUT' | 'BAD_CODE';
 export type RoomError = { code: RoomErrorCode; roomId?: string; matchId?: string };
 
-/** Why she was sent back to the Rooms tab. */
-export type RoomNotice = 'EXPIRED' | 'DISCONNECTED' | 'DRAINING' | 'CLOSED';
+/**
+ * Why she was sent back to the Rooms tab. `HOST_CLOSED`: a player whose host left (or dropped past her grace), with
+ * `noticeHost` naming the host; `LOST`: a player whose own connection did not come back.
+ */
+export type RoomNotice = 'EXPIRED' | 'DISCONNECTED' | 'DRAINING' | 'CLOSED' | 'HOST_CLOSED' | 'LOST';
 
-export type RoomPhase = 'idle' | 'creating' | 'resuming' | 'lobby';
+export type RoomPhase = 'idle' | 'creating' | 'joining' | 'resuming' | 'lobby';
+
+/** The membership change of the last applied lobby broadcast (for the chips and the announcements). */
+export type LobbyEvent = { seq: number; joined: string[]; left: string[] };
+
+/** A join that failed from a link: the Rooms tab shows it under the field, with the code prefilled. */
+export type JoinFailure = { typed: string; error: RoomError };
 
 export type RoomState = {
   phase: RoomPhase;
@@ -47,10 +71,29 @@ export type RoomState = {
   error: RoomError | null;
   /** Set when the room ended under her; the Rooms tab shows it once. */
   notice: RoomNotice | null;
+  /** The host's name for a `HOST_CLOSED` notice (inserted unchanged). */
+  noticeHost: string | null;
   reconnecting: boolean;
+  /** A start sent and not yet answered, and the last start's answer (still `NOT_AVAILABLE_YET` until Story 5.4). */
+  starting: boolean;
+  startError: RoomError | null;
+  lobbyEvent: LobbyEvent | null;
+  joinFailure: JoinFailure | null;
 };
 
-export const INITIAL_ROOM_STATE: RoomState = { phase: 'idle', session: null, configuring: false, error: null, notice: null, reconnecting: false };
+export const INITIAL_ROOM_STATE: RoomState = {
+  phase: 'idle',
+  session: null,
+  configuring: false,
+  error: null,
+  notice: null,
+  noticeHost: null,
+  reconnecting: false,
+  starting: false,
+  startError: null,
+  lobbyEvent: null,
+  joinFailure: null,
+};
 
 export const useRoom = create<RoomState>(() => INITIAL_ROOM_STATE);
 
@@ -60,17 +103,29 @@ export const CREATE_TIMEOUT_MS = 10_000;
 export const CONFIGURE_TIMEOUT_MS = 8_000;
 /** A resume, or a reconnect, with no `ROOM_JOINED` within this finds the room gone. */
 export const RESUME_TIMEOUT_MS = 5_000;
+/** A join with no reply within this fails (she can try again). */
+export const JOIN_TIMEOUT_MS = 10_000;
+/** A lobby `resync` with no `ROOM_JOINED` within this is sent again. */
+export const RESYNC_RETRY_MS = 3_000;
 
 export type CreateResult = { ok: true; session: RoomSession } | { ok: false; error: RoomError };
+export type JoinResult = CreateResult;
 
 export type RoomClient = {
   /** Opens a room with `config`. Resolves with the lobby, or with the error to show inline. */
   create(config: Required<RoomConfigRequest>): Promise<CreateResult>;
-  /** Re-reads a room she is already in (a reload on `/r/<code>`). Resolves false when there is none. */
+  /** Joins the room with `code` (canonical). A second call while one is in flight returns the same promise. */
+  join(code: string): Promise<JoinResult>;
+  /** Re-reads a room she is already in. Resolves false when there is none. */
   resume(): Promise<boolean>;
+  /** The host asks to start (answered with an `ERROR` until Story 5.4). */
+  start(): void;
+  /** Hands a link's failed join to the Rooms tab; `clearJoinFailure` once shown. */
+  setJoinFailure(failure: JoinFailure): void;
+  clearJoinFailure(): void;
   /** Sends a configure for the room she is in. */
   configure(config: RoomConfigRequest): void;
-  /** Leaves on purpose: no confirm, the room closes, nothing is shown. */
+  /** Leaves on purpose: nothing is shown (a host's leave closes the room; the UI confirmed when others were in). */
   leave(): void;
   clearError(): void;
   dismissNotice(): void;
@@ -100,7 +155,14 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
   let createTimer: ReturnType<typeof setTimeout> | undefined;
   let configureTimer: ReturnType<typeof setTimeout> | undefined;
   let resumeTimer: ReturnType<typeof setTimeout> | undefined;
+  let joinTimer: ReturnType<typeof setTimeout> | undefined;
+  let startTimer: ReturnType<typeof setTimeout> | undefined;
+  let resyncTimer: ReturnType<typeof setTimeout> | undefined;
   let creating: { request: Required<RoomConfigRequest>; resolve: (result: CreateResult) => void } | null = null;
+  let joining: { code: string; promise: Promise<JoinResult>; resolve: (result: JoinResult) => void } | null = null;
+  /** Lobby frames held while a resync is out (a seq gap). */
+  let held: Array<Extract<RoomIncoming, { type: 'ROOM_LOBBY_UPDATED' }>> = [];
+  let awaitingResync = false;
   let resuming: ((found: boolean) => void) | null = null;
   let resumePromise: Promise<boolean> | null = null;
 
@@ -126,6 +188,9 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
     generation++;
     dropTopic();
     retryTimer = clearTimer(retryTimer);
+    resyncTimer = clearTimer(resyncTimer);
+    held = [];
+    awaitingResync = false;
     const closing = client;
     client = null;
     status = 'closed';
@@ -134,13 +199,85 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
   }
 
   /** The room is over for her: no session, no socket, and the notice (when there is one) for the Rooms tab. */
-  function end(notice: RoomNotice | null): void {
+  function end(notice: RoomNotice | null, noticeHost: string | null = null): void {
     createTimer = clearTimer(createTimer);
     configureTimer = clearTimer(configureTimer);
     resumeTimer = clearTimer(resumeTimer);
+    startTimer = clearTimer(startTimer);
     retries = 0;
     closeSocket();
-    set({ ...INITIAL_ROOM_STATE, notice });
+    // A player (not the host) whose own connection never came back: her room may well go on without her.
+    const lost = notice === 'DISCONNECTED' && get().session !== null && get().session?.role !== 'HOST';
+    set({ ...INITIAL_ROOM_STATE, joinFailure: get().joinFailure, notice: lost ? 'LOST' : notice, noticeHost });
+  }
+
+  function hostName(session: RoomSession | null): string | null {
+    return session?.room.participants.find((p) => p.participantId === session.room.hostParticipantId)?.displayName ?? null;
+  }
+
+  function settleJoin(result: JoinResult): void {
+    joinTimer = clearTimer(joinTimer);
+    const current = joining;
+    joining = null;
+    if (!current) return;
+    const { session } = get();
+    set({ phase: session ? 'lobby' : 'idle' });
+    if (!result.ok && !session) closeSocket();
+    current.resolve(result);
+  }
+
+  /** Applies one lobby frame (in order). */
+  function applyLobby(incoming: Extract<RoomIncoming, { type: 'ROOM_LOBBY_UPDATED' }>): void {
+    const { session, configuring } = get();
+    if (!session) return;
+    const { room, joined, left } = incoming.payload;
+    const seq = incoming.message.seq ?? session.lastSeq;
+    const before = session.room;
+    const configChanged = before.questionCount !== room.questionCount || before.source.topicId !== room.source.topicId;
+    const patch: Partial<RoomState> = { session: { ...session, room, lastSeq: seq }, lobbyEvent: { seq, joined, left } };
+    // A membership-only frame neither closes an open configure nor clears its inline error.
+    if (configChanged || (joined.length === 0 && left.length === 0)) {
+      if (configuring) configureTimer = clearTimer(configureTimer);
+      Object.assign(patch, { configuring: false, error: null });
+    }
+    set(patch);
+  }
+
+  /** Asks for a fresh `ROOM_JOINED` (a seq gap), again while unanswered. */
+  function requestResync(): void {
+    resyncTimer = clearTimer(resyncTimer);
+    awaitingResync = true;
+    const { session } = get();
+    if (!session || status !== 'open' || !client) return;
+    try {
+      client.publish({ destination: roomResync(session.roomId), body: '{}' });
+    } catch {
+      // The socket is going; the reconnect brings ROOM_JOINED.
+    }
+    resyncTimer = setTimeout(() => {
+      resyncTimer = undefined;
+      if (awaitingResync) requestResync();
+    }, RESYNC_RETRY_MS);
+  }
+
+  /** After a fresh `ROOM_JOINED`: the held frames above it, in order, until the next gap. */
+  function drainHeld(): void {
+    awaitingResync = false;
+    resyncTimer = clearTimer(resyncTimer);
+    const frames = held.sort((a, b) => (a.message.seq ?? 0) - (b.message.seq ?? 0));
+    held = [];
+    for (let i = 0; i < frames.length; i++) {
+      const frame = frames[i]!;
+      const last = get().session?.lastSeq ?? 0;
+      const seq = frame.message.seq ?? last + 1;
+      if (seq <= last) continue;
+      if (seq > last + 1) {
+        held = frames.slice(i);
+        requestResync();
+        return;
+      }
+      applyLobby(frame);
+    }
   }
 
   function settleCreate(result: CreateResult): void {
@@ -190,9 +327,13 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
         retries = 0;
         resumeTimer = clearTimer(resumeTimer);
         // Whichever room game-service says she is in: its state replaces what she had.
+        const previous = get().session;
+        if (previous && previous.roomId !== payload.roomId) held = [];
         set({ session, reconnecting: false, phase: get().phase === 'idle' ? 'lobby' : get().phase });
         subscribeTopic(payload.roomId);
+        drainHeld();
         if (creating && sameConfig(creating.request, payload.room)) settleCreate({ ok: true, session });
+        if (joining && joining.code === payload.code) settleJoin({ ok: true, session });
         if (resuming) {
           const done = resuming;
           resuming = null;
@@ -205,25 +346,41 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
       case 'ROOM_LOBBY_UPDATED': {
         const { session } = get();
         if (!session || message.roomId !== session.roomId) return;
-        if (message.seq !== undefined && message.seq <= session.lastSeq) return;
-        configureTimer = clearTimer(configureTimer);
-        set({ session: { ...session, room: incoming.payload.room, lastSeq: message.seq ?? session.lastSeq }, configuring: false, error: null });
+        if (message.seq === undefined) {
+          applyLobby(incoming);
+          return;
+        }
+        if (message.seq <= session.lastSeq) return;
+        if (awaitingResync || message.seq > session.lastSeq + 1) {
+          held.push(incoming);
+          if (!awaitingResync) requestResync();
+          return;
+        }
+        applyLobby(incoming);
         return;
       }
       case 'ROOM_CLOSED': {
         const { session } = get();
         if (session && message.roomId !== undefined && message.roomId !== session.roomId) return;
-        const notice = NOTICES[incoming.payload.reason];
-        end(notice);
+        const { reason } = incoming.payload;
+        const hostGone = reason === 'HOST_LEFT' || reason === 'HOST_DISCONNECTED';
+        if (session && session.role !== 'HOST' && hostGone) end('HOST_CLOSED', hostName(session));
+        else end(NOTICES[reason]);
         if (creating) settleCreateAfterEnd();
+        if (joining) settleJoin({ ok: false, error: { code: 'ROOM_EXPIRED' } });
         return;
       }
       case 'ERROR': {
         const error: RoomError = { code: incoming.payload.code, roomId: incoming.payload.roomId, matchId: incoming.payload.matchId };
-        if (creating) {
+        if (joining) {
+          settleJoin({ ok: false, error });
+        } else if (creating) {
           settleCreate({ ok: false, error });
         } else if (resuming) {
           settleResume(false);
+        } else if (get().starting) {
+          startTimer = clearTimer(startTimer);
+          set({ starting: false, startError: error });
         } else if (get().configuring) {
           configureTimer = clearTimer(configureTimer);
           set({ configuring: false, error });
@@ -312,6 +469,8 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
   /** The socket closed or never opened. In a lobby it is reopened; anything waiting on it fails. */
   function connectionLost(wasOpen: boolean): void {
     pending = [];
+    resyncTimer = clearTimer(resyncTimer);
+    if (joining) settleJoin({ ok: false, error: { code: 'CONNECTION' } });
     if (creating) {
       settleCreate({ ok: false, error: { code: 'CONNECTION' } });
       return;
@@ -325,6 +484,10 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
     if (get().configuring) {
       configureTimer = clearTimer(configureTimer);
       set({ configuring: false, error: { code: 'CONNECTION' } });
+    }
+    if (get().starting) {
+      startTimer = clearTimer(startTimer);
+      set({ starting: false, startError: { code: 'CONNECTION' } });
     }
     resumeTimer = clearTimer(resumeTimer);
     if (!get().reconnecting || wasOpen) {
@@ -357,8 +520,12 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
     createTimer = clearTimer(createTimer);
     configureTimer = clearTimer(configureTimer);
     resumeTimer = clearTimer(resumeTimer);
+    joinTimer = clearTimer(joinTimer);
+    startTimer = clearTimer(startTimer);
     creating?.resolve({ ok: false, error: { code: 'CONNECTION' } });
     creating = null;
+    joining?.resolve({ ok: false, error: { code: 'CONNECTION' } });
+    joining = null;
     resuming?.(false);
     resuming = null;
     resumePromise = null;
@@ -376,6 +543,40 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
         createTimer = setTimeout(() => settleCreate({ ok: false, error: { code: 'TIMEOUT' } }), CREATE_TIMEOUT_MS);
         send((c) => c.publish({ destination: ROOM_CREATE, body: configBody(config) }));
       });
+    },
+    join(code) {
+      if (joining) {
+        // The same code again (a second tap): the join in flight. Another code: refused, the first one still runs.
+        if (joining.code === code) return joining.promise;
+        return Promise.resolve({ ok: false, error: { code: 'BAD_REQUEST' } });
+      }
+      let resolve!: (result: JoinResult) => void;
+      const promise = new Promise<JoinResult>((r) => {
+        resolve = r;
+      });
+      joining = { code, promise, resolve };
+      set({ phase: get().session ? get().phase : 'joining', notice: null });
+      joinTimer = clearTimer(joinTimer);
+      joinTimer = setTimeout(() => settleJoin({ ok: false, error: { code: 'TIMEOUT' } }), JOIN_TIMEOUT_MS);
+      send((c) => c.publish({ destination: ROOM_JOIN, body: joinBody(code) }));
+      return promise;
+    },
+    start() {
+      const { session, starting } = get();
+      if (!session || session.role !== 'HOST' || starting) return;
+      set({ starting: true, startError: null });
+      startTimer = clearTimer(startTimer);
+      startTimer = setTimeout(() => {
+        startTimer = undefined;
+        set({ starting: false, startError: { code: 'TIMEOUT' } });
+      }, CONFIGURE_TIMEOUT_MS);
+      send((c) => c.publish({ destination: roomStart(session.roomId), body: '{}' }));
+    },
+    setJoinFailure(failure) {
+      set({ joinFailure: failure });
+    },
+    clearJoinFailure() {
+      if (get().joinFailure) set({ joinFailure: null });
     },
     resume() {
       if (get().session) return Promise.resolve(true);

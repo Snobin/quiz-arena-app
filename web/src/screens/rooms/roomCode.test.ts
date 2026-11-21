@@ -1,5 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { canonicalCode, formatCode, isRoomCode, spellCode } from './roomCode.ts';
+import { canonicalCode, formatCode, isRoomCode, normalizeCode, spellCode } from './roomCode.ts';
+
+const SAMPLES = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../contracts/samples');
+type Case = { input: string; code: string | null };
+const TABLE = (JSON.parse(readFileSync(join(SAMPLES, 'code-normalisation.json'), 'utf8')) as { cases: Case[] }).cases;
 
 describe('room codes', () => {
   it('shows the canonical code as XXX-XXX', () => {
@@ -13,6 +20,11 @@ describe('room codes', () => {
     expect(isRoomCode('k7m q2x')).toBe(true);
     expect(isRoomCode('K7M-Q2')).toBe(false);
     expect(isRoomCode('K7M-Q0X')).toBe(false);
+  });
+
+  it('follows the table shared with game-service', () => {
+    expect(TABLE.length).toBeGreaterThan(20);
+    for (const { input, code } of TABLE) expect([input, normalizeCode(input)]).toEqual([input, code]);
   });
 
   it('spells the code for a screen reader', () => {

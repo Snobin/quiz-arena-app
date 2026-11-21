@@ -16,8 +16,9 @@ import { guestTokenBody, jsonResponse, utf8Jwt } from '../../test-utils/guest.ts
 import { SERVER_TIME, useFakeRealtime, type FakeStomp } from '../../test-utils/realtime.ts';
 import { RECENT_TOPICS_PATH, TOPICS_PATH, type Catalogue } from '../topics/topicsApi.ts';
 import { loadRecentRooms, saveRecentRoom } from './recentRooms.ts';
+import { useReduceEffectsStore } from '../../motion/reduceEffects.ts';
 import { resetRoomClient } from './roomClient.ts';
-import { ROOM_CREATE, roomConfigure, roomLeave } from './roomProtocol.ts';
+import { ROOM_CREATE, ROOM_JOIN, roomConfigure, roomLeave, roomStart } from './roomProtocol.ts';
 
 const USER_ID = '5d8f0f5e-0000-4000-8000-000000000001';
 const KH_ID = '7c1f0c9a-1111-4a2b-8c3d-0e1f2a3b4c5d';
@@ -150,7 +151,7 @@ afterEach(async () => {
 });
 
 describe('the Rooms tab', () => {
-  it('shows the heading, Create room, an inert Join with code and no Recently hosted when there are none', async () => {
+  it('shows the heading, Create room, a live Join with code and no Recently hosted when there are none', async () => {
     await boot();
     renderApp('/rooms');
     expect(await screen.findByRole('heading', { level: 1, name: 'Rooms' }, { timeout: 8000 })).toBeInTheDocument();
@@ -160,9 +161,9 @@ describe('the Rooms tab', () => {
     expect(field).toHaveAttribute('autocapitalize', 'characters');
     expect(field).toHaveAttribute('autocomplete', 'off');
     expect(field).toHaveAttribute('spellcheck', 'false');
+    expect(field).toHaveAttribute('inputmode', 'text');
     const join = screen.getByRole('button', { name: 'Join' });
-    expect(join).toHaveAttribute('aria-disabled', 'true');
-    expect(join).toHaveAccessibleDescription('Joining arrives soon');
+    expect(join).not.toHaveAttribute('aria-disabled');
     expect(screen.queryByText('Recently hosted')).toBeNull();
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
   });
@@ -407,7 +408,7 @@ describe('the host lobby', () => {
     await user.click(screen.getByRole('button', { name: 'More questions' }));
     await user.click(screen.getByRole('button', { name: 'Save' }));
     expect(socket().bodiesTo(roomConfigure(ROOM_ID))).toEqual([{ questionCount: 11 }]);
-    const update = { ...joinedMessage({ count: 11 }), type: 'ROOM_LOBBY_UPDATED', seq: 2 };
+    const update = { ...joinedMessage({ count: 11 }), type: 'ROOM_LOBBY_UPDATED', seq: 1 };
     (update as { payload: unknown }).payload = { room: joinedMessage({ count: 11 }).payload.room };
     act(() => socket().deliverRoomTopic(ROOM_ID, update));
     expect(await screen.findByText('11 questions')).toBeInTheDocument();
@@ -468,36 +469,37 @@ describe('the host lobby', () => {
     expect(useAnnouncements.getState().polite.text.trim()).toBe('That room expired.');
   });
 
-  it('a reload on /r/<code> finds the room again through the socket', async () => {
+  it('a reload on /r/<code> finds the room again through the socket (a join her own room answers with ROOM_JOINED)', async () => {
     await boot();
     renderApp('/r/K7M-Q2X');
     await waitFor(() => expect(clients.length).toBeGreaterThan(0), { timeout: 8000 });
     await flush();
     socket().open();
+    await waitFor(() => expect(socket().bodiesTo(ROOM_JOIN)).toEqual([{ code: 'K7MQ2X' }]));
     act(() => socket().deliver(joinedMessage()));
     expect(await screen.findByRole('heading', { level: 1, name: 'Battle Room' })).toBeInTheDocument();
+    expect(screen.getByText('Host')).toBeInTheDocument();
   });
 
-  it('a shared link to a room that is not hers says joining arrives soon at once, with a way back', async () => {
+  it('a link with a bad code opens the Rooms tab with it prefilled and the error, sending nothing', async () => {
     await boot();
-    renderApp('/r/ABCDEF');
-    await waitFor(() => expect(clients.length).toBeGreaterThan(0), { timeout: 8000 });
-    await flush();
-    socket().open();
-    act(() => socket().deliver(joinedMessage()));
-    expect(await screen.findByText('Joining a room from a link arrives soon.')).toBeInTheDocument();
-    expect(screen.queryByText('Connecting to your room…')).toBeNull();
-    expect(screen.getByRole('link', { name: 'Back to Rooms' })).toHaveAttribute('href', '/rooms');
-    expect(window.location.pathname).toBe('/r/ABCDEF');
+    renderApp('/r/K7M-Q2O');
+    await waitFor(() => expect(window.location.pathname).toBe('/rooms'), { timeout: 8000 });
+    const field = await screen.findByLabelText('Room code');
+    expect(field).toHaveValue('K7M-Q2O');
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field).toHaveAccessibleDescription('Check the code. Codes have 6 letters and numbers and never use 0, O, 1, I or L.');
+    expect(clients).toHaveLength(0);
   });
 
-  it('tries to resume once per mount: a failed resume does not open a second socket', async () => {
+  it('joins once per mount: a link whose socket drops goes back to the Rooms tab and opens no second socket', async () => {
     await boot();
     renderApp('/r/K7M-Q2X');
     await waitFor(() => expect(clients.length).toBe(1), { timeout: 8000 });
     await flush();
     act(() => socket().drop());
-    expect(await screen.findByText('Joining a room from a link arrives soon.')).toBeInTheDocument();
+    await waitFor(() => expect(window.location.pathname).toBe('/rooms'));
+    expect(await screen.findByLabelText('Room code')).toHaveAccessibleDescription("Couldn't connect. Check your connection and try again.");
     await flush();
     expect(clients).toHaveLength(1);
   });
@@ -517,5 +519,276 @@ describe('the host lobby', () => {
     expect(name).toHaveTextContent('കേരളത്തിലെ നദികൾ');
     expect(name!.className).toContain('break-words');
     expect(name!.className).not.toContain('truncate');
+  });
+});
+
+// ---- Story 5.3: joining and the live lobby ----
+
+const BIJU = '9d8c7b6a-5f4e-4d3c-b2a1-0f9e8d7c6b5a';
+const person = (participantId: string, displayName: string) => ({ participantId, displayName, kind: 'USER' });
+const roomOf = (participants: ReturnType<typeof person>[]) => ({
+  ...joinedMessage().payload.room,
+  participants,
+  humanCount: participants.length,
+});
+/** Biju's ROOM_JOINED as a member of Rajeev's room. */
+const memberJoined = (others: ReturnType<typeof person>[] = []) => ({
+  ...joinedMessage(),
+  payload: { ...joinedMessage().payload, role: 'MEMBER', selfParticipantId: BIJU, room: roomOf([person(SELF, 'Rajeev'), person(BIJU, 'Biju'), ...others]) },
+});
+const lobbyUpdate = (seq: number, participants: ReturnType<typeof person>[], joined: string[] = [], left: string[] = []) => ({
+  type: 'ROOM_LOBBY_UPDATED',
+  roomId: ROOM_ID,
+  seq,
+  serverTime: SERVER_TIME,
+  payload: { room: roomOf(participants), joined, left },
+});
+
+/** Opens /r/<code> as a registered player and answers the join with `reply`. */
+async function openLink(path: string, reply: unknown) {
+  renderApp(path);
+  await waitFor(() => expect(clients.length).toBeGreaterThan(0), { timeout: 8000 });
+  await flush();
+  socket().open();
+  await waitFor(() => expect(socket().sentTo(ROOM_JOIN)).toBe(1));
+  act(() => socket().deliver(reply));
+}
+
+describe('joining with a code', () => {
+  it('refuses a bad code without asking the server, and keeps it', async () => {
+    await boot();
+    const user = userEvent.setup();
+    renderApp('/rooms');
+    const field = await screen.findByLabelText('Room code', undefined, { timeout: 8000 });
+    await user.type(field, 'k7m-q2l{Enter}');
+    expect(field).toHaveValue('k7m-q2l');
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field).toHaveAccessibleDescription('Check the code. Codes have 6 letters and numbers and never use 0, O, 1, I or L.');
+    expect(clients).toHaveLength(0);
+  });
+
+  it('sends the canonical code, shows "…" while it is out, and opens the lobby at /r/<code>', async () => {
+    await boot();
+    const user = userEvent.setup();
+    renderApp('/rooms');
+    await user.type(await screen.findByLabelText('Room code', undefined, { timeout: 8000 }), ' k7m q2x ');
+    await user.click(screen.getByRole('button', { name: 'Join' }));
+    expect(await screen.findByRole('button', { name: '…' })).toBeInTheDocument();
+    await waitFor(() => expect(clients.length).toBe(1));
+    await flush();
+    socket().open();
+    await waitFor(() => expect(socket().bodiesTo(ROOM_JOIN)).toEqual([{ code: 'K7MQ2X' }]));
+    // A tap while it is out is ignored.
+    await user.click(screen.getByRole('button', { name: '…' }));
+    expect(socket().sentTo(ROOM_JOIN)).toBe(1);
+    act(() => socket().deliver(memberJoined()));
+    await waitFor(() => expect(window.location.pathname).toBe('/r/K7M-Q2X'));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Battle Room' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['ROOM_NOT_FOUND', 'No room has this code. Check it with the host.'],
+    ['ROOM_EXPIRED', 'K7M-Q2X has expired. Ask the host to share a new code.'],
+    ['ROOM_FULL', 'Room is full (50). Ask the host for a new room.'],
+    ['ROOM_STARTED', 'This room has already started. Ask the host for the next room.'],
+    ['RATE_LIMITED', 'Too many tries. Wait a minute and try again.'],
+  ])('maps %s to its inline message under the field, keeping the code, announced politely', async (code, text) => {
+    await boot();
+    const user = userEvent.setup();
+    renderApp('/rooms');
+    const field = await screen.findByLabelText('Room code', undefined, { timeout: 8000 });
+    await user.type(field, 'K7M-Q2X{Enter}');
+    await waitFor(() => expect(clients.length).toBe(1));
+    await flush();
+    socket().open();
+    await waitFor(() => expect(socket().sentTo(ROOM_JOIN)).toBe(1));
+    act(() => socket().deliver({ type: 'ERROR', serverTime: SERVER_TIME, payload: { code } }));
+    await waitFor(() => expect(field).toHaveAccessibleDescription(text));
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field).toHaveValue('K7M-Q2X');
+    expect(window.location.pathname).toBe('/rooms');
+    await waitFor(() => expect(useAnnouncements.getState().polite.text.trim()).toBe(text));
+  });
+
+  it('ALREADY_IN_MATCH offers a way back to the match', async () => {
+    await boot();
+    const user = userEvent.setup();
+    renderApp('/rooms');
+    await user.type(await screen.findByLabelText('Room code', undefined, { timeout: 8000 }), 'K7MQ2X{Enter}');
+    await waitFor(() => expect(clients.length).toBe(1));
+    await flush();
+    socket().open();
+    await waitFor(() => expect(socket().sentTo(ROOM_JOIN)).toBe(1));
+    act(() => socket().deliver({ type: 'ERROR', matchId: ROOM_ID, serverTime: SERVER_TIME, payload: { code: 'ALREADY_IN_MATCH', matchId: ROOM_ID } }));
+    expect(await screen.findByText("You're already in a match or a room.")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Go back to it' })).toBeInTheDocument();
+  });
+});
+
+describe('joining by link', () => {
+  it('a guest goes to Sign-in with returnTo=/r/<code> and no join is sent', async () => {
+    await boot(false);
+    renderApp('/r/K7M-Q2X');
+    await waitFor(() => expect(window.location.pathname).toBe('/sign-in'), { timeout: 8000 });
+    expect(new URLSearchParams(window.location.search).get('returnTo')).toBe('/r/K7M-Q2X');
+    expect(clients).toHaveLength(0);
+  });
+
+  it('a registered player lands in the lobby with no confirmation, any case and no hyphen', async () => {
+    await boot();
+    await openLink('/r/k7mq2x', memberJoined());
+    expect(socket().bodiesTo(ROOM_JOIN)).toEqual([{ code: 'K7MQ2X' }]);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Battle Room' })).toBeInTheDocument();
+  });
+
+  it('an error opens the Rooms tab with the code prefilled and the error shown and announced', async () => {
+    await boot();
+    await openLink('/r/k7mq2x', { type: 'ERROR', serverTime: SERVER_TIME, payload: { code: 'ROOM_EXPIRED' } });
+    await waitFor(() => expect(window.location.pathname).toBe('/rooms'));
+    const field = await screen.findByLabelText('Room code');
+    expect(field).toHaveValue('k7mq2x');
+    // The message names the normalised code, whatever was typed or linked.
+    expect(field).toHaveAccessibleDescription('K7M-Q2X has expired. Ask the host to share a new code.');
+    await waitFor(() => expect(useAnnouncements.getState().polite.text.trim()).toBe('K7M-Q2X has expired. Ask the host to share a new code.'));
+  });
+});
+
+describe('the player lobby', () => {
+  it('shows the code block and Share, read-only config, the chips and "Waiting for <host> to start", and no start bar', async () => {
+    await boot();
+    await openLink('/r/K7M-Q2X', memberJoined());
+    await screen.findByRole('heading', { level: 1, name: 'Battle Room' });
+    expect(screen.getByText('K7M-Q2X')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Share to WhatsApp' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy code' })).toBeInTheDocument();
+    const card = screen.getByRole('region', { name: 'Room settings' });
+    expect(within(card).queryByRole('link', { name: 'Edit topic' })).toBeNull();
+    expect(within(card).queryByRole('button', { name: 'Edit question count' })).toBeNull();
+    expect(screen.queryByText('Host')).toBeNull();
+    expect(screen.getByRole('heading', { level: 2, name: '2 joined' })).toBeInTheDocument();
+    expect(screen.getByText('You')).toBeInTheDocument();
+    expect(screen.getByText('Rajeev').getAttribute('lang')).toBe('en');
+    expect(screen.getByText('Waiting for Rajeev to start')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Start/ })).toBeNull();
+    expect(screen.queryByRole('navigation', { name: 'Main' })).toBeNull();
+    expect(document.body.innerHTML).not.toMatch(/volt|flash/);
+  });
+
+  it('a new joiner pops in at the front with "Just in"; five at once fade in as a batch; the list is never a live region', async () => {
+    await boot();
+    await openLink('/r/K7M-Q2X', memberJoined());
+    await screen.findByRole('heading', { level: 1, name: 'Battle Room' });
+    const base = [person(SELF, 'Rajeev'), person(BIJU, 'Biju')];
+    const anju = person('p-anju', 'അഞ്ജു');
+    act(() => socket().deliverRoomTopic(ROOM_ID, lobbyUpdate(1, [...base, anju], [anju.participantId])));
+    const chips = await screen.findAllByTestId('joined-chip');
+    expect(chips[0]).toHaveTextContent('അഞ്ജു');
+    expect(chips[0]).toHaveAttribute('data-entrance', 'chip-pop');
+    expect(within(chips[0]!).getByText('Just in')).toBeInTheDocument();
+    expect(within(chips[0]!).getByText('അഞ്ജു')).toHaveAttribute('lang', 'ml');
+    expect(screen.getByRole('heading', { level: 2, name: '3 joined' })).toBeInTheDocument();
+    expect(useAnnouncements.getState().polite.text.trim()).toBe('1 joined, 3 in room');
+
+    const five = ['a', 'b', 'c', 'd', 'e'].map((x) => person(`p-${x}`, `Player ${x}`));
+    act(() => socket().deliverRoomTopic(ROOM_ID, lobbyUpdate(2, [...base, anju, ...five], five.map((p) => p.participantId))));
+    await waitFor(() => expect(screen.getAllByTestId('joined-chip')).toHaveLength(8));
+    for (const chip of screen.getAllByTestId('joined-chip').slice(0, 5)) expect(chip).toHaveAttribute('data-entrance', 'chip-batch-fade');
+    // Within 5 s of the last announcement nothing more is said yet.
+    expect(useAnnouncements.getState().polite.text.trim()).toBe('1 joined, 3 in room');
+    expect(document.querySelector('[aria-live] [data-testid="joined-chip"]')).toBeNull();
+    expect(screen.getByRole('list').closest('[aria-live]')).toBeNull();
+
+    // A leaver's chip goes at once.
+    act(() => socket().deliverRoomTopic(ROOM_ID, lobbyUpdate(3, [...base, ...five], [], [anju.participantId])));
+    await waitFor(() => expect(screen.queryByText('അഞ്ജു')).toBeNull());
+  });
+
+  it('under reduced effects every new chip only fades', async () => {
+    useReduceEffectsStore.setState({ setting: 'on' });
+    try {
+      await boot();
+      await openLink('/r/K7M-Q2X', memberJoined());
+      await screen.findByRole('heading', { level: 1, name: 'Battle Room' });
+      const anju = person('p-anju', 'Anju');
+      act(() => socket().deliverRoomTopic(ROOM_ID, lobbyUpdate(1, [person(SELF, 'Rajeev'), person(BIJU, 'Biju'), anju], [anju.participantId])));
+      await waitFor(() => expect(screen.getAllByTestId('joined-chip')[0]).toHaveAttribute('data-entrance', 'chip-reduced-fade'));
+    } finally {
+      useReduceEffectsStore.setState({ setting: 'follow-phone' });
+    }
+  });
+
+  it('shows at most 24 chips, then a dashed "+N more" chip that shows the rest', async () => {
+    await boot();
+    const many = Array.from({ length: 28 }, (_, i) => person(`p-${i}`, `കുട്ടി ${i} with a fairly long Latin surname`));
+    const user = userEvent.setup();
+    await openLink('/r/K7M-Q2X', memberJoined(many));
+    await screen.findByRole('heading', { level: 1, name: 'Battle Room' });
+    expect(screen.getAllByTestId('joined-chip')).toHaveLength(24);
+    const more = screen.getByRole('button', { name: '+6 more' });
+    expect(more.className).toContain('border-dashed');
+    await user.click(more);
+    expect(screen.getAllByTestId('joined-chip')).toHaveLength(30);
+    for (const chip of screen.getAllByTestId('joined-chip')) expect(chip.className).not.toContain('truncate');
+  });
+
+  it('Leave sends leave with no confirm and returns to the Rooms tab', async () => {
+    await boot();
+    const user = userEvent.setup();
+    await openLink('/r/K7M-Q2X', memberJoined());
+    await user.click(await screen.findByRole('button', { name: 'Leave' }));
+    expect(socket().bodiesTo(roomLeave(ROOM_ID))).toHaveLength(1);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    await waitFor(() => expect(window.location.pathname).toBe('/rooms'));
+  });
+
+  it('ROOM_CLOSED HOST_LEFT returns her to the Rooms tab with "<host> closed the room", announced', async () => {
+    await boot();
+    await openLink('/r/K7M-Q2X', memberJoined());
+    await screen.findByRole('heading', { level: 1, name: 'Battle Room' });
+    act(() => socket().deliver({ type: 'ROOM_CLOSED', roomId: ROOM_ID, serverTime: SERVER_TIME, payload: { reason: 'HOST_LEFT' } }));
+    await waitFor(() => expect(window.location.pathname).toBe('/rooms'));
+    expect(await within(screen.getByRole('main')).findByText('Rajeev closed the room')).toBeInTheDocument();
+    expect(useAnnouncements.getState().polite.text.trim()).toBe('Rajeev closed the room');
+  });
+});
+
+describe('the host lobby with players', () => {
+  async function hostWithBiju() {
+    const user = await openLobby();
+    act(() => socket().deliverRoomTopic(ROOM_ID, lobbyUpdate(1, [person(SELF, 'Rajeev'), person(BIJU, 'Biju')], [BIJU])));
+    await screen.findByRole('heading', { level: 2, name: '2 joined' });
+    return user;
+  }
+
+  it('enables the start bar at 2 humans; a start is still answered "Starting a match arrives soon"', async () => {
+    await boot();
+    const user = await hostWithBiju();
+    const start = screen.getByRole('button', { name: 'Start · 2 players' });
+    expect(start).not.toHaveAttribute('aria-disabled');
+    expect(screen.getByText('Leaving closes the room')).toBeInTheDocument();
+    await user.click(start);
+    expect(socket().sentTo(roomStart(ROOM_ID))).toBe(1);
+    act(() => socket().deliver({ type: 'ERROR', roomId: ROOM_ID, serverTime: SERVER_TIME, payload: { code: 'NOT_AVAILABLE_YET', roomId: ROOM_ID } }));
+    expect(await screen.findByText('Starting a match arrives soon')).toBeInTheDocument();
+  });
+
+  it('Leave with others asks first: Stay is focused and Esc stays; Close room sends leave', async () => {
+    await boot();
+    const user = await hostWithBiju();
+    await user.click(screen.getByRole('button', { name: 'Leave' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Close the room? Everyone will be sent back.' });
+    expect(within(dialog).getByRole('button', { name: 'Stay' })).toHaveFocus();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(socket().sentTo(roomLeave(ROOM_ID))).toBe(0);
+
+    // Android back asks too, and Back again on the dialog means Stay.
+    act(() => window.history.back());
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    expect(socket().sentTo(roomLeave(ROOM_ID))).toBe(0);
+
+    await user.click(screen.getByRole('button', { name: 'Close room' }));
+    expect(socket().bodiesTo(roomLeave(ROOM_ID))).toHaveLength(1);
+    await waitFor(() => expect(window.location.pathname).toBe('/rooms'));
   });
 });

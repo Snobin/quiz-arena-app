@@ -37,7 +37,8 @@ const read = (file: string): unknown => JSON.parse(readFileSync(join(SAMPLES, fi
 // The question-set DTOs and the `minnal.match.completed` event travel only between services
 // (never to the browser), so the client has no parser for them; `client-*` samples are bodies the
 // client sends; every other sample is a STOMP frame body the server sends.
-const SERVER_ONLY = new Set(['enums.json', 'match-completed.json']);
+// `code-normalisation.json` is the shared room-code table (Story 5.3), read by screens/rooms/roomCode.test.ts.
+const SERVER_ONLY = new Set(['enums.json', 'match-completed.json', 'code-normalisation.json']);
 const ALL_SERVER_MESSAGES = readdirSync(SAMPLES).filter(
   (file) =>
     file.endsWith('.json') && !SERVER_ONLY.has(file) && !file.startsWith('question-set-') && !file.startsWith('client-'),
@@ -49,7 +50,7 @@ const SERVER_MESSAGES = ALL_SERVER_MESSAGES.filter((file) => !file.startsWith('r
 
 describe('contracts/samples', () => {
   it('has the room samples, which parse at the envelope and carry the room fields', () => {
-    expect(ROOM_MESSAGES).toEqual(['room-closed.json', 'room-joined.json', 'room-lobby-updated.json']);
+    expect(ROOM_MESSAGES).toEqual(['room-closed.json', 'room-joined-member.json', 'room-joined.json', 'room-lobby-updated.json']);
     for (const file of ROOM_MESSAGES) {
       const json = read(file);
       expect(parseServerMessage(json)).toEqual(json);
@@ -78,6 +79,18 @@ describe('contracts/samples', () => {
     expect(parseErrorPayload(parseServerMessage(read('error-room-invalid-config.json'))!.payload)).toEqual({
       code: 'INVALID_ROOM_CONFIG',
     });
+    // Story 5.3: a refused join names no room; a start with too few players names its room.
+    for (const [file, code] of [
+      ['error-room-not-found.json', 'ROOM_NOT_FOUND'],
+      ['error-room-expired.json', 'ROOM_EXPIRED'],
+      ['error-room-full.json', 'ROOM_FULL'],
+      ['error-room-started.json', 'ROOM_STARTED'],
+    ] as const) {
+      expect(parseErrorPayload(parseServerMessage(read(file))!.payload)).toEqual({ code });
+    }
+    const few = parseServerMessage(read('error-room-not-enough-players.json'))!;
+    expect(parseErrorPayload(few.payload)).toEqual({ code: 'NOT_ENOUGH_PLAYERS', roomId: few.roomId });
+    expect(read('client-room-join.json')).toEqual({ code: 'K7M-Q2X' });
   });
 
   it('has the server-message samples', () => {

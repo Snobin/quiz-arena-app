@@ -21,6 +21,9 @@ import {
  */
 
 export const ROOM_CREATE = '/app/room/create';
+export const ROOM_JOIN = '/app/room/join';
+export const roomStart = (roomId: string) => `/app/room/${roomId}/start`;
+export const roomResync = (roomId: string) => `/app/room/${roomId}/resync`;
 export const roomConfigure = (roomId: string) => `/app/room/${roomId}/configure`;
 export const roomLeave = (roomId: string) => `/app/room/${roomId}/leave`;
 export const roomTopic = (roomId: string) => `/topic/room/${roomId}`;
@@ -59,10 +62,16 @@ export function parseRoomJoined(value: unknown): RoomJoinedPayload | null {
   return { roomId, code, role: role as RoomJoinedPayload['role'], selfParticipantId, room };
 }
 
+const isIdList = (value: unknown): value is string[] => Array.isArray(value) && value.every((id) => typeof id === 'string');
+
+/** `joined` and `left` (Story 5.3) read as empty when absent; anything else in them rejects the frame. */
 export function parseRoomLobbyUpdated(value: unknown): RoomLobbyUpdatedPayload | null {
   if (!isObject(value)) return null;
   const room = parseRoomView(value.room);
-  return room ? { room } : null;
+  const joined = value.joined ?? [];
+  const left = value.left ?? [];
+  if (!room || !isIdList(joined) || !isIdList(left)) return null;
+  return { room, joined, left };
 }
 
 export function parseRoomClosed(value: unknown): RoomClosedPayload | null {
@@ -108,6 +117,11 @@ export function parseRoomIncoming(body: string): RoomIncoming | null {
     default:
       return { type: 'OTHER', message };
   }
+}
+
+/** The body of a join request: the canonical code. */
+export function joinBody(code: string): string {
+  return JSON.stringify({ code });
 }
 
 /** The body of a create or configure request. */

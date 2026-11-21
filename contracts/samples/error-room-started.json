@@ -1,0 +1,7 @@
+{
+  "type" : "ERROR",
+  "serverTime" : "2026-11-12T10:15:30.123Z",
+  "payload" : {
+    "code" : "ROOM_STARTED"
+  }
+}
