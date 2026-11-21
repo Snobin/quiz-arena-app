@@ -53,8 +53,19 @@ function useElapsedSeconds(since: number, active: boolean): number {
  * effects) and Cancel. After MATCH_FOUND it shows who joined ("Minnal Bot joined" + BOT badge,
  * announced once) and opens `/match` after max(fonts ready, 1 s). Failures show an inline alert.
  * Leaving the route while searching cancels. No tab bar.
+ *
+ * Story 4.2: given a `topicId` it joins that Topic Duel queue instead, shows `topicName` under the
+ * heading, and returns to `exitTo` (the picker) rather than Home when cancelled.
  */
-export function MatchmakingScreen() {
+export function MatchmakingScreen({
+  topicId,
+  topicName,
+  exitTo = '/',
+}: {
+  topicId?: string;
+  topicName?: string;
+  exitTo?: string;
+} = {}) {
   const { t } = useTranslation();
   useDocumentTitle(t('title.matchmaking'));
   useHideTabBar();
@@ -71,7 +82,7 @@ export function MatchmakingScreen() {
   // Before paint, so a stale phase from the last visit never shows.
   useLayoutEffect(() => {
     staleMatch.current = liveGameStore.getState().match;
-    joinQuickMatch();
+    joinQuickMatch(topicId);
     return () => {
       if (liveGameStore.getState().phase === 'searching') cancelMatchmaking();
     };
@@ -83,7 +94,7 @@ export function MatchmakingScreen() {
   const elapsed = useElapsedSeconds(joinedAt, searching && reduced);
 
   useEffect(() => {
-    if (phase === 'cancelled' && cancelRequested.current) navigate('/');
+    if (phase === 'cancelled' && cancelRequested.current) navigate(exitTo);
   }, [phase]);
 
   useEffect(() => {
@@ -102,12 +113,12 @@ export function MatchmakingScreen() {
 
   const onCancel = () => {
     cancelRequested.current = true;
-    if (cancelMatchmaking() !== 'sent') navigate('/');
+    if (cancelMatchmaking() !== 'sent') navigate(exitTo);
   };
 
   const onRetry = () => {
     setJoinedAt(Date.now());
-    joinQuickMatch();
+    joinQuickMatch(topicId);
   };
 
   let heading: ReactNode = t('matchmaking.searching');
@@ -128,6 +139,7 @@ export function MatchmakingScreen() {
           {heading}
           {found && withBot ? <BotBadge /> : null}
         </h1>
+        {topicName ? <p data-testid="matchmaking-topic" className="text-body text-muted">{topicName}</p> : null}
 
         {searching ? (
           reduced ? (

@@ -52,7 +52,9 @@ public final class FakeCore implements AutoCloseable {
                 Thread.currentThread().interrupt();
             }
             int code = status;
-            byte[] out = (code == 200 ? questions(body.get("count").asInt() - shortBy, version, textPrefix) : "{\"status\":" + code + "}")
+            JsonNode topicId = body.path("filters").path("topicId");
+            byte[] out = (code == 200 ? questions(body.get("count").asInt() - shortBy, version, textPrefix,
+                    topicId.isString() ? topicId.asString() : null) : "{\"status\":" + code + "}")
                     .getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", code == 200 ? "application/json" : "application/problem+json");
             try {
@@ -92,12 +94,14 @@ public final class FakeCore implements AutoCloseable {
         calls.clear();
     }
 
-    private static String questions(int count, int version, String prefix) {
+    private static String questions(int count, int version, String prefix, String topicId) {
+        String topic = topicId == null ? "" : (",\"topic\":{\"topicId\":\"%s\",\"name\":\"Kerala History\","
+                + "\"subjectId\":\"%s\",\"subjectName\":\"History\"}").formatted(topicId, UUID.randomUUID());
         return IntStream.range(0, count).mapToObj(i -> """
                 {"questionId":"%s","version":%d,"textMl":"ചോദ്യം %d","textEn":"%s %d",
                  "options":["a","b","c","d"],"answerIndex":%d,"explanation":"x","attribution":null}"""
                 .formatted(UUID.randomUUID(), version, i, prefix, i, i % 4))
-                .collect(Collectors.joining(",", "{\"questions\":[", "]}"));
+                .collect(Collectors.joining(",", "{\"questions\":[", "]" + topic + "}"));
     }
 
     @Override

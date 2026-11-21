@@ -10,6 +10,7 @@ import in.minnal.contracts.realtime.RematchDeclinedPayload;
 import in.minnal.contracts.realtime.RematchExpiredPayload;
 import in.minnal.contracts.realtime.RematchRequestedPayload;
 import in.minnal.contracts.realtime.ServerMessage;
+import in.minnal.contracts.realtime.TopicInfo;
 import in.minnal.game.match.application.MatchCompletedForRematch;
 import in.minnal.game.match.application.MatchRegistry;
 import in.minnal.game.match.application.MatchTimers;
@@ -44,7 +45,8 @@ import org.springframework.stereotype.Service;
  * every change is a queued {@link RematchEvent}; only its thread touches the windows. Timers only
  * tell it events, and the question-set fetch runs off its thread (its result comes back as an event).
  *
- * <p>Rules, per completed QUICK match:
+ * <p>Rules, per completed QUICK or TOPIC_DUEL match (a rematch keeps the mode and the topic; a guest may not
+ * rematch into a Topic Duel):
  * <ul>
  *   <li>The window opens at the match end ({@link MatchCompletedForRematch}). It closes after
  *       {@code minnal.rematch.window} (60 s) with nothing pending, counted from the match end or from
@@ -59,7 +61,7 @@ import org.springframework.stereotype.Service;
  *       still rematch. A pending request
  *       that becomes impossible (either side leaves or joins matchmaking) reverts the other side the
  *       same way. A cancel sends the opponent {@code REMATCH_DECLINED CANCELLED}.
- *   <li>When both have requested, both humans are claimed ({@code Queued(QUICK)}) while a fresh set
+ *   <li>When both have requested, both humans are claimed ({@code Queued(mode, topic)}) while a fresh set
  *       is fetched, then the new match (fresh id, same participants, ratings from the old setup,
  *       {@code queueWaitMs} 0) starts through {@link MatchStarter}, so the clients get an ordinary
  *       {@code MATCH_FOUND}. A failed fetch sends {@code MATCHMAKING_FAILED}; the window stays open.
@@ -73,8 +75,6 @@ import org.springframework.stereotype.Service;
 public class RematchCoordinator implements RematchRequests, DisposableBean {
 
     private static final Logger log = LoggerFactory.getLogger(RematchCoordinator.class);
-
-    private static final Activity QUEUED = new Activity.Queued(MatchMode.QUICK);
 
     /** A pending request: its number (a re-send gets a new one) and when it lapses. */
     private record Pending(long token, Instant expiresAt) {
@@ -92,6 +92,15 @@ public class RematchCoordinator implements RematchRequests, DisposableBean {
         long fetchToken;
         /** Who cancelled while the set was being fetched (the start is then called off); null otherwise. */
         String cancelledWhileStarting;
+
+        /** The claim held while the rematch's set is fetched: the old match's mode (and topic). */
+        Activity queued() {
+            return new Activity.Queued(setup.mode(), topicId());
+        }
+
+        UUID topicId() {
+            return setup.topic() == null ? null : setup.topic().topicId();
+        }
 
         Window(MatchCompletedForRematch ended) {
             this.setup = ended.setup();
@@ -148,8 +157,8 @@ public class RematchCoordinator implements RematchRequests, DisposableBean {
     }
 
     @Override
-    public void request(String sub, String sessionId, String matchIdText) {
-        actor.tell(new RematchEvent.Request(sub, sessionId, matchIdText));
+    public void request(String sub, boolean guest, String sessionId, String matchIdText) {
+        actor.tell(new RematchEvent.Request(sub, guest, sessionId, matchIdText));
     }
 
     @Override
@@ -186,7 +195,7 @@ public class RematchCoordinator implements RematchRequests, DisposableBean {
 
     private void onOpened(MatchCompletedForRematch ended) {
         MatchSetup setup = ended.setup();
-        if (setup.mode() != MatchMode.QUICK || setup.humans().isEmpty()) {
+        if ((setup.mode() != MatchMode.QUICK && setup.mode() != MatchMode.TOPIC_DUEL) || setup.humans().isEmpty()) {
             return;
         }
         Window w = new Window(ended);
@@ -204,6 +213,10 @@ public class RematchCoordinator implements RematchRequests, DisposableBean {
             return;
         }
         Window w = matchId == null ? null : windows.get(matchId);
+        if (w != null && w.setup.mode() == MatchMode.TOPIC_DUEL && request.guest()) {
+            channel.toSession(sub, request.sessionId(), ServerMessage.error(ErrorCode.FORBIDDEN_MODE, null, now));
+            return;
+        }
         if (w == null || !w.isHuman(sub)) {
             declined(sub, matchId, RematchDeclineReason.UNAVAILABLE, now);
             return;
@@ -326,7 +339,7 @@ public class RematchCoordinator implements RematchRequests, DisposableBean {
         List<String> claimed = new ArrayList<>();
         boolean allFree = true;
         for (String sub : humans) {
-            if (participation.claim(sub, QUEUED).isEmpty()) {
+            if (participation.claim(sub, w.queued()).isEmpty()) {
                 claimed.add(sub);
             } else {
                 allFree = false;
@@ -335,7 +348,7 @@ public class RematchCoordinator implements RematchRequests, DisposableBean {
         if (!allFree) {
             // Someone got busy since: whoever is still free reverts.
             for (String sub : claimed) {
-                participation.release(sub, QUEUED);
+                participation.release(sub, w.queued());
                 declined(sub, w.matchId(), RematchDeclineReason.UNAVAILABLE, now);
             }
             w.pending.clear();
@@ -352,7 +365,7 @@ public class RematchCoordinator implements RematchRequests, DisposableBean {
         }
         UUID matchId = w.matchId();
         log.atInfo().addKeyValue("matchId", matchId).addKeyValue("userId", humans).log("rematch accepted; fetching a set");
-        questionSets.fetch(MatchStarter.questionSetRequest(requester)).whenComplete((set, failure) ->
+        questionSets.fetch(MatchStarter.questionSetRequest(requester, w.topicId())).whenComplete((set, failure) ->
                 actor.tell(new RematchEvent.SetFetched(matchId, token, set, failure)));
     }
 
@@ -371,7 +384,7 @@ public class RematchCoordinator implements RematchRequests, DisposableBean {
             // Someone cancelled, or left, while the set was fetched: nobody is pulled into a match.
             RematchDeclineReason reason = canceller != null ? RematchDeclineReason.CANCELLED : RematchDeclineReason.UNAVAILABLE;
             for (String sub : humanSubs) {
-                participation.release(sub, QUEUED);
+                participation.release(sub, w.queued());
                 if (!sub.equals(canceller) && !gone.contains(sub)) {
                     declined(sub, w.matchId(), reason, now);
                 }
@@ -381,8 +394,8 @@ public class RematchCoordinator implements RematchRequests, DisposableBean {
             idleIfDone(w);
             return;
         }
-        if (!MatchStarter.usable(fetched.set(), fetched.failure())) {
-            starter.failed(newMatchId, MatchMode.QUICK, humanSubs, fetched.failure(), now);
+        if (!MatchStarter.usable(fetched.set(), fetched.failure(), old.mode())) {
+            starter.failed(newMatchId, old.mode(), w.topicId(), humanSubs, fetched.failure(), now);
             w.fetchToken = 0; // she may ask again while the window lasts
             idleIfDone(w);
             return;
@@ -400,7 +413,8 @@ public class RematchCoordinator implements RematchRequests, DisposableBean {
                     ratingOf(old, participant.participantId()), 0L));
         }
         int botRating = humans.isEmpty() ? RatingCache.DEFAULT_RATING : humans.getFirst().rating();
-        if (starter.start(newMatchId, MatchMode.QUICK, humans, botName, botRating, fetched.set().questions(), now)) {
+        TopicInfo topic = old.mode() == MatchMode.TOPIC_DUEL ? MatchStarter.topicOf(fetched.set()) : null;
+        if (starter.start(newMatchId, old.mode(), humans, botName, botRating, fetched.set().questions(), now, topic)) {
             log.atInfo().addKeyValue("matchId", newMatchId).addKeyValue("rematchOf", old.matchId()).log("rematch started");
         }
     }

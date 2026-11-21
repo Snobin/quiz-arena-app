@@ -38,6 +38,18 @@ class DrainingTest extends GameIntegrationTest {
         }
     }
 
+    /** Story 4.2: a Topic Duel join with a valid topic is refused the same way. */
+    @Test
+    void whileDrainingATopicDuelJoinIsRefusedWithServerDraining() {
+        String a = newSub();
+        try (StompTestClient anju = connect(userToken(a, "Anju"))) {
+            drain.begin();
+            anju.send("/app/matchmaking/TOPIC_DUEL/join", "{\"topicId\":\"" + java.util.UUID.randomUUID() + "\"}");
+            anju.error("SERVER_DRAINING");
+            assertThat(participation.activityOf(a)).isEmpty();
+        }
+    }
+
     /** Story 1.10: a rematch request while draining is refused the same way. */
     @Test
     void whileDrainingARematchRequestIsRefusedWithServerDraining() {

@@ -4,6 +4,7 @@ import in.minnal.contracts.internal.InternalQuestion;
 import in.minnal.contracts.internal.QuestionSetFilters;
 import in.minnal.contracts.internal.QuestionSetRequest;
 import in.minnal.contracts.internal.QuestionSetResponse;
+import in.minnal.contracts.internal.QuestionSetTopic;
 import in.minnal.contracts.internal.QuestionSource;
 import in.minnal.core.question.domain.ContentCategory;
 import in.minnal.core.question.domain.DrawCriteria;
@@ -12,6 +13,7 @@ import in.minnal.core.question.domain.QuestionContent;
 import in.minnal.core.question.domain.QuestionVersion;
 import in.minnal.core.question.domain.Text;
 import in.minnal.core.question.infrastructure.JdbcQuestionRepository;
+import in.minnal.core.question.infrastructure.JdbcSubjectTopicRepository;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
@@ -22,9 +24,11 @@ public class QuestionSetService {
     static final String CUSTOM_NOT_AVAILABLE = "custom source not available";
 
     private final JdbcQuestionRepository questions;
+    private final JdbcSubjectTopicRepository topics;
 
-    public QuestionSetService(JdbcQuestionRepository questions) {
+    public QuestionSetService(JdbcQuestionRepository questions, JdbcSubjectTopicRepository topics) {
         this.questions = questions;
+        this.topics = topics;
     }
 
     public QuestionSetResponse draw(QuestionSetRequest request) {
@@ -34,7 +38,13 @@ public class QuestionSetService {
             throw new QuestionSetUnavailableException("not enough published questions match: requested "
                     + criteria.count() + ", available " + drawn.size());
         }
-        return new QuestionSetResponse(drawn.stream().map(QuestionSetService::toInternal).toList());
+        QuestionSetTopic topic = null;
+        if (criteria.topicId() != null) {
+            topic = topics.topicWithSubject(criteria.topicId())
+                    .map(t -> new QuestionSetTopic(t.topicId(), t.topicName(), t.subjectId(), t.subjectName()))
+                    .orElseThrow(() -> new QuestionSetUnavailableException("topic not found"));
+        }
+        return new QuestionSetResponse(drawn.stream().map(QuestionSetService::toInternal).toList(), topic);
     }
 
     private static DrawCriteria validate(QuestionSetRequest request) {

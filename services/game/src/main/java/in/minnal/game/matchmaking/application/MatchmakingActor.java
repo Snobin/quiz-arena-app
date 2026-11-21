@@ -38,6 +38,8 @@ final class MatchmakingActor implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(MatchmakingActor.class);
 
     private final MatchMode mode;
+    /** The Topic Duel topic this actor serves; null for Quick Match. */
+    private final UUID topicId;
     private final MatchmakingQueue queue;
     private final Clock clock;
     private final RatingCache ratings;
@@ -50,13 +52,19 @@ final class MatchmakingActor implements AutoCloseable {
     private final Counter humanPairings;
     private final Counter botPairings;
     private final Actor<MatchmakingEvent> actor;
+    /** Whether anyone is queued or pairing, as of the end of the last event; read by the idle reaper. */
+    private volatile boolean busy;
+    /** The last time a join arrived or the queue emptied. */
+    private volatile Instant lastTouched;
 
-    MatchmakingActor(MatchMode mode, MatchmakingQueue queue, Clock clock, RatingCache ratings,
+    MatchmakingActor(MatchMode mode, UUID topicId, MatchmakingQueue queue, Clock clock, RatingCache ratings,
             ParticipationRegistry participation, PlayerSessions sessions, PlayerChannel channel,
             QuestionSetClient questionSets, MatchRegistry matches, MeterRegistry meters) {
         this.mode = mode;
+        this.topicId = topicId;
         this.queue = queue;
         this.clock = clock;
+        this.lastTouched = clock.instant();
         this.ratings = ratings;
         this.participation = participation;
         this.sessions = sessions;
@@ -70,7 +78,8 @@ final class MatchmakingActor implements AutoCloseable {
                 .register(meters);
         this.humanPairings = pairings(meters, "human");
         this.botPairings = pairings(meters, "bot");
-        this.actor = new Actor<>("matchmaking-" + mode.name().toLowerCase(), this::handle);
+        this.actor = new Actor<>("matchmaking-" + mode.name().toLowerCase()
+                + (topicId == null ? "" : "-" + topicId.toString().substring(0, 8)), this::handle);
     }
 
     private Counter pairings(MeterRegistry meters, String opponent) {
@@ -82,10 +91,34 @@ final class MatchmakingActor implements AutoCloseable {
     }
 
     void tell(MatchmakingEvent event) {
+        if (event instanceof MatchmakingEvent.Join) {
+            lastTouched = clock.instant();
+            busy = true; // until the actor has looked at the join
+        }
         actor.tell(event);
     }
 
+    /** Nothing queued or pairing for at least {@code idle} (the topic actor may then be stopped). */
+    boolean idleFor(Duration idle) {
+        return !busy && !lastTouched.plus(idle).isAfter(clock.instant());
+    }
+
     private void handle(MatchmakingEvent event) {
+        try {
+            dispatch(event);
+        } finally {
+            if (queue.isEmpty()) {
+                if (busy) {
+                    lastTouched = clock.instant();
+                }
+                busy = false;
+            } else {
+                busy = true;
+            }
+        }
+    }
+
+    private void dispatch(MatchmakingEvent event) {
         switch (event) {
             case MatchmakingEvent.Join join -> onJoin(join);
             case MatchmakingEvent.Cancel cancel -> onCancel(cancel);
@@ -96,7 +129,7 @@ final class MatchmakingActor implements AutoCloseable {
     }
 
     private Activity queued() {
-        return new Activity.Queued(mode);
+        return new Activity.Queued(mode, topicId);
     }
 
     private void onJoin(MatchmakingEvent.Join join) {
@@ -107,7 +140,7 @@ final class MatchmakingActor implements AutoCloseable {
             return;
         }
         Seeker seeker = new Seeker(sub, join.player().name(), Matchmaking.kindOf(join.player()),
-                ratings.ratingOf(join.player()), clock.instant());
+                ratings.ratingOf(join.player(), mode), clock.instant());
         if (queue.join(seeker)) {
             log.debug("{} joined {} at rating {}", sub, mode, seeker.rating());
             pairDue();
@@ -142,7 +175,7 @@ final class MatchmakingActor implements AutoCloseable {
     private void pairDue() {
         for (Pairing pairing : queue.pair(clock.instant())) {
             recordPairing(pairing);
-            QuestionSetRequest request = MatchStarter.questionSetRequest(pairing.first().sub());
+            QuestionSetRequest request = MatchStarter.questionSetRequest(pairing.first().sub(), topicId);
             questionSets.fetch(request).whenComplete((set, failure) ->
                     actor.tell(new MatchmakingEvent.SetFetched(pairing.id(), set, failure)));
         }
@@ -158,13 +191,16 @@ final class MatchmakingActor implements AutoCloseable {
             waits.add(waitMs);
         }
         (pairing.withBot() ? botPairings : humanPairings).increment();
-        log.atInfo()
+        var line = log.atInfo()
                 .addKeyValue("matchId", pairing.id())
                 .addKeyValue("userId", userIds)
                 .addKeyValue("queueWaitMs", waits)
                 .addKeyValue("mode", mode)
-                .addKeyValue("opponent", pairing.withBot() ? "bot" : "human")
-                .log("matchmaking pairing formed");
+                .addKeyValue("opponent", pairing.withBot() ? "bot" : "human");
+        if (topicId != null) {
+            line = line.addKeyValue("topicId", topicId); // a log field only: never a metric tag (cardinality)
+        }
+        line.log("matchmaking pairing formed");
     }
 
     private void onSetFetched(MatchmakingEvent.SetFetched fetched) {
@@ -174,15 +210,16 @@ final class MatchmakingActor implements AutoCloseable {
         }
         Instant now = clock.instant();
         QuestionSetResponse set = fetched.set();
-        if (!MatchStarter.usable(set, fetched.failure())) {
-            starter.failed(pairing.id(), mode, pairing.humans().stream().map(Seeker::sub).toList(), fetched.failure(), now);
+        if (!MatchStarter.usable(set, fetched.failure(), mode)) {
+            starter.failed(pairing.id(), mode, topicId, pairing.humans().stream().map(Seeker::sub).toList(),
+                    fetched.failure(), now);
             return;
         }
         List<MatchStarter.Human> humans = pairing.humans().stream()
                 .map(h -> new MatchStarter.Human(h.sub(), h.displayName(), h.kind(), h.rating(), pairing.queueWaitMs(h)))
                 .toList();
         starter.start(pairing.id(), mode, humans, pairing.withBot() ? Matchmaking.BOT_NAME : null, pairing.botRating(),
-                set.questions(), now);
+                set.questions(), now, MatchStarter.topicOf(set));
     }
 
     @Override

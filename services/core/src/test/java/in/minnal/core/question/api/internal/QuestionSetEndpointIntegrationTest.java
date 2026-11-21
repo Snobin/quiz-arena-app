@@ -190,6 +190,33 @@ class QuestionSetEndpointIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void aTopicFilterReturnsOnlyThatTopicWithAdditiveTopicBlock() throws Exception {
+        Placement rivers = fixtures.placement("Kerala Geography", "Rivers");
+        Placement districts = fixtures.placement("Kerala Geography", "Districts");
+        for (int i = 0; i < 12; i++) {
+            fixtures.published(rivers, "rivers-" + i);
+            fixtures.published(districts, "districts-" + i);
+        }
+        String topic = "{\"category\": \"KERALA_PSC\", \"topicId\": \"%s\"}".formatted(districts.topicId());
+        request(body("\"BANK\"", topic, 10))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.questions.length()").value(10))
+                .andExpect(jsonPath("$.questions[?(@.textEn =~ /^districts-.*/)]").value(org.hamcrest.Matchers.hasSize(10)))
+                .andExpect(jsonPath("$.topic.topicId").value(districts.topicId().toString()))
+                .andExpect(jsonPath("$.topic.name").value("Districts"))
+                .andExpect(jsonPath("$.topic.subjectId").value(districts.subjectId().toString()))
+                .andExpect(jsonPath("$.topic.subjectName").value("Kerala Geography"));
+        request(bank(10)).andExpect(status().isOk()).andExpect(jsonPath("$.topic").doesNotExist());
+    }
+
+    @Test
+    void anUnknownTopicIs422() throws Exception {
+        publish(12, fixtures.placement("Kerala Geography", "Rivers"));
+        String topic = "{\"category\": \"KERALA_PSC\", \"topicId\": \"%s\"}".formatted(java.util.UUID.randomUUID());
+        request(body("\"BANK\"", topic, 10)).andExpect(status().isUnprocessableContent());
+    }
+
+    @Test
     void missingWrongOrEmptyTokenIs401ProblemDetail() throws Exception {
         publish(1, fixtures.placement("Kerala Geography", "Rivers"));
         for (String token : new String[] {null, "", "wrong-token", TOKEN + "x", TOKEN.substring(1)}) {

@@ -35,7 +35,7 @@ import tools.jackson.databind.JsonNode;
  * within about a second. Draining is in {@link DrainingTest} (its context is discarded).
  */
 @TestPropertySource(properties = "minnal.rematch.window=2s")
-class RematchFlowTest extends GameIntegrationTest {
+public class RematchFlowTest extends GameIntegrationTest {
 
     @Autowired
     MatchRegistry matches;
@@ -90,7 +90,7 @@ class RematchFlowTest extends GameIntegrationTest {
         return matchId;
     }
 
-    static String rematch(UUID matchId) {
+    public static String rematch(UUID matchId) {
         return "/app/match/" + matchId + "/rematch";
     }
 
@@ -99,7 +99,7 @@ class RematchFlowTest extends GameIntegrationTest {
     }
 
     /** The next private message of {@code type}, skipping others (MATCH_FOUND's acks, for one). */
-    static JsonNode privateOf(StompTestClient client, String type) {
+    public static JsonNode privateOf(StompTestClient client, String type) {
         for (int i = 0; i < 30; i++) {
             JsonNode message = client.next(Duration.ofSeconds(5));
             if (message.get("type").asString().equals(type)) {

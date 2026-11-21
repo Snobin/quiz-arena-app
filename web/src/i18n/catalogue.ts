@@ -582,6 +582,11 @@ export const catalogue = {
     en: "Couldn't start the rematch. Try again.",
     signoff: ['ml', 'en'],
   },
+  'rematch.note.topicUnavailable': {
+    ml: 'റീമാച്ച് ലഭ്യമല്ല · ടോപ്പിക്കിൽ ഇപ്പോൾ ചോദ്യങ്ങൾ കുറവാണ്',
+    en: 'Rematch unavailable · topic too small now',
+    signoff: ['ml', 'en'],
+  },
   'rematch.note.draining': {
     ml: 'മിന്നൽ അപ്ഡേറ്റ് ചെയ്യുകയാണ്. അൽപ്പം കഴിഞ്ഞ് വീണ്ടും ശ്രമിക്കൂ.',
     en: 'Minnal is updating. Try again in a moment.',
@@ -759,6 +764,11 @@ export const catalogue = {
   'topics.error.offline': {
     ml: 'ഇന്റർനെറ്റ് ഇല്ല, ടോപ്പിക്കുകൾ ലോഡ് ചെയ്യാനായില്ല.',
     en: "You're offline, so the topics couldn't load.",
+    signoff: ['ml', 'en'],
+  },
+  'topics.notice.small': {
+    ml: 'ആ ടോപ്പിക്കിൽ ഇപ്പോൾ ചോദ്യങ്ങൾ കുറവാണ്. മറ്റൊന്ന് തിരഞ്ഞെടുക്കൂ.',
+    en: 'That topic has too few questions right now. Pick another.',
     signoff: ['ml', 'en'],
   },
   'topics.stub.unavailable': { ml: 'ഇതുവരെ ലഭ്യമല്ല', en: 'Not available yet', signoff: ['ml', 'en'] },

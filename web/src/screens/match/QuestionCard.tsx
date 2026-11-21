@@ -17,6 +17,8 @@ type QuestionCardProps = {
   /** The heading's spoken position ("ചോദ്യം 4 / 10, 15 സെക്കൻഡ്"), read after the text. */
   position: string;
   headingRef: Ref<HTMLHeadingElement>;
+  /** The mode label beside the EN tag; Quick Match's when omitted ("Topic Duel · <topic>" in a Topic Duel). */
+  label?: string;
 };
 
 /**
@@ -26,7 +28,7 @@ type QuestionCardProps = {
  * only: render it with `key` per question so it resets. It never touches settings, and it is
  * hidden when there is no other-language text.
  */
-export function QuestionCard({ view, position, headingRef }: QuestionCardProps) {
+export function QuestionCard({ view, position, headingRef, label }: QuestionCardProps) {
   const { t, i18n } = useTranslation();
   const ui = uiLanguage(i18n);
   const base = baseLanguage(view, ui);
@@ -36,8 +38,10 @@ export function QuestionCard({ view, position, headingRef }: QuestionCardProps) 
 
   return (
     <section className="mt-4">
-      <div className="mb-2 flex min-h-target-min items-center justify-between gap-3">
-        <span className="text-label text-muted">{t('play.quickMatch')}</span>
+      <div className="mb-2 flex min-h-target-min items-center justify-between gap-3 py-1">
+        <span data-testid="mode-label" className="min-w-[0] break-words text-label text-muted">
+          {label ?? t('play.quickMatch')}
+        </span>
         {otherText !== undefined ? (
           <button
             type="button"

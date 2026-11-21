@@ -60,7 +60,7 @@ class MatchmakingFlowTest extends GameIntegrationTest {
     }
 
     double pairings(String opponent) {
-        var counter = meters.find("minnal.matchmaking.pairings").tag("opponent", opponent).counter();
+        var counter = meters.find("minnal.matchmaking.pairings").tag("mode", "QUICK").tag("opponent", opponent).counter();
         return counter == null ? 0 : counter.count();
     }
 
@@ -77,7 +77,7 @@ class MatchmakingFlowTest extends GameIntegrationTest {
         StompTestClient anju = guest(a);
         StompTestClient vishnu = guest(b);
         double humanBefore = pairings("human");
-        long waitsBefore = meters.find("minnal.matchmaking.queue.wait").timer().count();
+        long waitsBefore = meters.find("minnal.matchmaking.queue.wait").tag("mode", "QUICK").timer().count();
 
         anju.join();
         anju.expectNothing(Duration.ofMillis(300));
@@ -119,7 +119,7 @@ class MatchmakingFlowTest extends GameIntegrationTest {
             assertThat(call.body().get("requesterId").asString()).isEqualTo(a);
         });
         assertThat(pairings("human")).isEqualTo(humanBefore + 1);
-        assertThat(meters.find("minnal.matchmaking.queue.wait").timer().count()).isEqualTo(waitsBefore + 2);
+        assertThat(meters.find("minnal.matchmaking.queue.wait").tag("mode", "QUICK").timer().count()).isEqualTo(waitsBefore + 2);
         assertThat(participation.matchOf(a)).hasValueSatisfying(id -> assertThat(id.toString()).isEqualTo(matchId));
     }
 
@@ -349,7 +349,7 @@ class MatchmakingFlowTest extends GameIntegrationTest {
         guest.error("FORBIDDEN_MODE");
         guest.send("/app/matchmaking/BATTLE_ROOM/join");
         guest.error("FORBIDDEN_MODE");
-        user.send("/app/matchmaking/TOPIC_DUEL/join");
+        user.send("/app/matchmaking/BATTLE_ROOM/join");
         user.error("MODE_UNAVAILABLE");
         user.send("/app/matchmaking/quick/join");
         user.error("BAD_REQUEST");

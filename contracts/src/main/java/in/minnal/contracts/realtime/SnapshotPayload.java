@@ -25,6 +25,7 @@ import java.util.UUID;
  * @param myAnswer      the receiver's accepted answer to the open question, or null
  * @param selfParticipantId which participant the receiver is (so a client with no prior state,
  *                      such as after a page reload, can tell herself apart)
+ * @param topic         the Topic Duel topic, null in Quick Match
  */
 public record SnapshotPayload(
         SnapshotPhase phase,
@@ -39,7 +40,8 @@ public record SnapshotPayload(
         List<Participant> participants,
         boolean youForfeited,
         MyAnswer myAnswer,
-        UUID selfParticipantId) {
+        UUID selfParticipantId,
+        TopicInfo topic) {
 
     public SnapshotPayload {
         answered = List.copyOf(answered);

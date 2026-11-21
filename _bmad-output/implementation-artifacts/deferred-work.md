@@ -259,3 +259,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-1-topic-picker.md`
   summary: Manually check the Topic picker at 320 px and 200% text size.
   evidence: the spec asks for a wrap test but jsdom cannot measure layout; the code uses `break-words` and `min-h-[56px]`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-2-topic-duel.md`
+  summary: The matchmaking queue-depth gauge and timers are tagged by mode only, so several Topic Duel actors share one meter id.
+  evidence: Micrometer keeps the first registration, so the gauge can point at a closed or other actor's queue; fixing it needs a per-topic tag the spec forbids.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-2-topic-duel.md`
+  summary: A cancel sent while a Topic Duel rematch set is being fetched returns NOT_IN_QUEUE.
+  evidence: `RematchCoordinator` claims `Queued(TOPIC_DUEL, topicId)` with no `MatchmakingActor` behind it, so cancel finds no actor.

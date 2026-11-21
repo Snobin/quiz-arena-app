@@ -68,6 +68,11 @@ describe('contracts/samples', () => {
         'rematch-declined.json',
         'rematch-declined-unavailable.json',
         'rematch-expired.json',
+        'match-found-topic-duel.json',
+        'snapshot-topic-duel.json',
+        'match-ended-topic-duel.json',
+        'matchmaking-failed-topic-unavailable.json',
+        'error-invalid-topic.json',
       ]),
     );
   });
@@ -100,6 +105,31 @@ describe('contracts/samples', () => {
     expect(parseErrorPayload(parseServerMessage(read('error-server-draining.json'))!.payload)).toEqual({
       code: 'SERVER_DRAINING',
     });
+  });
+
+  it('the Topic Duel samples carry the topic block on MATCH_FOUND, SNAPSHOT and MATCH_ENDED, and Quick samples none', () => {
+    const topic = { topicId: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d', name: 'Kerala History', subjectName: 'History' };
+    const found = parseMatchFound(parseServerMessage(read('match-found-topic-duel.json'))!.payload);
+    expect(found).toMatchObject({ mode: 'TOPIC_DUEL', topic });
+    expect(parseSnapshot(parseServerMessage(read('snapshot-topic-duel.json'))!.payload)).toMatchObject({ topic });
+    expect(parseMatchEnded(parseServerMessage(read('match-ended-topic-duel.json'))!.payload)).toMatchObject({ mode: 'TOPIC_DUEL', topic });
+    for (const quick of ['match-found.json', 'snapshot.json', 'match-ended.json']) {
+      expect(JSON.stringify(read(quick))).not.toContain('"topic"');
+    }
+    expect(parseMatchFound(parseServerMessage(read('match-found.json'))!.payload)).not.toHaveProperty('topic');
+  });
+
+  it('a malformed topic block is refused', () => {
+    const payload = parseServerMessage(read('match-found-topic-duel.json'))!.payload as Record<string, unknown>;
+    expect(parseMatchFound({ ...payload, topic: { topicId: 't', name: 5, subjectName: 'x' } })).toBeNull();
+    expect(parseMatchFound({ ...payload, topic: 'Kerala History' })).toBeNull();
+  });
+
+  it('matchmaking-failed-topic-unavailable.json and error-invalid-topic.json: their payloads parse', () => {
+    expect(parseMatchmakingFailed(parseServerMessage(read('matchmaking-failed-topic-unavailable.json'))!.payload)).toEqual({
+      reason: 'TOPIC_UNAVAILABLE',
+    });
+    expect(parseErrorPayload(parseServerMessage(read('error-invalid-topic.json'))!.payload)).toEqual({ code: 'INVALID_TOPIC' });
   });
 
   it('matchmaking-cancelled.json has no payload', () => {

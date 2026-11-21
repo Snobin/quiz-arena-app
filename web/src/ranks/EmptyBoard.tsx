@@ -26,8 +26,8 @@ export function EmptyBoard({ mode, period, onSeeAll }: { mode: Mode; period: Per
         <path d={BOLT_PATH} />
       </svg>
       <p className="text-body">{t(`ranks.empty.${period}` as MessageKey)}</p>
-      {mode === 'QUICK' ? (
-        <Button className="w-full" onClick={() => navigate('/matchmaking')}>
+      {mode !== 'BATTLE_ROOM' ? (
+        <Button className="w-full" onClick={() => navigate(mode === 'QUICK' ? '/matchmaking' : '/play/topics?for=duel')}>
           {t('ranks.empty.start', { mode: label })}
         </Button>
       ) : (

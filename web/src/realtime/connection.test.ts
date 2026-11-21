@@ -1381,3 +1381,92 @@ describe('rejoin after a reload', () => {
     expect(state().live!.phase).toBe('open');
   });
 });
+
+describe('Topic Duel (Story 4.2)', () => {
+  const TOPIC = { topicId: '7c1f0c9a-1111-4a2b-8c3d-0e1f2a3b4c5d', name: 'Kerala History', subjectName: 'History' };
+  const DUEL_JOIN = '/app/matchmaking/TOPIC_DUEL/join';
+  const DUEL_CANCEL = '/app/matchmaking/TOPIC_DUEL/cancel';
+
+  it('an empty topic id is still a Topic Duel join, never a silent Quick Match', async () => {
+    realtime.joinQuickMatch('');
+    await flush();
+    last().open();
+    expect(last().published).toEqual([{ destination: DUEL_JOIN, body: JSON.stringify({ topicId: '' }) }]);
+  });
+
+  it('joins the Topic Duel queue with the topic id in the body, and a cancel names the same mode', async () => {
+    realtime.joinQuickMatch(TOPIC.topicId);
+    await flush();
+    last().open();
+    expect(last().published).toEqual([{ destination: DUEL_JOIN, body: JSON.stringify({ topicId: TOPIC.topicId }) }]);
+    expect(realtime.cancelMatchmaking()).toBe('sent');
+    expect(last().sentTo(DUEL_CANCEL)).toBe(1);
+    expect(last().sentTo(CANCEL)).toBe(0);
+    last().deliver(MATCHMAKING_CANCELLED);
+    // A later Quick Match goes back to the Quick queue.
+    realtime.joinQuickMatch();
+    expect(last().sentTo(JOIN)).toBe(1);
+    expect(realtime.cancelMatchmaking()).toBe('sent');
+    expect(last().sentTo(CANCEL)).toBe(1);
+  });
+
+  it('keeps the topic from MATCH_FOUND in the live match and the store', async () => {
+    realtime.joinQuickMatch(TOPIC.topicId);
+    await flush();
+    last().open();
+    const found = matchFound({ name: 'Vishnu R', kind: 'GUEST' });
+    last().deliver({ ...found, payload: { ...found.payload, mode: 'TOPIC_DUEL', topic: TOPIC } });
+    expect(state().match!.topic).toEqual(TOPIC);
+    expect(state().live!.topic).toEqual(TOPIC);
+  });
+
+  it('a Quick Match has no topic', async () => {
+    await joinAndOpen();
+    last().deliver(matchFound({ name: 'Vishnu R', kind: 'GUEST' }));
+    expect(state().live).not.toHaveProperty('topic');
+  });
+
+  it('MATCHMAKING_FAILED TOPIC_UNAVAILABLE is its own problem; any other reason stays a matchmaking one', async () => {
+    realtime.joinQuickMatch(TOPIC.topicId);
+    await flush();
+    last().open();
+    last().deliver({ ...MATCHMAKING_FAILED, payload: { reason: 'TOPIC_UNAVAILABLE' } });
+    expect(state()).toMatchObject({ phase: 'failed', problem: { kind: 'topicUnavailable' } });
+    realtime.joinQuickMatch(TOPIC.topicId);
+    last().deliver(MATCHMAKING_FAILED);
+    expect(state()).toMatchObject({ phase: 'failed', problem: { kind: 'matchmaking' } });
+  });
+
+  it('INVALID_TOPIC fails the search as a rejected join', async () => {
+    realtime.joinQuickMatch(TOPIC.topicId);
+    await flush();
+    last().open();
+    last().deliver(serverError('INVALID_TOPIC'));
+    expect(state()).toMatchObject({ phase: 'failed', problem: { kind: 'rejected', code: 'INVALID_TOPIC' } });
+  });
+
+  it('a rematch whose topic is too small reverts with its own note', async () => {
+    await joinAndOpen();
+    const found = matchFound({ name: 'Vishnu R', kind: 'GUEST' });
+    last().deliver(found);
+    const { matchId } = found.payload;
+    realtime.requestRematch(matchId);
+    last().deliver({ ...MATCHMAKING_FAILED, payload: { reason: 'TOPIC_UNAVAILABLE' } });
+    expect(state().rematch).toEqual({ matchId, state: 'idle', note: 'topicUnavailable' });
+  });
+
+  it('a rejoin rebuilds the topic from the SNAPSHOT', async () => {
+    const { payload } = matchFound({ name: 'Minnal Bot', kind: 'BOT' });
+    const { matchId, participants } = payload;
+    realtime.rejoinMatch(matchId);
+    await flush();
+    last().open();
+    const reply = snapshot(matchId, {
+      refSeq: 4,
+      scores: participants.map((p) => ({ participantId: p.participantId, score: 0 })),
+      participants,
+    });
+    last().deliver({ ...reply, payload: { ...reply.payload, topic: TOPIC } });
+    expect(state().live!.topic).toEqual(TOPIC);
+  });
+});

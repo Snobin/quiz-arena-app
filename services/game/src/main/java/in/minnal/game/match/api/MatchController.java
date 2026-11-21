@@ -59,7 +59,9 @@ class MatchController {
     /** After the match ended: she asks for a rematch (Story 1.10). The frame body is never read. */
     @MessageMapping("/match/{matchId}/rematch")
     void rematch(@DestinationVariable String matchId, Principal user, SimpMessageHeaderAccessor headers) {
-        rematches.request(user.getName(), headers.getSessionId(), matchId);
+        boolean guest = !(user instanceof in.minnal.game.platform.infrastructure.security.MinnalAuthentication auth)
+                || !auth.getPrincipal().hasRole(in.minnal.contracts.identity.Role.USER);
+        rematches.request(user.getName(), guest, headers.getSessionId(), matchId);
     }
 
     /** She withdraws her pending rematch request. */

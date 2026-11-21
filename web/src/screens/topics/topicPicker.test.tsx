@@ -4,6 +4,9 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../App.tsx';
 import { GUEST_TOKEN_PATH, guestSession } from '../../auth/guestSession.ts';
+import { resetRealtime } from '../../realtime/connection.ts';
+import { liveGameStore } from '../../realtime/liveGameStore.ts';
+import { CANCEL_DUEL, DUEL_JOIN, MATCHMAKING_CANCELLED, useFakeRealtime, type FakeStomp } from '../../test-utils/realtime.ts';
 import { REFRESH_PATH, session } from '../../auth/session.ts';
 import i18n from '../../i18n.ts';
 import { PROFILE_PATH, resetProfile } from '../../profile/profileStore.ts';
@@ -15,6 +18,8 @@ import { guestTokenBody, jsonResponse, utf8Jwt } from '../../test-utils/guest.ts
 import { filterCatalogue } from './TopicPicker.tsx';
 import { RECENT_TOPICS_PATH, TOPICS_PATH, type Catalogue } from './topicsApi.ts';
 
+const KH_ID = '7c1f0c9a-1111-4a2b-8c3d-0e1f2a3b4c5d';
+
 const CATALOGUE: Catalogue = {
   category: 'KERALA_PSC',
   minQuestions: 10,
@@ -23,7 +28,7 @@ const CATALOGUE: Catalogue = {
       subjectId: 's-hist',
       name: 'History',
       topics: [
-        { topicId: 't-kh', name: 'Kerala History', publishedCount: 1240 },
+        { topicId: KH_ID, name: 'Kerala History', publishedCount: 1240 },
         { topicId: 't-fs', name: 'Freedom Struggle', publishedCount: 12 },
       ],
     },
@@ -32,6 +37,8 @@ const CATALOGUE: Catalogue = {
 };
 
 let online = true;
+let clients: FakeStomp[];
+const socket = () => clients[clients.length - 1]!;
 type Handlers = { topics?: () => Response | Promise<Response>; recent?: () => Response | Promise<Response> };
 
 function stubCore(handlers: Handlers = {}) {
@@ -72,10 +79,12 @@ async function boot() {
 beforeEach(async () => {
   online = true;
   vi.spyOn(navigator, 'onLine', 'get').mockImplementation(() => online);
+  clients = useFakeRealtime();
   await act(() => i18n.changeLanguage('en'));
 });
 
 afterEach(async () => {
+  resetRealtime();
   session.reset();
   guestSession.reset();
   resetProfile();
@@ -106,7 +115,8 @@ describe('topic picker', () => {
     stubCore();
     await boot();
     renderApp('/play/topics?for=duel');
-    expect(await screen.findByRole('heading', { level: 1, name: 'Topic Duel · choose a topic' })).toBeInTheDocument();
+    // The first test of the file loads the lazy chunk cold, which now also pulls in the matchmaking screen.
+    expect(await screen.findByRole('heading', { level: 1, name: 'Topic Duel · choose a topic' }, { timeout: 8000 })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { level: 2, name: 'Recent' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: 'History' })).toBeInTheDocument();
     const row = screen.getByRole('button', { name: 'Kerala History, History, 1,240 questions' });
@@ -164,16 +174,72 @@ describe('topic picker', () => {
     expect(screen.getByRole('button', { name: /കേരളത്തിലെ നദികൾ/ })).toBeInTheDocument();
   });
 
-  it('a tap fires the PUT without waiting and opens the stub with the topic name and a Back link', async () => {
+  it('a tap fires the PUT without waiting and opens the Topic Duel matchmaking view with the topic name', async () => {
     const calls = stubCore();
     await boot();
     renderApp('/play/topics?for=duel');
     await userEvent.click(await screen.findByRole('button', { name: /^Kerala History, History/ }));
-    expect(window.location.pathname).toBe('/play/duel/t-kh');
-    await waitFor(() => expect(calls).toContainEqual({ url: `${RECENT_TOPICS_PATH}/t-kh`, method: 'PUT' }));
-    expect(await screen.findByRole('heading', { level: 1, name: 'Kerala History' })).toBeInTheDocument();
-    expect(screen.getByText('Not available yet')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Back' })).toHaveAttribute('href', '/play/topics?for=duel');
+    expect(window.location.pathname).toBe(`/play/duel/${KH_ID}`);
+    await waitFor(() => expect(calls).toContainEqual({ url: `${RECENT_TOPICS_PATH}/${KH_ID}`, method: 'PUT' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Finding an opponent…' })).toBeInTheDocument();
+    expect(await screen.findByTestId('matchmaking-topic')).toHaveTextContent('Kerala History');
+    // The join goes over the existing socket with the topic id.
+    await waitFor(() => expect(clients).toHaveLength(1));
+    act(() => socket().open());
+    expect(socket().published).toEqual([{ destination: DUEL_JOIN, body: JSON.stringify({ topicId: KH_ID }) }]);
+  });
+
+  it.each([`/play/duel/${KH_ID}/extra`, '/play/duel/not-a-uuid'])(
+    'a Duel URL with a bad id (%s) goes back to the picker and never joins any queue',
+    async (path) => {
+      stubCore();
+      await boot();
+      renderApp(path);
+      expect(await screen.findByRole('heading', { level: 1, name: 'Topic Duel · choose a topic' })).toBeInTheDocument();
+      expect(window.location.pathname).toBe('/play/topics');
+      expect(clients.flatMap((c) => c.published)).toEqual([]);
+    },
+  );
+
+  it('Cancel leaves the Topic Duel queue and returns to the picker, not Home', async () => {
+    stubCore();
+    await boot();
+    renderApp(`/play/duel/${KH_ID}`);
+    await screen.findByRole('heading', { level: 1, name: 'Finding an opponent…' });
+    await waitFor(() => expect(clients).toHaveLength(1));
+    act(() => socket().open());
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(socket().sentTo(CANCEL_DUEL)).toBe(1);
+    act(() => socket().deliver(MATCHMAKING_CANCELLED));
+    await waitFor(() => expect(window.location.pathname).toBe('/play/topics'));
+    expect(window.location.search).toBe('?for=duel');
+  });
+
+  it('TOPIC_UNAVAILABLE reopens the picker with the notice and a fresh catalogue, never a raw error', async () => {
+    const calls = stubCore();
+    await boot();
+    renderApp('/play/topics?for=duel');
+    await userEvent.click(await screen.findByRole('button', { name: /^Kerala History, History/ }));
+    await waitFor(() => expect(clients).toHaveLength(1));
+    act(() => socket().open());
+    const topicCalls = () => calls.filter((c) => c.url === TOPICS_PATH).length;
+    const before = topicCalls();
+    act(() => socket().deliver({ type: 'MATCHMAKING_FAILED', serverTime: '2026-11-12T10:15:31.623Z', payload: { reason: 'TOPIC_UNAVAILABLE' } }));
+    await waitFor(() => expect(window.location.pathname).toBe('/play/topics'));
+    expect((await screen.findAllByText('That topic has too few questions right now. Pick another.')).length).toBeGreaterThan(0);
+    expect(useAnnouncements.getState().polite.text).toBe('That topic has too few questions right now. Pick another.');
+    expect(screen.getByRole('heading', { level: 1, name: 'Topic Duel · choose a topic' })).toBeInTheDocument();
+    await waitFor(() => expect(topicCalls()).toBeGreaterThan(before));
+    expect(screen.queryByText(/422/)).toBeNull();
+  });
+
+  it('picking a topic again after a refusal queues normally (the old problem does not bounce it)', async () => {
+    stubCore();
+    await boot();
+    liveGameStore.setState({ phase: 'failed', problem: { kind: 'topicUnavailable' } });
+    renderApp(`/play/duel/${KH_ID}`);
+    await screen.findByRole('heading', { level: 1, name: 'Finding an opponent…' });
+    expect(window.location.pathname).toBe(`/play/duel/${KH_ID}`);
   });
 
   it('a failed PUT is ignored and Solo goes to /practice/{id}', async () => {
@@ -187,7 +253,7 @@ describe('topic picker', () => {
     await boot();
     renderApp('/play/topics?for=solo');
     await userEvent.click(await screen.findByRole('button', { name: /^Kerala History, History/ }));
-    expect(window.location.pathname).toBe('/practice/t-kh');
+    expect(window.location.pathname).toBe(`/practice/${KH_ID}`);
     expect(calls.length).toBeGreaterThan(0);
   });
 

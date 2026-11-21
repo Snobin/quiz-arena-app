@@ -1,0 +1,34 @@
+{
+  "type" : "MATCH_ENDED",
+  "matchId" : "6f1c2a3e-8a4b-4c1d-9e2f-0a1b2c3d4e5f",
+  "serverTime" : "2026-11-12T10:15:30.123Z",
+  "payload" : {
+    "matchId" : "6f1c2a3e-8a4b-4c1d-9e2f-0a1b2c3d4e5f",
+    "mode" : "TOPIC_DUEL",
+    "questionSource" : "BANK",
+    "participants" : [ {
+      "participantId" : "0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+      "displayName" : "Anju",
+      "kind" : "USER",
+      "score" : 1500,
+      "correctCount" : 2,
+      "forfeited" : false,
+      "placement" : 1
+    }, {
+      "participantId" : "9d8c7b6a-5f4e-4d3c-b2a1-0f9e8d7c6b5a",
+      "displayName" : "Minnal Bot",
+      "kind" : "BOT",
+      "score" : 642,
+      "correctCount" : 1,
+      "forfeited" : false,
+      "placement" : 2
+    } ],
+    "questions" : [ ],
+    "breakdown" : [ ],
+    "topic" : {
+      "topicId" : "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+      "name" : "Kerala History",
+      "subjectName" : "History"
+    }
+  }
+}

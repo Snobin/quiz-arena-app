@@ -12,7 +12,7 @@ sealed interface RematchEvent {
     }
 
     /** {@code sub} asks for a rematch of {@code matchIdText} (as sent; may not parse). */
-    record Request(String sub, String sessionId, String matchIdText) implements RematchEvent {
+    record Request(String sub, boolean guest, String sessionId, String matchIdText) implements RematchEvent {
     }
 
     /** {@code sub} withdraws her pending request. */

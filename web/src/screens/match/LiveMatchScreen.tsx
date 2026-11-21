@@ -448,6 +448,7 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
               key={`question-${started.questionIndex}:${view.questionId}`}
               view={view}
               headingRef={headingRef}
+              label={live.topic ? `${t('mode.topicDuel.title')} · ${live.topic.name}` : undefined}
               position={t('match.questionPosition', {
                 n: started.questionIndex + 1,
                 total: started.total,

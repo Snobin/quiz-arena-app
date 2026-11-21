@@ -8,6 +8,7 @@ import in.minnal.contracts.internal.InternalQuestion;
 import in.minnal.contracts.internal.QuestionSetFilters;
 import in.minnal.contracts.internal.QuestionSetRequest;
 import in.minnal.contracts.internal.QuestionSetResponse;
+import in.minnal.contracts.internal.QuestionSetTopic;
 import in.minnal.contracts.internal.QuestionSource;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -47,6 +48,9 @@ class RealtimeSamplesTest {
     static final UUID QUESTION_ID = UUID.fromString("3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f");
     static final UUID QUESTION_2_ID = UUID.fromString("4d5e6f7a-8b9c-4d0e-9f1a-2b3c4d5e6f7a");
     static final UUID QUESTION_3_ID = UUID.fromString("5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b");
+    static final UUID TOPIC_ID = UUID.fromString("1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d");
+    static final UUID SUBJECT_ID = UUID.fromString("2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e");
+    static final TopicInfo TOPIC = new TopicInfo(TOPIC_ID, "Kerala History", "History");
     static final UUID EVENT_ID = UUID.fromString("7a8b9c0d-1e2f-4a3b-9c4d-5e6f7a8b9c0d");
 
     record Sample(String file, Object value, TypeReference<?> type) {
@@ -59,8 +63,37 @@ class RealtimeSamplesTest {
         return List.of(
                 new Sample("match-found.json",
                         ServerMessage.aboutMatch(MessageType.MATCH_FOUND, MATCH_ID, SERVER_TIME, new MatchFoundPayload(
-                                MATCH_ID, MatchMode.QUICK, participants, 10, QuestionSource.BANK, ANJU)),
+                                MATCH_ID, MatchMode.QUICK, participants, 10, QuestionSource.BANK, ANJU, null)),
                         new TypeReference<ServerMessage<MatchFoundPayload>>() { }),
+                new Sample("match-found-topic-duel.json",
+                        ServerMessage.aboutMatch(MessageType.MATCH_FOUND, MATCH_ID, SERVER_TIME, new MatchFoundPayload(
+                                MATCH_ID, MatchMode.TOPIC_DUEL, participants, 10, QuestionSource.BANK, ANJU, TOPIC)),
+                        new TypeReference<ServerMessage<MatchFoundPayload>>() { }),
+                new Sample("snapshot-topic-duel.json",
+                        ServerMessage.reply(MessageType.SNAPSHOT, MATCH_ID, 14, SERVER_TIME, new SnapshotPayload(
+                                SnapshotPhase.REVEAL, 3, 10, null, null, null, revealed(3), List.of(),
+                                List.of(new ParticipantScore(ANJU, 2140, false), new ParticipantScore(BOT, 1310, false)),
+                                participants, false, null, ANJU, TOPIC)),
+                        new TypeReference<ServerMessage<SnapshotPayload>>() { }),
+                new Sample("match-ended-topic-duel.json",
+                        ServerMessage.aboutMatch(MessageType.MATCH_ENDED, MATCH_ID, SERVER_TIME, new MatchEndedPayload(
+                                MATCH_ID, MatchMode.TOPIC_DUEL, QuestionSource.BANK, List.of(
+                                        new ResultParticipant(ANJU, "Anju", ParticipantKind.USER, 1500, 2, false, 1),
+                                        new ResultParticipant(BOT, "Minnal Bot", ParticipantKind.BOT, 642, 1, false, 2)),
+                                List.of(), List.of(), TOPIC)),
+                        new TypeReference<ServerMessage<MatchEndedPayload>>() { }),
+                new Sample("matchmaking-failed-topic-unavailable.json",
+                        ServerMessage.direct(MessageType.MATCHMAKING_FAILED, SERVER_TIME,
+                                new MatchmakingFailedPayload(MatchmakingFailedPayload.TOPIC_UNAVAILABLE)),
+                        new TypeReference<ServerMessage<MatchmakingFailedPayload>>() { }),
+                new Sample("error-invalid-topic.json",
+                        ServerMessage.error(ErrorCode.INVALID_TOPIC, null, SERVER_TIME),
+                        new TypeReference<ServerMessage<ErrorPayload>>() { }),
+                new Sample("question-set-response-topic.json",
+                        new QuestionSetResponse(List.of(new InternalQuestion(QUESTION_ID, 2,
+                                "കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി?", null, List.of("a", "b", "c", "d"), 0, "x", null)),
+                                new QuestionSetTopic(TOPIC_ID, "കേരള ചരിത്രം", SUBJECT_ID, "ചരിത്രം")),
+                        new TypeReference<QuestionSetResponse>() { }),
                 new Sample("matchmaking-failed.json",
                         ServerMessage.direct(MessageType.MATCHMAKING_FAILED, SERVER_TIME,
                                 new MatchmakingFailedPayload(MatchmakingFailedPayload.QUESTION_SET_UNAVAILABLE)),
@@ -107,13 +140,13 @@ class RealtimeSamplesTest {
                                 SnapshotPhase.QUESTION_OPEN, 3, 10, questionView(), SERVER_TIME.minusSeconds(6),
                                 SERVER_TIME.plusSeconds(9), revealed(2), List.of(ANJU),
                                 List.of(new ParticipantScore(ANJU, 2140, false), new ParticipantScore(BOT, 1310, false)),
-                                participants, false, MyAnswer.withResult(1, true, 900, 1, 3040), ANJU)),
+                                participants, false, MyAnswer.withResult(1, true, 900, 1, 3040), ANJU, null)),
                         new TypeReference<ServerMessage<SnapshotPayload>>() { }),
                 new Sample("snapshot-forfeited.json",
                         ServerMessage.reply(MessageType.SNAPSHOT, MATCH_ID, 14, SERVER_TIME, new SnapshotPayload(
                                 SnapshotPhase.REVEAL, 3, 10, null, null, null, revealed(3), List.of(),
                                 List.of(new ParticipantScore(ANJU, 2140, true), new ParticipantScore(BOT, 1310, false)),
-                                participants, true, null, ANJU)),
+                                participants, true, null, ANJU, null)),
                         new TypeReference<ServerMessage<SnapshotPayload>>() { }),
                 new Sample("participant-forfeited.json",
                         ServerMessage.broadcast(MessageType.PARTICIPANT_FORFEITED, MATCH_ID, 13, SERVER_TIME,
@@ -146,7 +179,7 @@ class RealtimeSamplesTest {
                                         new ParticipantBreakdown(BOT, List.of(
                                                 new BreakdownAnswer(2, false, 6000L, 0),
                                                 new BreakdownAnswer(1, false, 2100L, 0),
-                                                new BreakdownAnswer(3, true, 5370L, 642)))))),
+                                                new BreakdownAnswer(3, true, 5370L, 642)))), null)),
                         new TypeReference<ServerMessage<MatchEndedPayload>>() { }),
                 new Sample("match-completed.json",
                         new MatchCompletedEvent(EVENT_ID, MATCH_ID, MatchMode.QUICK, null, QuestionSource.BANK, true,
@@ -313,7 +346,7 @@ class RealtimeSamplesTest {
     @Test
     void aSnapshotOutsideAnOpenQuestionOmitsTheQuestionFields() {
         JsonNode snapshot = ContractJson.MAPPER.valueToTree(new SnapshotPayload(SnapshotPhase.LEAD_IN, 0, 10, null, null,
-                null, null, List.of(), List.of(), List.of(), false, null, ANJU));
+                null, null, List.of(), List.of(), List.of(), false, null, ANJU, null));
         assertThat(snapshot.propertyNames()).containsExactly("phase", "questionIndex", "total", "answered", "scores",
                 "participants", "youForfeited", "selfParticipantId");
         JsonNode receipt = ContractJson.MAPPER.valueToTree(MyAnswer.receipt(2));

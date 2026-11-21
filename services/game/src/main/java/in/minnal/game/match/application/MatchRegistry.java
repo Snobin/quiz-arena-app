@@ -43,7 +43,7 @@ import org.springframework.stereotype.Component;
  * <p>An ended match stays resolvable for {@link #TOMBSTONE_TTL} (30 s), so its players' late
  * answers get {@code ANSWER_REJECTED} rather than {@code NOT_IN_MATCH}.
  *
- * <p>When a completed QUICK match ends, {@link MatchCompletedForRematch} is published so its rematch
+ * <p>When a completed QUICK or TOPIC_DUEL match ends, {@link MatchCompletedForRematch} is published so its rematch
  * window opens (Story 1.10); the actor itself still closes at the end.
  *
  * <p>Once draining has begun, {@link #start} refuses new matches. The check and the registration
@@ -85,7 +85,7 @@ public class MatchRegistry implements MatchAccess, DisposableBean {
     }
 
     /**
-     * @param events where {@link MatchCompletedForRematch} goes when a completed QUICK match ends
+     * @param events where {@link MatchCompletedForRematch} goes when a completed QUICK or TOPIC_DUEL match ends
      */
     @Autowired
     public MatchRegistry(ParticipationRegistry participation, PlayerSessions sessions, PlayerChannel channel,
@@ -242,12 +242,13 @@ public class MatchRegistry implements MatchAccess, DisposableBean {
             idle.notifyAll();
         }
         log.atInfo().addKeyValue("matchId", matchId).log("match removed; players released");
-        if (!match.isFailed() && !match.isAborted() && match.isCompleted() && match.setup().mode() == MatchMode.QUICK) {
+        if (!match.isFailed() && !match.isAborted() && match.isCompleted()
+                && (match.setup().mode() == MatchMode.QUICK || match.setup().mode() == MatchMode.TOPIC_DUEL)) {
             openRematchWindow(match);
         }
     }
 
-    /** A completed QUICK match: its rematch window opens (Story 1.10). A failure here never blocks the end. */
+    /** A completed QUICK or TOPIC_DUEL match: its rematch window opens (Story 1.10). A failure here never blocks the end. */
     private void openRematchWindow(MatchActor match) {
         try {
             Set<UUID> forfeited = new HashSet<>();

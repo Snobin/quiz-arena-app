@@ -223,4 +223,26 @@ class MatchCompletedHandlerIntegrationTest extends PostgresIntegrationTest {
         handler.handle(older);
         assertThat(jdbc.sql("SELECT updated_at FROM rating WHERE user_id = :u").param("u", a).query(java.sql.Timestamp.class).single().toInstant()).isEqualTo(newer);
     }
+
+    /** Story 4.2: a Topic Duel is rated in its own mode; the player's Quick rating is untouched. */
+    @Test
+    void aTopicDuelUpdatesOnlyTheTopicDuelRatingAndPublishesItsMode() {
+        UUID anju = UUID.randomUUID();
+        UUID biju = UUID.randomUUID();
+        jdbc.sql("INSERT INTO rating (user_id, mode, rating, matches_rated, updated_at) VALUES (:u, 'QUICK', 1500, 4, now())").param("u", anju).update();
+        java.time.Instant end = java.time.Instant.parse("2026-11-19T10:00:00Z");
+        MatchCompletedEvent duel = MatchCompletedEvent.of(UUID.randomUUID(), in.minnal.contracts.realtime.MatchMode.TOPIC_DUEL, null,
+                QuestionSource.BANK, end.minusSeconds(180), end, null, List.of(user(anju, 7000, 1), user(biju, 4000, 2)));
+
+        assertThat(handler.handle(duel)).isEqualTo(MatchCompletedHandler.Outcome.APPLIED);
+
+        assertThat(jdbc.sql("SELECT rating FROM rating WHERE user_id = :u AND mode = 'TOPIC_DUEL'").param("u", anju).query(Integer.class).single()).isEqualTo(1216);
+        assertThat(jdbc.sql("SELECT rating FROM rating WHERE user_id = :u AND mode = 'TOPIC_DUEL'").param("u", biju).query(Integer.class).single()).isEqualTo(1184);
+        assertThat(ratingOf(anju)).as("Quick untouched").isEqualTo(1500);
+        assertThat(jdbc.sql("SELECT count(*) FROM rating WHERE user_id = :u AND mode = 'QUICK'").param("u", biju).query(Long.class).single()).isZero();
+        assertThat(jdbc.sql("SELECT DISTINCT mode FROM match_record").query(String.class).list()).containsExactly("TOPIC_DUEL");
+        assertThat(jdbc.sql("SELECT DISTINCT mode FROM rating_event").query(String.class).list()).containsExactly("TOPIC_DUEL");
+        assertThat(jdbc.sql("SELECT DISTINCT payload->>'mode' FROM event_outbox WHERE stream = 'minnal.rating.updated'").query(String.class).list())
+                .containsExactly("TOPIC_DUEL");
+    }
 }

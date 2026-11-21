@@ -35,6 +35,14 @@ public class RatingCache {
         return ratingOf(player.sub(), QUICK);
     }
 
+    /** The player's rating in {@code mode} (a guest is always the default). */
+    public int ratingOf(MinnalPrincipal player, in.minnal.contracts.realtime.MatchMode mode) {
+        if (Matchmaking.isGuest(player)) {
+            return DEFAULT_RATING;
+        }
+        return ratingOf(player.sub(), mode.name());
+    }
+
     public int ratingOf(String userId, String mode) {
         Rated rated = ratings.get(key(userId, mode));
         return rated == null ? DEFAULT_RATING : rated.rating();

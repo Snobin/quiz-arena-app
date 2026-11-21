@@ -40,4 +40,14 @@ class InternalDtoRoundTripTest {
         assertThat(ContractJson.MAPPER.readValue(ContractJson.MAPPER.writeValueAsString(response), QuestionSetResponse.class))
                 .isEqualTo(response);
     }
+
+    @Test
+    void aTopicBlockRoundTripsAndIsOmittedWhenNull() {
+        InternalQuestion q = new InternalQuestion(UUID.randomUUID(), 1, "ml", null, List.of("a", "b", "c", "d"), 0, "x", null);
+        QuestionSetResponse withTopic = new QuestionSetResponse(List.of(q),
+                new QuestionSetTopic(UUID.randomUUID(), "Kerala History", UUID.randomUUID(), "History"));
+        assertThat(ContractJson.MAPPER.readValue(ContractJson.MAPPER.writeValueAsString(withTopic), QuestionSetResponse.class))
+                .isEqualTo(withTopic);
+        assertThat(ContractJson.MAPPER.writeValueAsString(new QuestionSetResponse(List.of(q)))).doesNotContain("topic");
+    }
 }

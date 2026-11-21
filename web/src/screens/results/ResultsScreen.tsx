@@ -14,6 +14,7 @@ import * as lastResult from '../../realtime/lastResult.ts';
 import { cancelRematch, requestRematch, useLiveGame, type LiveMatch } from '../../realtime/liveGameStore.ts';
 import type { MatchEndedPayload } from '../../realtime/protocol.ts';
 import { announce } from '../../shell/announce.ts';
+import { Link } from '../../shell/Link.tsx';
 import { navigate } from '../../shell/router.ts';
 import { useHideTabBar } from '../../shell/useHideTabBar.ts';
 import { BreakdownRow } from './BreakdownRow.tsx';
@@ -149,7 +150,11 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
   const them = view.rival?.score ?? 0;
   const baseHeading = t(`results.heading.${view.kind}`, { you, them });
   // The accessible name gains the rating once it is known ("You won, 3,140 to 2,980, rating +24").
-  const heading = delta.status === 'ready' ? `${baseHeading}, ${t('results.rating.sr', { delta: delta.delta })}` : baseHeading;
+  const named = delta.status === 'ready' ? `${baseHeading}, ${t('results.rating.sr', { delta: delta.delta })}` : baseHeading;
+  // A Topic Duel names its mode and topic under the result line ("Topic Duel · Kerala History"), and in the heading's name.
+  const topic = full.payload.topic;
+  const topicLabel = topic ? `${t('mode.topicDuel.title')} · ${topic.name}` : undefined;
+  const heading = topicLabel ? `${named}, ${topicLabel}` : named;
   // Questions she marked during the live reveals open expanded with the note ready (Story 3.5).
   const [marks] = useState(() => new Set(lastResult.loadMarks(matchId)));
   const answers = full.payload.breakdown.find((b) => b.participantId === full.selfId)?.answers ?? [];
@@ -169,7 +174,7 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
               <span aria-hidden="true">{t('results.title')}</span>
               <span className="sr-only">{heading}</span>
             </h1>
-            <ResultsBand view={view} delta={ratedForHer ? delta : undefined} />
+            <ResultsBand view={view} delta={ratedForHer ? delta : undefined} topicLabel={topicLabel} />
             {showPrompt ? <GuestResultsPrompt view={view} /> : null}
             {signedInAfterGuest ? (
               <p data-testid="guest-match-note" className="text-caption text-muted">
@@ -305,6 +310,14 @@ function RematchActions({ matchId, rivalName }: { matchId: string; rivalName: st
         note ? (
           <p data-testid="rematch-note" className="text-body text-muted">
             {note}
+            {rematch?.note === 'topicUnavailable' ? (
+              <>
+                {' '}
+                <Link to="/play/topics?for=duel" className="font-semibold underline">
+                  {t('title.topics')}
+                </Link>
+              </>
+            ) : null}
           </p>
         ) : null
       }

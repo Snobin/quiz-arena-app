@@ -43,6 +43,7 @@ export const ERROR_CODES = [
   'BAD_REQUEST',
   'NOT_IN_MATCH',
   'ANSWER_REJECTED',
+  'INVALID_TOPIC',
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
@@ -90,6 +91,9 @@ export type ServerMessage<P = unknown> = {
 
 export type Participant = { participantId: string; displayName: string; kind: ParticipantKind };
 
+/** The Topic Duel topic (Story 4.2); absent in Quick Match. */
+export type TopicInfo = { topicId: string; name: string; subjectName: string };
+
 export type MatchFoundPayload = {
   matchId: string;
   mode: MatchMode;
@@ -98,6 +102,7 @@ export type MatchFoundPayload = {
   questionSource: QuestionSource;
   /** Which participant the receiver is. */
   selfParticipantId: string;
+  topic?: TopicInfo;
 };
 
 export type MatchmakingFailedPayload = { reason: string };
@@ -190,6 +195,7 @@ export type SnapshotPayload = {
   myAnswer: SnapshotAnswer | null;
   /** Which participant the receiver is; null from an older server (lets a reloaded client rejoin). */
   selfParticipantId: string | null;
+  topic?: TopicInfo;
 };
 
 /** PARTICIPANT_FORFEITED (broadcast): a participant left the match (grace ran out, or Leave). */
@@ -238,6 +244,7 @@ export type MatchEndedPayload = {
   participants: ResultParticipant[];
   questions: ResultQuestion[];
   breakdown: ParticipantBreakdown[];
+  topic?: TopicInfo;
 };
 
 /**
@@ -313,6 +320,13 @@ export function parseParticipant(value: unknown): Participant | null {
   return { participantId, displayName, kind };
 }
 
+/** The optional `topic`: undefined when absent, null when malformed. */
+function parseTopic(value: unknown): TopicInfo | undefined | null {
+  if (value === undefined) return undefined;
+  if (!isObject(value) || !isString(value.topicId) || !isString(value.name) || !isString(value.subjectName)) return null;
+  return { topicId: value.topicId, name: value.name, subjectName: value.subjectName };
+}
+
 export function parseMatchFound(value: unknown): MatchFoundPayload | null {
   if (!isObject(value)) return null;
   const { matchId, mode, participants, questionCount, questionSource, selfParticipantId } = value;
@@ -324,7 +338,9 @@ export function parseMatchFound(value: unknown): MatchFoundPayload | null {
   if (parsed.some((p) => p === null)) return null;
   const list = parsed as Participant[];
   if (!list.some((p) => p.participantId === selfParticipantId)) return null;
-  return { matchId, mode, participants: list, questionCount, questionSource, selfParticipantId };
+  const topic = parseTopic(value.topic);
+  if (topic === null) return null;
+  return { matchId, mode, participants: list, questionCount, questionSource, selfParticipantId, ...(topic && { topic }) };
 }
 
 export function parseMatchmakingFailed(value: unknown): MatchmakingFailedPayload | null {
@@ -454,6 +470,8 @@ export function parseSnapshot(value: unknown): SnapshotPayload | null {
     if (!isString(value.selfParticipantId)) return null;
     selfParticipantId = value.selfParticipantId;
   }
+  const topic = parseTopic(value.topic);
+  if (topic === null) return null;
   return {
     phase,
     questionIndex,
@@ -468,6 +486,7 @@ export function parseSnapshot(value: unknown): SnapshotPayload | null {
     youForfeited,
     myAnswer,
     selfParticipantId,
+    ...(topic && { topic }),
   };
 }
 
@@ -514,6 +533,8 @@ export function parseMatchEnded(value: unknown): MatchEndedPayload | null {
   const parsedParticipants = participants.map(parseResultParticipant);
   const parsedQuestions = questions.map(parseResultQuestion);
   if (parsedParticipants.some((p) => p === null) || parsedQuestions.some((q) => q === null)) return null;
+  const topic = parseTopic(value.topic);
+  if (topic === null) return null;
   const parsedBreakdown: ParticipantBreakdown[] = [];
   for (const entry of breakdown) {
     if (!isObject(entry) || !isString(entry.participantId) || !Array.isArray(entry.answers)) return null;
@@ -530,6 +551,7 @@ export function parseMatchEnded(value: unknown): MatchEndedPayload | null {
     participants: parsedParticipants as ResultParticipant[],
     questions: parsedQuestions as ResultQuestion[],
     breakdown: parsedBreakdown,
+    ...(topic && { topic }),
   };
 }
 

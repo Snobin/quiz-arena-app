@@ -12,6 +12,7 @@ import java.util.UUID;
  * @param questionSource always {@code BANK} until Epic 6
  * @param participants   every participant with her score, correct count and placement, in participant order
  * @param questions      the questions that were asked, in order (never one that did not open)
+ * @param topic          the Topic Duel topic, null in Quick Match
  * @param breakdown      one per participant, in participant order; {@code answers[i]} lines up with {@code questions[i]}
  */
 public record MatchEndedPayload(
@@ -20,7 +21,8 @@ public record MatchEndedPayload(
         QuestionSource questionSource,
         List<ResultParticipant> participants,
         List<ResultQuestion> questions,
-        List<ParticipantBreakdown> breakdown) {
+        List<ParticipantBreakdown> breakdown,
+        TopicInfo topic) {
 
     public MatchEndedPayload {
         participants = List.copyOf(participants);

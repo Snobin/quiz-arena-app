@@ -119,6 +119,11 @@ public final class MatchmakingQueue {
         return Optional.ofNullable(pairing);
     }
 
+    /** Nobody waiting and no pairing awaiting its question set. */
+    public boolean isEmpty() {
+        return waiting.isEmpty() && pairings.isEmpty();
+    }
+
     public boolean contains(String sub) {
         return pairingBySub.containsKey(sub) || waiting.stream().anyMatch(s -> s.sub().equals(sub));
     }
