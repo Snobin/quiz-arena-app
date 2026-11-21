@@ -90,12 +90,24 @@ export default function TopicsRoutes() {
   if (pathname.startsWith(DUEL_PATH)) return <DuelRoute id={pathname.slice(DUEL_PATH.length)} />;
   if (pathname.startsWith(PRACTICE_PATH)) return <PracticeRoute id={pathname.slice(PRACTICE_PATH.length)} />;
   const params = new URLSearchParams(window.location.search);
-  const purpose: TopicPurpose = params.get('for') === 'solo' ? 'SOLO_PRACTICE' : 'TOPIC_DUEL';
+  const target = params.get('for');
+  const purpose: TopicPurpose = target === 'solo' ? 'SOLO_PRACTICE' : target === 'room' ? 'BATTLE_ROOM' : 'TOPIC_DUEL';
   return (
     <TopicPicker
       purpose={purpose}
       notice={params.get('notice') === 'small' ? t('topics.notice.small') : undefined}
-      onSelect={(topic) => navigate(`${purpose === 'TOPIC_DUEL' ? DUEL_PATH : PRACTICE_PATH}${topic.topicId}`)}
+      onSelect={(topic) => {
+        if (purpose === 'BATTLE_ROOM') {
+          // Back to the Create screen, or the host's lobby when `roomId` is set. The room code stays in its own chunk.
+          const roomId = params.get('roomId');
+          const count = Number(params.get('count'));
+          void import('../rooms/pickerReturn.ts').then((m) => m.returnPickedTopic(topic, { roomId, count: Number.isInteger(count) && count > 0 ? count : null }))
+            // The rooms chunk did not load (offline): the Rooms tab is the way on.
+            .catch(() => navigate('/rooms', { replace: true }));
+          return;
+        }
+        navigate(`${purpose === 'TOPIC_DUEL' ? DUEL_PATH : PRACTICE_PATH}${topic.topicId}`);
+      }}
     />
   );
 }

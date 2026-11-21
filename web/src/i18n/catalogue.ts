@@ -18,6 +18,7 @@
 
 import type { PracticeKey } from '../screens/practice/practiceCatalogue.ts';
 import type { PractiseKey } from '../screens/results/practiseCatalogue.ts';
+import type { RoomKey } from '../screens/rooms/roomCatalogue.ts';
 import { LANGUAGES, type Language } from './language.ts';
 
 export { LANGUAGES, type Language } from './language.ts';
@@ -719,6 +720,7 @@ export const catalogue = {
   // Topic picker (Story 4.1)
   'title.topics': { ml: 'ടോപ്പിക് തിരഞ്ഞെടുക്കുക', en: 'Choose a topic', signoff: ['ml', 'en'] },
   'topics.heading.duel': { ml: 'ടോപ്പിക് ഡ്യുവൽ · ടോപ്പിക് തിരഞ്ഞെടുക്കുക', en: 'Topic Duel · choose a topic', signoff: ['ml', 'en'] },
+  'topics.heading.room': { ml: 'ബാറ്റിൽ റൂം · ടോപ്പിക് തിരഞ്ഞെടുക്കുക', en: 'Battle Room · choose a topic', signoff: ['ml', 'en'] },
   'topics.heading.solo': { ml: 'സോളോ പ്രാക്ടീസ് · ടോപ്പിക് തിരഞ്ഞെടുക്കുക', en: 'Solo Practice · choose a topic', signoff: ['ml', 'en'] },
   'topics.search.label': { ml: 'ടോപ്പിക് തിരയുക', en: 'Search topics', signoff: ['ml', 'en'] },
   'topics.recent': { ml: 'അടുത്തിടെ', en: 'Recent', signoff: ['ml', 'en'] },
@@ -923,6 +925,6 @@ declare module 'i18next' {
   interface CustomTypeOptions {
     keySeparator: false;
     nsSeparator: false;
-    resources: { translation: Record<CatalogueKey | PracticeKey | PractiseKey, string> };
+    resources: { translation: Record<CatalogueKey | PracticeKey | PractiseKey | RoomKey, string> };
   }
 }

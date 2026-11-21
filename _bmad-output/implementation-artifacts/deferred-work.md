@@ -283,3 +283,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-1-room-server-create-configure-and-expire.md`
   summary: Reconcile the epic text: `hostParticipantId` is a random room participant id, not the host's `sub`.
   evidence: AD-10 says a sub is never exposed to other players; lobby members will see the id in Story 5.3.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-2-create-a-room-and-share-it.md`
+  summary: Cap vitest workers (for example `maxWorkers: 4`) so the full web suite is reliable on machines with many cores.
+  evidence: with the default worker count on an 18-core machine 8 tests time out (results, profile, sign-in and rooms flows) and all 1117 pass with `--maxWorkers=4` or in isolation.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-2-create-a-room-and-share-it.md`
+  summary: Add a close-reason table test and a no-reply reconnect case to the room client, and decide whether guests may load the rooms chunk.
+  evidence: only `EXPIRED` and the happy reconnect are tested; `/rooms/create` and `/r/<code>` lazy-load the chunk for guests before redirecting to sign-in.

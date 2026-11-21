@@ -6,13 +6,13 @@ import { setReturnFocus } from '../../shell/returnFocus.ts';
 import { BattleRoomIcon, LockIcon, SoloPracticeIcon, TopicDuelIcon } from './icons.tsx';
 import { signInPath } from './signInPath.ts';
 
-type Mode = { id: string; title: MessageKey; sub: MessageKey; Icon: ComponentType };
+type Mode = { id: string; title: MessageKey; sub: MessageKey; Icon: ComponentType; /** Where Sign-in brings her back to; Home when absent. */ returnTo?: string };
 
 /** Mockup order. Guests may play Quick Match only (CAP-1); these open the Sign-in prompt. */
 export const LOCKED_MODES: readonly Mode[] = [
   { id: 'homeModeTopicDuel', title: 'mode.topicDuel.title', sub: 'mode.topicDuel.sub', Icon: TopicDuelIcon },
   { id: 'homeModeSolo', title: 'mode.solo.title', sub: 'mode.solo.sub', Icon: SoloPracticeIcon },
-  { id: 'homeModeBattleRoom', title: 'mode.battleRoom.title', sub: 'mode.battleRoom.sub', Icon: BattleRoomIcon },
+  { id: 'homeModeBattleRoom', title: 'mode.battleRoom.title', sub: 'mode.battleRoom.sub', Icon: BattleRoomIcon, returnTo: '/rooms' },
 ];
 
 /**
@@ -24,15 +24,15 @@ export function LockedModeRows() {
   const { t } = useTranslation();
   return (
     <ul className="rounded-lg border border-hairline bg-card">
-      {LOCKED_MODES.map(({ id, title, sub, Icon }) => (
+      {LOCKED_MODES.map(({ id, title, sub, Icon, returnTo = '/' }) => (
         <li key={id} className="border-b border-hairline last:border-b-0">
           <Link
             id={id}
-            to={signInPath('/')}
+            to={signInPath(returnTo)}
             aria-label={t('mode.locked.a11y', { mode: t(title) })}
             onClick={(event) => {
               // Only an in-app navigation comes back here; a new-tab click must not leave a target.
-              if (isPlainLeftClick(event)) setReturnFocus(id, '/');
+              if (isPlainLeftClick(event)) setReturnFocus(id, returnTo);
             }}
             className="flex min-h-target-min w-full min-w-[0] items-center gap-3 rounded-lg px-4 py-2"
           >

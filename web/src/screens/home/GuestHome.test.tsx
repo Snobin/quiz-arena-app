@@ -86,7 +86,8 @@ describe('guest Home structure', () => {
 
     const rows = ROW_NAMES.map((name) => screen.getByRole('link', { name }));
     for (const row of rows) {
-      expect(row).toHaveAttribute('href', '/sign-in?returnTo=/');
+      // Battle Room's Sign-in comes back to the Rooms tab (Story 5.2); the others to Home.
+      expect(row).toHaveAttribute('href', row === rows[2] ? '/sign-in?returnTo=/rooms' : '/sign-in?returnTo=/');
       expect(row.className).toContain('min-h-target-min');
       expect(row.querySelector('.opacity-50')).not.toBeNull();
       expect(within(row).getByText('Sign in')).toBeInTheDocument();

@@ -20,8 +20,8 @@ import {
   type SubjectItem,
 } from './topicsApi.ts';
 
-export type TopicPurpose = 'TOPIC_DUEL' | 'SOLO_PRACTICE';
-/** Only the question bank for now; Battle Room and custom topics add sources later. */
+export type TopicPurpose = 'TOPIC_DUEL' | 'SOLO_PRACTICE' | 'BATTLE_ROOM';
+/** Only the question bank for now; custom topics add a source in Epic 6. */
 export type TopicSource = 'BANK';
 
 export type TopicPickerProps = {
@@ -40,6 +40,7 @@ const DEBOUNCE_MS = 200;
 const HEADING: Record<TopicPurpose, MessageKey> = {
   TOPIC_DUEL: 'topics.heading.duel',
   SOLO_PRACTICE: 'topics.heading.solo',
+  BATTLE_ROOM: 'topics.heading.room',
 };
 
 /** NFC and case-insensitive, so Malayalam and Latin text match as typed. */

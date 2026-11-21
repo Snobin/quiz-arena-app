@@ -42,8 +42,8 @@ const ALL_SERVER_MESSAGES = readdirSync(SAMPLES).filter(
   (file) =>
     file.endsWith('.json') && !SERVER_ONLY.has(file) && !file.startsWith('question-set-') && !file.startsWith('client-'),
 );
-// Room messages (Story 5.1) have types here and no runtime parsers until the room screens (Story 5.2, entry
-// budget), so they are checked at the envelope only, below.
+// Room messages (Story 5.1) have types here; their runtime parsers live in the lazy rooms chunk (Story 5.2, entry
+// budget: screens/rooms/roomProtocol.test.ts), so they are checked at the envelope only, below.
 const ROOM_MESSAGES = ALL_SERVER_MESSAGES.filter((file) => file.startsWith('room-'));
 const SERVER_MESSAGES = ALL_SERVER_MESSAGES.filter((file) => !file.startsWith('room-'));
 

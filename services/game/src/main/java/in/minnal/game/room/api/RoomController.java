@@ -71,7 +71,7 @@ class RoomController {
             body = null;
         }
         if (body == null || !body.isObject()) {
-            return new RoomConfigInput(false, null, null, null, false, null);
+            return new RoomConfigInput(false, null, null, false, null);
         }
         JsonNode source = body.get("source");
         JsonNode count = body.get("questionCount");
@@ -79,14 +79,12 @@ class RoomController {
         boolean countPresent = count != null && !count.isNull();
         String type = null;
         String topicId = null;
-        String topicName = null;
         if (sourcePresent && source.isObject()) {
             type = text(source.get("type"));
             topicId = text(source.get("topicId"));
-            topicName = text(source.get("topicName"));
         }
         Integer questionCount = countPresent && count.isIntegralNumber() && count.canConvertToInt() ? count.asInt() : null;
-        return new RoomConfigInput(sourcePresent, type, topicId, topicName, countPresent, questionCount);
+        return new RoomConfigInput(sourcePresent, type, topicId, countPresent, questionCount);
     }
 
     private static String text(JsonNode node) {

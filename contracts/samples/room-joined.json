@@ -12,8 +12,7 @@
       "hostParticipantId" : "0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
       "source" : {
         "type" : "BANK",
-        "topicId" : "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
-        "topicName" : "Kerala History"
+        "topicId" : "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
       },
       "questionCount" : 10,
       "rated" : true,

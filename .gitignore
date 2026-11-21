@@ -18,3 +18,6 @@ deploy/.env
 
 # Party-mode session memory (personal, not project history)
 _bmad-output/party-mode/
+
+# Local web build overrides
+web/.env.local
