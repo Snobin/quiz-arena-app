@@ -116,6 +116,46 @@ class MatchRegistryTest {
         assertThat(meters.get(MatchMetrics.BROADCAST_LAG).tag("type", "QUESTION_REVEALED").timer().count()).isEqualTo(10);
     }
 
+    /** Whether a late answer from "h0" still finds the ended match's tombstone (ANSWER_REJECTED) rather than NOT_IN_MATCH. */
+    private boolean tombstoned(MatchSetup setup) {
+        registry.answer("h0", "s-h0", setup.matchId().toString(), new AnswerRequest(9, 0), Instant.now());
+        return ((ErrorPayload) channel.sent.getLast().message().payload()).code().name().equals("ANSWER_REJECTED");
+    }
+
+    private void assertTombstoneTtl(MatchSetup setup, Duration expected) {
+        java.util.concurrent.atomic.AtomicLong now = new java.util.concurrent.atomic.AtomicLong(1_000_000_000L);
+        registry.nanos = now::get;
+        await().atMost(Duration.ofSeconds(10)).until(() -> registry.liveCount() == 0);
+        now.addAndGet(expected.minusSeconds(1).toNanos());
+        assertThat(tombstoned(setup)).as("still resolvable just before %s", expected).isTrue();
+        now.addAndGet(Duration.ofSeconds(1).toNanos());
+        assertThat(tombstoned(setup)).as("gone at %s", expected).isFalse();
+    }
+
+    @Test
+    void aCompletedRoomMatchStaysResolvableForSixtySecondsAndAQuickMatchForThirty() {
+        registry = registry(Duration.ofMillis(40));
+        registry.nanos = () -> 1_000_000_000L;
+        MatchSetup room = claimed(MatchTestKit.room(MatchTestKit.setup(2, 0, 1)));
+        registry.start(room).orElseThrow();
+        assertTombstoneTtl(room, MatchRegistry.POST_MATCH_TTL);
+
+        MatchSetup quick = claimed(MatchTestKit.setup(2, 0, 1));
+        registry.start(quick).orElseThrow();
+        assertTombstoneTtl(quick, MatchRegistry.TOMBSTONE_TTL);
+    }
+
+    @Test
+    void anAbortedRoomMatchKeepsTheThirtySecondTombstone() {
+        registry = registry(Duration.ofMillis(400));
+        registry.nanos = () -> 1_000_000_000L;
+        MatchSetup room = claimed(MatchTestKit.room(MatchTestKit.setup(2, 0, 2)));
+        registry.start(room).orElseThrow();
+        registry.leave("h0", room.matchId().toString());
+        registry.leave("h1", room.matchId().toString());
+        assertTombstoneTtl(room, MatchRegistry.TOMBSTONE_TTL);
+    }
+
     /** Within the reconnect grace (10 s by default) a disconnect only marks the participant. */
     @Test
     void aDisconnectMarksTheParticipantButTheMatchRunsToTheEnd() {

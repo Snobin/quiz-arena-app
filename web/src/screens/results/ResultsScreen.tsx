@@ -21,9 +21,12 @@ import { BreakdownRow } from './BreakdownRow.tsx';
 import { DotStrip } from './DotStrip.tsx';
 import { GuestResultsPrompt } from './GuestResultsPrompt.tsx';
 import { resultView, type ResultView } from './outcome.ts';
+import { Podium } from './Podium.tsx';
 import { RematchCard } from './RematchCard.tsx';
 import { ResultsBand } from './ResultsBand.tsx';
+import { RoomStandings } from './RoomStandings.tsx';
 import { WinTakeover } from './WinTakeover.tsx';
+import '../rooms/roomCatalogue.ts';
 
 /** Matches whose takeover has played in this page session: it never replays (Back, re-render). */
 const takeoverPlayed = new Set<string>();
@@ -48,7 +51,6 @@ type FullResult = { payload: MatchEndedPayload; selfId: string; liveArrival: boo
 export function ResultsScreen() {
   const { t } = useTranslation();
   useHideTabBar();
-  useDocumentTitle(t('results.title'));
   const live = useLiveGame((s) => s.live);
   const [stored] = useState(() => lastResult.load());
 
@@ -66,6 +68,7 @@ export function ResultsScreen() {
   const outcome = newMatch ? null : (live?.outcome ?? null);
   const minimal = view === null && live !== null && outcome !== null && outcome.kind !== 'aborted';
   const show = view !== null || minimal;
+  useDocumentTitle(full?.payload.mode === 'BATTLE_ROOM' ? t('room.result.title') : t('results.title'));
 
   useEffect(() => {
     // The rematch (or any new match) started: straight to it.
@@ -90,7 +93,9 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
   const reduced = useReducedEffects();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const matchId = full.payload.matchId;
-  const eligible = full.liveArrival && view.kind === 'win' && !view.self.forfeited;
+  const room = full.payload.mode === 'BATTLE_ROOM';
+  // The win takeovers are a later piece for rooms: a room opens straight on the settled view.
+  const eligible = !room && full.liveArrival && view.kind === 'win' && !view.self.forfeited;
   const [takeover, setTakeover] = useState(false);
   const guardUntil = useRef(0);
 
@@ -148,12 +153,15 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
 
   const you = view.self.score;
   const them = view.rival?.score ?? 0;
-  const baseHeading = t(`results.heading.${view.kind}`, { you, them });
+  const total = full.payload.participants.length;
+  const baseHeading = room
+    ? t('room.result.heading', { place: view.self.placement, total, score: you })
+    : t(`results.heading.${view.kind}`, { you, them });
   // The accessible name gains the rating once it is known ("You won, 3,140 to 2,980, rating +24").
   const named = delta.status === 'ready' ? `${baseHeading}, ${t('results.rating.sr', { delta: delta.delta })}` : baseHeading;
   // A Topic Duel names its mode and topic under the result line ("Topic Duel · Kerala History"), and in the heading's name.
   const topic = full.payload.topic;
-  const topicLabel = topic ? `${t('mode.topicDuel.title')} · ${topic.name}` : undefined;
+  const topicLabel = topic ? `${room ? t('room.result.title') : t('mode.topicDuel.title')} · ${topic.name}` : undefined;
   const heading = topicLabel ? `${named}, ${topicLabel}` : named;
   // Questions she marked during the live reveals open expanded with the note ready (Story 3.5).
   const [marks] = useState(() => new Set(lastResult.loadMarks(matchId)));
@@ -174,7 +182,18 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
               <span aria-hidden="true">{t('results.title')}</span>
               <span className="sr-only">{heading}</span>
             </h1>
-            <ResultsBand view={view} delta={ratedForHer ? delta : undefined} topicLabel={topicLabel} />
+            <ResultsBand
+              view={view}
+              delta={ratedForHer ? delta : undefined}
+              topicLabel={topicLabel}
+              room={room ? { total } : undefined}
+            />
+            {room ? (
+              <>
+                <Podium participants={full.payload.participants} selfId={full.selfId} />
+                <RoomStandings participants={full.payload.participants} selfId={full.selfId} />
+              </>
+            ) : null}
             {showPrompt ? <GuestResultsPrompt view={view} /> : null}
             {signedInAfterGuest ? (
               <p data-testid="guest-match-note" className="text-caption text-muted">
@@ -211,7 +230,9 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
               })}
             </ol>
           </main>
-          {signedInAfterGuest ? (
+          {room ? (
+            <HomeActions />
+          ) : signedInAfterGuest ? (
             <PlayAgainActions />
           ) : (
             <RematchActions matchId={matchId} rivalName={view.rival?.displayName ?? ''} />
@@ -228,6 +249,18 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
         />
       ) : null}
     </>
+  );
+}
+
+/** A Battle Room's results bar (Story 5.5): Home only. Play again is the host's, in Story 5.6; Share is Epic 7. */
+function HomeActions() {
+  const { t } = useTranslation();
+  return (
+    <ActionBar>
+      <Button variant="secondary" data-testid="home-button" onClick={() => navigate('/')}>
+        {t('common.home')}
+      </Button>
+    </ActionBar>
   );
 }
 

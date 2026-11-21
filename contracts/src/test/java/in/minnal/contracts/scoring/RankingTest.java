@@ -52,6 +52,36 @@ class RankingTest {
     }
 
     @Test
+    void aThreeWayTieForFirstSharesOneAndSkipsToFour() {
+        assertThat(Ranking.placements(List.of(
+                new Standing(2000, 3), new Standing(2000, 3), new Standing(2000, 3), new Standing(900, 1))))
+                .containsExactly(1, 1, 1, 4);
+    }
+
+    @Test
+    void aTieForThirdSharesThirdAndSkipsToFive() {
+        assertThat(Ranking.placements(List.of(
+                new Standing(4000, 5), new Standing(3000, 4), new Standing(2000, 3), new Standing(2000, 3),
+                new Standing(100, 1)))).containsExactly(1, 2, 3, 3, 5);
+    }
+
+    @Test
+    void aRoomForfeiterInATwentyThreePlayerFieldRanksOnHerEarnedScore() {
+        record Player(int score, int correct, boolean forfeited) {
+        }
+        java.util.List<Player> players = new java.util.ArrayList<>();
+        for (int i = 0; i < 22; i++) {
+            players.add(new Player(4000 - i * 100, 5, false));
+        }
+        players.add(2, new Player(3850, 5, true)); // left, but earned more than everyone from the fourth place down
+        List<Integer> placements = Ranking.placements(players, Player::score, Player::correct, Player::forfeited, false);
+        assertThat(placements).hasSize(23);
+        assertThat(placements.get(2)).isEqualTo(3);
+        assertThat(placements.get(3)).isEqualTo(4);
+        assertThat(placements.get(22)).isEqualTo(23);
+    }
+
+    @Test
     void anEmptyOrSingleListIsFine() {
         assertThat(Ranking.placements(List.of())).isEmpty();
         assertThat(Ranking.placements(List.of(new Standing(0, 0)))).containsExactly(1);

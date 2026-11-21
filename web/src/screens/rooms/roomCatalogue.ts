@@ -232,7 +232,7 @@ export const roomCatalogue = {
     signoff: both,
   },
 
-  // The Battle Room live screen (Story 5.4): the countdown, the plain standings and the interim final list.
+  // The Battle Room live screen (Story 5.4): the countdown and the plain standings.
   'room.countdown.label': {
     ml: 'തുടങ്ങാൻ {{n, number}}',
     en: 'Starting in {{n, number}}',
@@ -247,12 +247,43 @@ export const roomCatalogue = {
     params: { ml: { rank: 1, name: 'Anju', score: 1200, status: 'ഉത്തരം നൽകി' }, en: { rank: 1, name: 'Anju', score: 1200, status: 'answered' } },
   },
   'room.standings.notAnswered': { ml: 'ഇതുവരെ ഉത്തരം നൽകിയില്ല', en: 'not answered yet', signoff: both },
-  'room.final.heading': { ml: 'അവസാന സ്കോർ നില', en: 'Final standings', signoff: both },
   'room.final.row': {
     ml: '{{rank, number}}-ാം സ്ഥാനം, {{name}}, {{score, number}} പോയിന്റ്',
     en: 'Place {{rank, number}}, {{name}}, {{score, number}} points',
     signoff: both,
     params: { ml: { rank: 1, name: 'Anju', score: 1200 }, en: { rank: 1, name: 'Anju', score: 1200 } },
+  },
+
+  // Battle Room results (Story 5.5): the compact band, the podium and the full standings. Every line awaits sign-off.
+  'room.result.title': { ml: 'ബാറ്റിൽ റൂം ഫലം', en: 'Battle Room results', signoff: both },
+  'room.result.band': {
+    ml: '{{total, number}} പേരിൽ #{{place, number}}',
+    en: '#{{place, number}} of {{total, number}}',
+    signoff: both,
+    params: { ml: { place: 3, total: 23 }, en: { place: 3, total: 23 } },
+  },
+  'room.result.heading': {
+    ml: '{{total, number}} പേരിൽ {{place, number}}-ാം സ്ഥാനം, {{score, number}} പോയിന്റ്',
+    en: 'Place {{place, number}} of {{total, number}}, {{score, number}} points',
+    signoff: both,
+    params: { ml: { place: 3, total: 23, score: 3960 }, en: { place: 3, total: 23, score: 3960 } },
+  },
+  'room.podium.heading': { ml: 'പോഡിയം', en: 'Podium', signoff: both },
+  'room.results.standings': { ml: 'എല്ലാവരുടെയും സ്കോർ നില', en: 'Full standings', signoff: both },
+  'room.results.correct': {
+    ml: '{{n, number}} ശരി',
+    en: '{{n, number}} correct',
+    signoff: both,
+    params: { ml: { n: 7 }, en: { n: 7 } },
+  },
+  'room.results.row': {
+    ml: '{{rank, number}}-ാം സ്ഥാനം, {{name}}, {{score, number}} പോയിന്റ്, {{correct, number}} ശരി{{status}}',
+    en: 'Place {{rank, number}}, {{name}}, {{score, number}} points, {{correct, number}} correct{{status}}',
+    signoff: both,
+    params: {
+      ml: { rank: 1, name: 'Anju', score: 1200, correct: 7, status: '' },
+      en: { rank: 1, name: 'Anju', score: 1200, correct: 7, status: '' },
+    },
   },
 
   // Notices on the Rooms tab

@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.Random;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
@@ -77,7 +78,7 @@ class MatchActorRoomTest {
     }
 
     @Test
-    void roomMatchesOfTwoAndFiveHumansRunTheSameListBasedPathWithReceiptsAndNothingPublished() throws Exception {
+    void roomMatchesOfTwoAndFiveHumansRunTheSameListBasedPathWithReceiptsAndOneCompletedEventEach() throws Exception {
         for (int humans : new int[] {2, 5}) {
             broadcaster.all.clear();
             channel.sent.clear();
@@ -189,7 +190,7 @@ class MatchActorRoomTest {
     }
 
     @Test
-    void aFinishedRoomMatchSendsMatchEndedButPublishesNoCompletedEvent() throws Exception {
+    void aFinishedRoomMatchSendsMatchEndedWithTheRoomBlockAndPublishesOneRatedCompletedEvent() throws Exception {
         MatchSetup setup = MatchTestKit.room(MatchTestKit.setup(2, 0, 1));
         MatchActor actor = actor(setup, settings(Duration.ofMillis(10), Duration.ofMillis(250)), Instant.now().plusMillis(50));
         actor.tell(new MatchEvent.Begin());
@@ -200,7 +201,46 @@ class MatchActorRoomTest {
         await().atMost(Duration.ofSeconds(3)).until(() -> endedWith.get() != null);
         assertThat(actor.isCompleted()).isTrue();
         assertThat(channel.sent.stream().filter(s -> s.message().type() == MessageType.MATCH_ENDED)).hasSize(2);
-        assertThat(published).isEmpty();
+        in.minnal.contracts.realtime.MatchEndedPayload ended = (in.minnal.contracts.realtime.MatchEndedPayload) channel.sent
+                .stream().filter(s -> s.message().type() == MessageType.MATCH_ENDED).findFirst().orElseThrow().message().payload();
+        assertThat(ended.room()).isEqualTo(setup.room());
+        assertThat(published).hasSize(1);
+        MatchCompletedEvent event = published.getFirst();
+        assertThat(event.mode()).isEqualTo(in.minnal.contracts.realtime.MatchMode.BATTLE_ROOM);
+        assertThat(event.roomId()).isEqualTo(setup.room().roomId());
+        assertThat(event.rated()).isTrue();
+        assertThat(event.queueWaitMs()).isNull();
+    }
+
+    @Test
+    void aRoomForfeiterWhoOutScoredAnotherPlayerRanksOnHerEarnedScoreInBothOutputs() throws Exception {
+        MatchSetup setup = MatchTestKit.room(MatchTestKit.setup(3, 0, 2));
+        MatchActor actor = actor(setup, settings(Duration.ofMillis(10), Duration.ofMillis(250)), Instant.now().plusMillis(50));
+        actor.tell(new MatchEvent.Begin());
+        broadcaster.next(MessageType.QUESTION_STARTED, Duration.ofSeconds(2));
+        int right = setup.questions().getFirst().answerIndex();
+        answer(actor, setup, 0, 0, right);
+        answer(actor, setup, 1, 0, (right + 1) % 4);
+        answer(actor, setup, 2, 0, (right + 1) % 4);
+        broadcaster.next(MessageType.QUESTION_REVEALED, Duration.ofSeconds(2));
+        broadcaster.next(MessageType.QUESTION_STARTED, Duration.ofSeconds(2));
+        actor.tell(new MatchEvent.Leave("h0")); // she earned points on Q1, then left
+        answer(actor, setup, 1, 1, 0);
+        answer(actor, setup, 2, 1, 0);
+
+        await().atMost(Duration.ofSeconds(3)).until(() -> endedWith.get() != null);
+        UUID leaver = setup.humans().get("h0");
+        in.minnal.contracts.realtime.MatchEndedPayload ended = (in.minnal.contracts.realtime.MatchEndedPayload) channel.sent
+                .stream().filter(s -> s.message().type() == MessageType.MATCH_ENDED).findFirst().orElseThrow().message().payload();
+        var self = ended.participants().stream().filter(p -> p.participantId().equals(leaver)).findFirst().orElseThrow();
+        assertThat(self.forfeited()).isTrue();
+        assertThat(self.score()).isPositive();
+        assertThat(self.placement()).isEqualTo(1);
+        assertThat(ended.participants().stream().filter(p -> !p.participantId().equals(leaver)))
+                .allSatisfy(p -> assertThat(p.placement()).isGreaterThan(1));
+        assertThat(published).hasSize(1);
+        assertThat(published.getFirst().participants().stream().filter(p -> p.participantId().equals(leaver)).findFirst().orElseThrow()
+                .placement()).isEqualTo(1);
     }
 
     @Test

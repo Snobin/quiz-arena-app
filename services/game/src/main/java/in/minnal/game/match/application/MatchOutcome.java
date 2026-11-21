@@ -17,6 +17,7 @@ import in.minnal.game.match.domain.RecordedAnswer;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Turns a completed match's {@link MatchResults} into its {@code MATCH_ENDED} payload and its
@@ -54,7 +55,7 @@ final class MatchOutcome {
         }
         List<ResultQuestion> questions = results.asked().stream().map(MatchOutcome::questionOf).toList();
         return new MatchEndedPayload(setup.matchId(), setup.mode(), setup.questionSource(), participants, questions,
-                breakdown, setup.topic());
+                breakdown, setup.topic(), setup.room());
     }
 
     MatchCompletedEvent completedEvent(Instant endedAt) {
@@ -67,7 +68,8 @@ final class MatchOutcome {
                     entry.forfeited(), placements.get(i)));
         }
         Long queueWaitMs = setup.queueWaitMs().values().stream().max(Long::compare).orElse(null);
-        return MatchCompletedEvent.of(setup.matchId(), setup.mode(), null, setup.questionSource(),
+        UUID roomId = setup.room() == null ? null : setup.room().roomId();
+        return MatchCompletedEvent.of(setup.matchId(), setup.mode(), roomId, setup.questionSource(),
                 results.q1StartedAt() != null ? results.q1StartedAt() : endedAt, endedAt, queueWaitMs, participants);
     }
 

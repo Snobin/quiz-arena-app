@@ -552,10 +552,7 @@ public final class MatchActor implements AutoCloseable {
                 log.atWarn().addKeyValue("matchId", matchId()).setCause(e).log("could not send MATCH_ENDED to a player");
             }
         }
-        if (state.mode() != MatchMode.BATTLE_ROOM) {
-            // Story 5.5 turns the Battle Room's completed event on; until then a room match leaves no event.
-            publisher.publish(outcome.completedEvent(endedAt));
-        }
+        publisher.publish(outcome.completedEvent(endedAt));
     }
 
     /** The state, for tests that read it once the actor is idle or ended. */

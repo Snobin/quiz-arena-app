@@ -322,7 +322,12 @@ export type MatchEndedPayload = {
   questions: ResultQuestion[];
   breakdown: ParticipantBreakdown[];
   topic?: TopicInfo;
+  /** A Battle Room's id and host participant (Story 5.5); absent outside rooms. */
+  room?: MatchEndedRoom;
 };
+
+/** The room block of a MATCH_ENDED (contracts `MatchEndedRoom`). */
+export type MatchEndedRoom = { roomId: string; hostParticipantId: string };
 
 /**
  * REMATCH_REQUESTED (private, about the ended match; Story 1.10): a human asked for a rematch.
@@ -618,6 +623,11 @@ export function parseMatchEnded(value: unknown): MatchEndedPayload | null {
   if (parsedParticipants.some((p) => p === null) || parsedQuestions.some((q) => q === null)) return null;
   const topic = parseTopic(value.topic);
   if (topic === null) return null;
+  let room: MatchEndedRoom | undefined;
+  if (value.room !== undefined) {
+    if (!isObject(value.room) || !isString(value.room.roomId) || !isString(value.room.hostParticipantId)) return null;
+    room = { roomId: value.room.roomId, hostParticipantId: value.room.hostParticipantId };
+  }
   const parsedBreakdown: ParticipantBreakdown[] = [];
   for (const entry of breakdown) {
     if (!isObject(entry) || !isString(entry.participantId) || !Array.isArray(entry.answers)) return null;
@@ -635,6 +645,7 @@ export function parseMatchEnded(value: unknown): MatchEndedPayload | null {
     questions: parsedQuestions as ResultQuestion[],
     breakdown: parsedBreakdown,
     ...(topic && { topic }),
+    ...(room && { room }),
   };
 }
 
