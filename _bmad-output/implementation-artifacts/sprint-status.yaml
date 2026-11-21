@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-11-2026 09:40
-last_updated: '11-21-2026 11:00'
+last_updated: '11-21-2026 11:20'
 project: quiz-arena
 project_key: NOKEY
 tracking_system: file-system
@@ -75,7 +75,7 @@ development_status:
   4-2-topic-duel: done
   4-3-solo-practice: done
   4-4-practise-this-topic: done
-  epic-4-retrospective: optional
+  epic-4-retrospective: done
 
   epic-5: backlog
   5-1-room-server-create-configure-and-expire: backlog
@@ -155,3 +155,65 @@ action_items:
     owner: "dev"
     status: open
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-19.md"
+  - id: "epic-4-retro-item-9-add-an-error-boundary-with-retry-for-fai"
+    epic: 4
+    action: "Add an error boundary with retry for failed lazy-chunk loads before any
+      Epic 5 story"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-11-21.md"
+  - id: "epic-4-retro-item-10-add-a-topic-duel-forfeit-and-disconnect"
+    epic: 4
+    action: "Add a Topic Duel forfeit and disconnect test and a ResultQuestion.topicId
+      equals MATCH_ENDED topic assertion"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-11-21.md"
+  - id: "epic-4-retro-item-11-decide-whether-the-duel-draw-shares-topi"
+    epic: 4
+    action: "Decide whether the Duel draw shares TopicThreshold and what players see
+      when the topic actor cap refuses a join"
+    owner: "Snobin"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-11-21.md"
+  - id: "epic-4-retro-item-12-reconcile-the-epic-and-4-2-to-4-4-specs"
+    epic: 4
+    action: "Reconcile the epic and 4.2 to 4.4 specs: QUESTION_SET_UNAVAILABLE, string
+      placement, actor cap, bundle headroom"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-11-21.md"
+  - id: "epic-4-retro-item-13-make-the-valkey-solo-session-create-atom"
+    epic: 4
+    action: "Make the Valkey solo session create atomic and use a revision counter
+      for CAS before Story 6.4"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-11-21.md"
+  - id: "epic-4-retro-item-14-reject-recent-topics-writes-from-a-delet"
+    epic: 4
+    action: "Reject recent-topics writes from a deleted account live token with Epic
+      2 action A4"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-11-21.md"
+  - id: "epic-4-retro-item-15-run-the-10-manual-playtests-in-the-epic"
+    epic: 4
+    action: "Run the 10 manual playtests in the Epic 4 retro on a real phone including
+      320 px and 200 percent text"
+    owner: "Snobin"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-11-21.md"
+  - id: "epic-4-retro-item-16-add-an-ml-and-en-parity-test-for-the-pra"
+    epic: 4
+    action: "Add an ml and en parity test for the practise lazy catalogue"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-11-21.md"
+  - id: "epic-4-retro-item-17-confirm-a-review-triage-log-is-present-i"
+    epic: 4
+    action: "Confirm a review triage log is present in the spec file after writing
+      it"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-11-21.md"
