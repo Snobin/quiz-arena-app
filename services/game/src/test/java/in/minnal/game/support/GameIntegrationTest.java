@@ -53,6 +53,10 @@ public abstract class GameIntegrationTest {
     @Autowired
     protected ParticipationRegistry participation;
 
+    /** The broker's subscriptions, so a test's subscribe returns only once the broker has registered it. */
+    @Autowired
+    protected org.springframework.messaging.simp.user.SimpUserRegistry userRegistry;
+
     /** The rate limiter's time source; frozen by a test only, and always released after it. */
     @Autowired
     protected ControllableNanos nanos;
@@ -81,7 +85,7 @@ public abstract class GameIntegrationTest {
     }
 
     protected StompTestClient connect(String token) {
-        return StompTestClient.connect(port, token);
+        return StompTestClient.connect(port, token).withRegistry(userRegistry);
     }
 
     /** Waits until none of {@code subs} holds a queue or match claim (a match ends after its last reveal). */

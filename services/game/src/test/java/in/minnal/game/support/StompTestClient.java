@@ -31,6 +31,7 @@ public final class StompTestClient implements AutoCloseable {
     private final StompSession session;
     private final BlockingQueue<JsonNode> inbox = new LinkedBlockingQueue<>();
     private final BlockingQueue<JsonNode> topic = new LinkedBlockingQueue<>();
+    private volatile org.springframework.messaging.simp.user.SimpUserRegistry registry;
 
     private StompTestClient(int port, String token) throws Exception {
         client = new WebSocketStompClient(new StandardWebSocketClient());
@@ -51,8 +52,13 @@ public final class StompTestClient implements AutoCloseable {
         });
     }
 
-    /** Subscribes to {@code destination}; its frames go to {@link #nextBroadcast}. */
+    /**
+     * Subscribes to {@code destination}; its frames go to {@link #nextBroadcast}. SUBSCRIBE is asynchronous: with a
+     * registry (see {@link #withRegistry}) this returns only once the broker has registered it, so a broadcast sent
+     * right after cannot be lost to a subscription that is not there yet.
+     */
     public void subscribe(String destination) {
+        int before = subscriptionsTo(destination);
         session.subscribe(destination, new StompFrameHandler() {
             @Override
             public Type getPayloadType(StompHeaders headers) {
@@ -64,6 +70,21 @@ public final class StompTestClient implements AutoCloseable {
                 topic.add(JSON.readTree(new String((byte[]) payload, StandardCharsets.UTF_8)));
             }
         });
+        if (registry != null) {
+            org.awaitility.Awaitility.await().atMost(Duration.ofSeconds(5))
+                    .until(() -> subscriptionsTo(destination) > before);
+        }
+    }
+
+    /** The broker's subscriptions to {@code destination}, across all sessions. */
+    private int subscriptionsTo(String destination) {
+        return registry == null ? 0 : registry.findSubscriptions(subscription -> destination.equals(subscription.getDestination())).size();
+    }
+
+    /** Lets {@link #subscribe} wait for the broker to register each subscription. */
+    public StompTestClient withRegistry(org.springframework.messaging.simp.user.SimpUserRegistry userRegistry) {
+        this.registry = userRegistry;
+        return this;
     }
 
     /** The next topic frame, failing after {@code within}. */
