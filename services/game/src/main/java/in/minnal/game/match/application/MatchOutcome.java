@@ -78,6 +78,6 @@ final class MatchOutcome {
 
     private static ResultQuestion questionOf(InternalQuestion question) {
         return new ResultQuestion(question.questionId(), question.version(), question.textMl(), question.textEn(),
-                question.options(), question.answerIndex(), question.explanation(), question.attribution());
+                question.options(), question.answerIndex(), question.explanation(), question.attribution(), question.topicId());
     }
 }

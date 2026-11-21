@@ -36,7 +36,8 @@ class InternalDtoRoundTripTest {
     void aQuestionSetResponseRoundTrips() {
         QuestionSetResponse response = new QuestionSetResponse(List.of(
                 new InternalQuestion(UUID.randomUUID(), 1, "ചോദ്യം", null, List.of("a", "b", "c", "d"), 3, "വിശദീകരണം", "PSC 2019"),
-                new InternalQuestion(UUID.randomUUID(), 4, null, "Question", List.of("w", "x", "y", "z"), 0, "Why", null)));
+                new InternalQuestion(UUID.randomUUID(), 4, null, "Question", List.of("w", "x", "y", "z"), 0, "Why", null),
+                new InternalQuestion(UUID.randomUUID(), 2, "ml", null, List.of("a", "b", "c", "d"), 1, "x", null, UUID.randomUUID())));
         assertThat(ContractJson.MAPPER.readValue(ContractJson.MAPPER.writeValueAsString(response), QuestionSetResponse.class))
                 .isEqualTo(response);
     }

@@ -225,6 +225,8 @@ export type ResultQuestion = {
   answerIndex: number;
   explanation: string;
   attribution: string | null;
+  /** The bank topic (Story 4.4); absent for a custom question or an older stored result. */
+  topicId?: string;
 };
 
 /** One participant's answer to one asked question; `pickedIndex` and `responseMs` are null when she did not answer. */
@@ -513,7 +515,8 @@ export function parseResultQuestion(value: unknown): ResultQuestion | null {
   const view = parseQuestionView(value);
   const { answerIndex, explanation, attribution } = value;
   if (!view || !isOption(answerIndex) || !isString(explanation) || !isOptionalString(attribution)) return null;
-  return { ...view, answerIndex, explanation, attribution: attribution ?? null };
+  const { topicId } = value;
+  return { ...view, answerIndex, explanation, attribution: attribution ?? null, ...(isString(topicId) ? { topicId } : {}) };
 }
 
 export function parseBreakdownAnswer(value: unknown): BreakdownAnswer | null {

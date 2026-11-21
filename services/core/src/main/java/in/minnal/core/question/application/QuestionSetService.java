@@ -82,6 +82,6 @@ public class QuestionSetService {
     private static InternalQuestion toInternal(QuestionVersion version) {
         QuestionContent c = version.content();
         return new InternalQuestion(version.questionId(), version.version(), c.textMl(), c.textEn(), c.options(),
-                c.answerIndex(), c.explanation(), c.attribution());
+                c.answerIndex(), c.explanation(), c.attribution(), c.topicId());
     }
 }
