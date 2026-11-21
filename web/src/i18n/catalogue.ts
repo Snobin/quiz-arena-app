@@ -60,6 +60,8 @@ export const catalogue = {
   'nav.main': { ml: 'പ്രധാന മെനു', en: 'Main', signoff: ['ml', 'en'] },
   'common.loading': { ml: 'ലോഡ് ചെയ്യുന്നു…', en: 'Loading…', signoff: ['ml', 'en'] },
   'play.quickMatch': { ml: 'ക്വിക്ക് മാച്ച്', en: 'Quick Match', signoff: ['ml', 'en'] },
+  'chunk.title': { ml: 'ഈ സ്ക്രീൻ ലോഡ് ചെയ്യാനായില്ല', en: 'This screen could not load', signoff: ['ml', 'en'] },
+  'chunk.body': { ml: 'കണക്ഷൻ പരിശോധിച്ച് വീണ്ടും ശ്രമിക്കൂ.', en: 'Check your connection and try again.', signoff: ['ml', 'en'] },
   'common.back': { ml: 'തിരികെ', en: 'Back', signoff: ['ml', 'en'] },
   'common.retry': { ml: 'വീണ്ടും ശ്രമിക്കൂ', en: 'Try again', signoff: ['ml', 'en'] },
   'common.cancel': { ml: 'റദ്ദാക്കുക', en: 'Cancel', signoff: ['ml', 'en'] },
