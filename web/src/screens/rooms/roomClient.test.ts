@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { closeRealtime, configureRealtimeForTests, resetRealtime } from '../../realtime/connection.ts';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { closeRealtime, configureRealtimeForTests, resetRealtime, RETRY_WINDOW_MS } from '../../realtime/connection.ts';
 import { USER_PRIVATE_QUEUE } from '../../realtime/protocol.ts';
 import { FakeStomp, SERVER_TIME } from '../../test-utils/realtime.ts';
-import { CREATE_TIMEOUT_MS, resetRoomClient, roomClient, useRoom } from './roomClient.ts';
+import { CREATE_TIMEOUT_MS, JOIN_TIMEOUT_MS, RESYNC_RETRY_MS, resetRoomClient, roomClient, useRoom } from './roomClient.ts';
 import { ROOM_CREATE, ROOM_JOIN, roomConfigure, roomLeave, roomResync, roomStart, roomTopic } from './roomProtocol.ts';
 
 const ROOM_ID = '8e9f0a1b-2c3d-4e5f-a6b7-c8d9e0f1a2b3';
@@ -270,5 +270,57 @@ describe('joining (Story 5.3)', () => {
     expect(useRoom.getState().starting).toBe(true);
     socket().deliver(error('NOT_AVAILABLE_YET', { roomId: ROOM_ID }));
     expect(useRoom.getState()).toMatchObject({ starting: false, startError: { code: 'NOT_AVAILABLE_YET' } });
+  });
+});
+
+describe('joining: timers (Story 5.3 QA)', () => {
+  const OTHER = '9d8c7b6a-5f4e-4d3c-b2a1-0f9e8d7c6b5a';
+  const memberRoom = view({ participants: [...view().participants, { participantId: OTHER, displayName: 'Biju', kind: 'USER' }], humanCount: 2 });
+  const member = () => ({ ...joined(memberRoom), payload: { ...joined(memberRoom).payload, role: 'MEMBER', selfParticipantId: OTHER } });
+  const topic = (message: unknown) =>
+    (socket() as unknown as { subscriptions: Map<string, (m: { body: string }) => void> }).subscriptions.get(roomTopic(ROOM_ID))!({ body: JSON.stringify(message) });
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  async function joinedAsMember() {
+    const result = roomClient().join('K7MQ2X');
+    await vi.advanceTimersByTimeAsync(0);
+    socket().open();
+    await vi.advanceTimersByTimeAsync(0);
+    socket().deliver(member());
+    await result;
+  }
+
+  it('a join that gets no answer fails with TIMEOUT and leaves no room', async () => {
+    const result = roomClient().join('K7MQ2X');
+    await vi.advanceTimersByTimeAsync(0);
+    socket().open();
+    await vi.advanceTimersByTimeAsync(JOIN_TIMEOUT_MS);
+    expect(await result).toEqual({ ok: false, error: { code: 'TIMEOUT' } });
+    expect(useRoom.getState()).toMatchObject({ phase: 'idle', session: null });
+  });
+
+  it('an unanswered resync is sent again every RESYNC_RETRY_MS until the fresh ROOM_JOINED arrives', async () => {
+    await joinedAsMember();
+    topic(lobbyUpdated(3, memberRoom)); // seq 2 is missing
+    expect(socket().sentTo(roomResync(ROOM_ID))).toBe(1);
+    await vi.advanceTimersByTimeAsync(RESYNC_RETRY_MS);
+    expect(socket().sentTo(roomResync(ROOM_ID))).toBe(2);
+    socket().deliver({ ...member(), refSeq: 2 });
+    await vi.advanceTimersByTimeAsync(RESYNC_RETRY_MS * 2);
+    expect(socket().sentTo(roomResync(ROOM_ID))).toBe(2);
+  });
+
+  it('a player whose own connection never comes back ends with the LOST notice, not DISCONNECTED', async () => {
+    await joinedAsMember();
+    socket().drop();
+    expect(useRoom.getState().reconnecting).toBe(true);
+    // Every reopened socket fails too; once the retry window has passed the player is let go.
+    for (let i = 0; i < 40 && useRoom.getState().session; i++) {
+      await vi.advanceTimersByTimeAsync(RETRY_WINDOW_MS / 10);
+      socket().drop();
+    }
+    expect(useRoom.getState()).toMatchObject({ session: null, notice: 'LOST' });
   });
 });
