@@ -1,0 +1,9 @@
+{
+  "type" : "ERROR",
+  "roomId" : "8e9f0a1b-2c3d-4e5f-a6b7-c8d9e0f1a2b3",
+  "serverTime" : "2026-11-12T10:15:30.123Z",
+  "payload" : {
+    "code" : "ALREADY_IN_MATCH",
+    "roomId" : "8e9f0a1b-2c3d-4e5f-a6b7-c8d9e0f1a2b3"
+  }
+}

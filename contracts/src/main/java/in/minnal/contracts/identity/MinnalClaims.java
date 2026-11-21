@@ -18,6 +18,13 @@ public final class MinnalClaims {
     /** UI / question language: {@code ml} or {@code en}. */
     public static final String LANG = "lang";
 
+    /**
+     * Boolean: the registered player has saved her profile (Story 5.1). Set when the access token is issued, so a
+     * token issued before her profile was saved says {@code false}; one issued before this claim existed lacks it,
+     * and a reader must treat an absent claim as {@code false} until the token is refreshed.
+     */
+    public static final String PROFILE_COMPLETE = "profileComplete";
+
     private MinnalClaims() {
     }
 }

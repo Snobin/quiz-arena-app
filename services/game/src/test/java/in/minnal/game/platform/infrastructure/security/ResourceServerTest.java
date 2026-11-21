@@ -151,4 +151,16 @@ class ResourceServerTest {
         assertThat(authentication.getPrincipal()).isEqualTo(new MinnalPrincipal("s",
                 java.util.Set.of(in.minnal.contracts.identity.Role.USER, in.minnal.contracts.identity.Role.ADMIN), "n", "ml"));
     }
+
+    @Test
+    void theProfileCompleteClaimIsReadAndAnAbsentOrNonBooleanClaimCountsAsIncomplete() {
+        var base = org.springframework.security.oauth2.jwt.Jwt.withTokenValue("t").header("alg", "RS256").subject("s")
+                .claim("roles", List.of("USER"));
+        assertThat(MinnalPrincipal.from(base.claim("profileComplete", true).build()).profileComplete()).isTrue();
+        assertThat(MinnalPrincipal.from(base.claim("profileComplete", false).build()).profileComplete()).isFalse();
+        assertThat(MinnalPrincipal.from(base.claim("profileComplete", "true").build()).profileComplete()).isFalse();
+        var old = org.springframework.security.oauth2.jwt.Jwt.withTokenValue("t").header("alg", "RS256").subject("s")
+                .claim("roles", List.of("USER")).build();
+        assertThat(MinnalPrincipal.from(old).profileComplete()).isFalse();
+    }
 }

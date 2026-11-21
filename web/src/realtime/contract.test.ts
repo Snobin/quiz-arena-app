@@ -22,6 +22,8 @@ import {
   parseServerMessage,
   parseSnapshot,
   type AnswerRequest,
+  type RoomClosedPayload,
+  type RoomJoinedPayload,
 } from './protocol.ts';
 
 /**
@@ -36,12 +38,48 @@ const read = (file: string): unknown => JSON.parse(readFileSync(join(SAMPLES, fi
 // (never to the browser), so the client has no parser for them; `client-*` samples are bodies the
 // client sends; every other sample is a STOMP frame body the server sends.
 const SERVER_ONLY = new Set(['enums.json', 'match-completed.json']);
-const SERVER_MESSAGES = readdirSync(SAMPLES).filter(
+const ALL_SERVER_MESSAGES = readdirSync(SAMPLES).filter(
   (file) =>
     file.endsWith('.json') && !SERVER_ONLY.has(file) && !file.startsWith('question-set-') && !file.startsWith('client-'),
 );
+// Room messages (Story 5.1) have types here and no runtime parsers until the room screens (Story 5.2, entry
+// budget), so they are checked at the envelope only, below.
+const ROOM_MESSAGES = ALL_SERVER_MESSAGES.filter((file) => file.startsWith('room-'));
+const SERVER_MESSAGES = ALL_SERVER_MESSAGES.filter((file) => !file.startsWith('room-'));
 
 describe('contracts/samples', () => {
+  it('has the room samples, which parse at the envelope and carry the room fields', () => {
+    expect(ROOM_MESSAGES).toEqual(['room-closed.json', 'room-joined.json', 'room-lobby-updated.json']);
+    for (const file of ROOM_MESSAGES) {
+      const json = read(file);
+      expect(parseServerMessage(json)).toEqual(json);
+      expect(parseServerMessage(json)!.roomId).toBeDefined();
+    }
+    const joined = parseServerMessage(read('room-joined.json'))!;
+    expect(joined.type).toBe('ROOM_JOINED');
+    expect(joined.refSeq).toBeDefined();
+    expect(joined.seq).toBeUndefined();
+    const room = joined.payload as RoomJoinedPayload;
+    expect(room.role).toBe('HOST');
+    expect(room.room.rated).toBe(true);
+    expect(room.room.participants.map((p) => p.participantId)).toContain(room.selfParticipantId);
+    expect(room.room.humanCount).toBe(room.room.participants.length);
+    const broadcast = parseServerMessage(read('room-lobby-updated.json'))!;
+    expect(broadcast.seq).toBe(2);
+    expect(broadcast.refSeq).toBeUndefined();
+    expect((parseServerMessage(read('room-closed.json'))!.payload as RoomClosedPayload).reason).toBe('EXPIRED');
+  });
+
+  it('the room error samples parse with their roomId and codes', () => {
+    const busy = parseServerMessage(read('error-room-already-in-room.json'))!;
+    expect(parseErrorPayload(busy.payload)).toEqual({ code: 'ALREADY_IN_MATCH', roomId: busy.roomId });
+    const notHost = parseServerMessage(read('error-room-not-host.json'))!;
+    expect(parseErrorPayload(notHost.payload)).toEqual({ code: 'NOT_HOST', roomId: notHost.roomId });
+    expect(parseErrorPayload(parseServerMessage(read('error-room-invalid-config.json'))!.payload)).toEqual({
+      code: 'INVALID_ROOM_CONFIG',
+    });
+  });
+
   it('has the server-message samples', () => {
     expect(SERVER_MESSAGES).toEqual(
       expect.arrayContaining([

@@ -275,3 +275,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-3-solo-practice.md`
   summary: Add a service-level test for the CAS retry and conflict path, and filter the practice pool query by topic before `DISTINCT ON`.
   evidence: only the store primitive is tested; `publishedQuestionIds` scans every published question per start and reshuffle.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-room-server-create-configure-and-expire.md`
+  summary: Story 5.2 should take the room's topic name from core (or validate it) instead of trusting the host client.
+  evidence: `RoomController` accepts `source.topicName` from the create request and broadcasts it to joiners in the lobby.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-1-room-server-create-configure-and-expire.md`
+  summary: Reconcile the epic text: `hostParticipantId` is a random room participant id, not the host's `sub`.
+  evidence: AD-10 says a sub is never exposed to other players; lobby members will see the id in Story 5.3.

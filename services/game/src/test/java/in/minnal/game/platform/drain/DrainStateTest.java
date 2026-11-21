@@ -21,4 +21,18 @@ class DrainStateTest {
         drain.start();
         assertThat(drain.isDraining()).isFalse();
     }
+
+    @Test
+    void listenersRunOnceWhenDrainingBeginsAndALateOneRunsAtOnce() {
+        DrainState drain = new DrainState();
+        java.util.concurrent.atomic.AtomicInteger early = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger late = new java.util.concurrent.atomic.AtomicInteger();
+        drain.onBegin(early::incrementAndGet);
+        assertThat(early).hasValue(0);
+        drain.begin();
+        drain.begin();
+        assertThat(early).hasValue(1);
+        drain.onBegin(late::incrementAndGet);
+        assertThat(late).hasValue(1);
+    }
 }

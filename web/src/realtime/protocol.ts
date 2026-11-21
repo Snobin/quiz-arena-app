@@ -44,6 +44,11 @@ export const ERROR_CODES = [
   'NOT_IN_MATCH',
   'ANSWER_REJECTED',
   'INVALID_TOPIC',
+  'PROFILE_REQUIRED',
+  'INVALID_ROOM_CONFIG',
+  'SOURCE_NOT_AVAILABLE',
+  'NOT_HOST',
+  'NOT_AVAILABLE_YET',
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
@@ -65,6 +70,12 @@ export type AbortReason = (typeof ABORT_REASONS)[number];
 export const REMATCH_DECLINE_REASONS = ['CANCELLED', 'UNAVAILABLE'] as const;
 export type RematchDeclineReason = (typeof REMATCH_DECLINE_REASONS)[number];
 
+export const ROOM_ROLES = ['HOST', 'MEMBER'] as const;
+export type RoomRole = (typeof ROOM_ROLES)[number];
+
+export const ROOM_CLOSED_REASONS = ['HOST_LEFT', 'HOST_DISCONNECTED', 'EXPIRED', 'SERVER_DRAINING'] as const;
+export type RoomClosedReason = (typeof ROOM_CLOSED_REASONS)[number];
+
 /** The enum lists by their Java names, as `contracts/samples/enums.json` has them. */
 export const ENUMS = {
   MessageType: MESSAGE_TYPES,
@@ -75,6 +86,8 @@ export const ENUMS = {
   SnapshotPhase: SNAPSHOT_PHASES,
   AbortReason: ABORT_REASONS,
   RematchDeclineReason: REMATCH_DECLINE_REASONS,
+  RoomRole: ROOM_ROLES,
+  RoomClosedReason: ROOM_CLOSED_REASONS,
 } as const;
 
 /** The envelope: `{type, matchId?, roomId?, seq?, refSeq?, serverTime, payload?}`. */
@@ -107,7 +120,34 @@ export type MatchFoundPayload = {
 
 export type MatchmakingFailedPayload = { reason: string };
 
-export type ErrorPayload = { code: ErrorCode; matchId?: string };
+export type ErrorPayload = { code: ErrorCode; matchId?: string; roomId?: string };
+
+/** A Battle Room's question source (Story 5.1): tagged, so Epic 6 can add `CUSTOM`. Only `BANK` is accepted today. */
+export type RoomSource = { type: QuestionSource; topicId?: string; topicName?: string };
+
+/** The lobby as `ROOM_JOINED` and `ROOM_LOBBY_UPDATED` show it. Types only: the room screens (Story 5.2) add the parsers. */
+export type RoomView = {
+  hostParticipantId: string;
+  source: RoomSource;
+  questionCount: number;
+  rated: boolean;
+  /** ISO-8601 UTC: the lobby closes then. */
+  expiresAt: string;
+  participants: Participant[];
+  humanCount: number;
+};
+
+/** ROOM_JOINED (private, with `refSeq`). `code` is the canonical 6 characters, shown as `XXX-XXX`. */
+export type RoomJoinedPayload = { roomId: string; code: string; role: RoomRole; selfParticipantId: string; room: RoomView };
+
+/** ROOM_LOBBY_UPDATED (broadcast on `/topic/room/{roomId}`). */
+export type RoomLobbyUpdatedPayload = { room: RoomView };
+
+/** ROOM_CLOSED (broadcast, and private to each member). */
+export type RoomClosedPayload = { reason: RoomClosedReason };
+
+/** Body of `/app/room/create` and `/app/room/{roomId}/configure`. */
+export type RoomConfigRequest = { source?: RoomSource; questionCount?: number };
 
 /** An open question: no answer, explanation or attribution (AD-5). At least one text is present. */
 export type QuestionView = {
@@ -351,8 +391,13 @@ export function parseMatchmakingFailed(value: unknown): MatchmakingFailedPayload
 }
 
 export function parseErrorPayload(value: unknown): ErrorPayload | null {
-  if (!isObject(value) || !isErrorCode(value.code) || !isOptionalString(value.matchId)) return null;
-  return value.matchId === undefined ? { code: value.code } : { code: value.code, matchId: value.matchId };
+  if (!isObject(value) || !isErrorCode(value.code) || !isOptionalString(value.matchId) || !isOptionalString(value.roomId)) {
+    return null;
+  }
+  const payload: ErrorPayload = { code: value.code };
+  if (value.matchId !== undefined) payload.matchId = value.matchId;
+  if (value.roomId !== undefined) payload.roomId = value.roomId;
+  return payload;
 }
 
 export function parseQuestionView(value: unknown): QuestionView | null {

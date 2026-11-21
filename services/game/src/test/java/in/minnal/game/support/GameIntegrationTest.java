@@ -75,6 +75,11 @@ public abstract class GameIntegrationTest {
         return JWKS.token(c -> c.subject(sub).claim("roles", List.of("USER")).claim("name", name));
     }
 
+    /** A registered player whose profile is saved: the token carries {@code profileComplete} (Story 5.1). */
+    protected static String profiledToken(String sub, String name) {
+        return JWKS.token(c -> c.subject(sub).claim("roles", List.of("USER")).claim("name", name).claim("profileComplete", true));
+    }
+
     protected StompTestClient connect(String token) {
         return StompTestClient.connect(port, token);
     }

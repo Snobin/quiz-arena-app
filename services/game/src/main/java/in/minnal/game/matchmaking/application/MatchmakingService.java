@@ -41,7 +41,7 @@ import org.springframework.stereotype.Service;
  * <p>The gate, in order: draining → {@code SERVER_DRAINING}; unknown mode → {@code BAD_REQUEST};
  * a guest on anything but QUICK → {@code FORBIDDEN_MODE}; BATTLE_ROOM → {@code MODE_UNAVAILABLE};
  * TOPIC_DUEL without a UUID {@code topicId} → {@code INVALID_TOPIC} (core is never asked: AD-2);
- * already queued or in a match → {@code ALREADY_IN_MATCH} (with the matchId when in one);
+ * already queued, in a room or in a match → {@code ALREADY_IN_MATCH} (with the matchId or roomId when in one);
  * otherwise the claim is taken and a JOIN goes to the actor.
  */
 @Service
@@ -184,7 +184,8 @@ public class MatchmakingService implements DisposableBean {
             Optional<Activity> held = participation.claim(player.sub(), queued);
             if (held.isPresent()) {
                 reject(player, sessionId, ErrorCode.ALREADY_IN_MATCH,
-                        held.get() instanceof Activity.InMatch(var matchId) ? matchId : null);
+                        held.get() instanceof Activity.InMatch(var matchId) ? matchId : null,
+                        held.get() instanceof Activity.InRoom(var roomId) ? roomId : null);
                 return;
             }
             actorFor(new Key(mode, topicId)).tell(new MatchmakingEvent.Join(player, sessionId));
@@ -221,7 +222,12 @@ public class MatchmakingService implements DisposableBean {
     }
 
     private void reject(MinnalPrincipal player, String sessionId, ErrorCode code, UUID matchId) {
-        channel.toSession(player.sub(), sessionId, ServerMessage.error(code, matchId, clock.instant()));
+        reject(player, sessionId, code, matchId, null);
+    }
+
+    /** {@code roomId} is set when the player's claim is a Battle Room lobby (Story 5.1). */
+    private void reject(MinnalPrincipal player, String sessionId, ErrorCode code, UUID matchId, UUID roomId) {
+        channel.toSession(player.sub(), sessionId, ServerMessage.error(code, matchId, roomId, null, clock.instant()));
     }
 
     private static UUID parseUuid(String text) {

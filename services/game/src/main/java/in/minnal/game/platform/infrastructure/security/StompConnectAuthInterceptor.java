@@ -6,6 +6,7 @@ import in.minnal.game.platform.infrastructure.ws.InboundRateLimiter;
 import in.minnal.game.platform.session.DeletedUsers;
 import in.minnal.game.platform.session.MatchAccess;
 import in.minnal.game.platform.session.PlayerChannel;
+import in.minnal.game.platform.session.RoomAccess;
 import java.time.Clock;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -30,8 +31,9 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
  *
  * <p>Authenticated clients may only send to {@code /app/**} and subscribe to {@code /user/**}, or to
  * {@code /topic/match/{matchId}} when they are a human participant of that live match
- * ({@link MatchAccess}); every other subscription ({@code /topic/room/**} included, and broker
- * queues, which would bypass user destinations) gets an {@code ERROR}. The token is checked once:
+ * ({@link MatchAccess}), or {@code /topic/room/{roomId}} when they are a member of that live room
+ * ({@link RoomAccess}, Story 5.1); every other subscription (broker queues, which would bypass user
+ * destinations, included) gets an {@code ERROR}. The token is checked once:
  * an open session is not cut when it expires.
  *
  * <p>Every frame but CONNECT and DISCONNECT (and heartbeats) also takes a token from the
@@ -44,19 +46,22 @@ public final class StompConnectAuthInterceptor implements ChannelInterceptor {
     private static final String AUTHORIZATION = "Authorization";
 
     private static final Pattern MATCH_TOPIC = Pattern.compile("^/topic/match/([0-9a-fA-F-]{36})$");
+    private static final Pattern ROOM_TOPIC = Pattern.compile("^/topic/room/([0-9a-fA-F-]{36})$");
 
     private final JwtDecoder decoder;
     private final MatchAccess matches;
+    private final RoomAccess rooms;
     private final InboundRateLimiter rateLimiter;
     private final PlayerChannel channel;
     private final Clock clock;
     private final DeletedUsers deleted;
     private final MinnalJwtAuthenticationConverter converter = new MinnalJwtAuthenticationConverter();
 
-    public StompConnectAuthInterceptor(JwtDecoder decoder, MatchAccess matches, InboundRateLimiter rateLimiter,
-            PlayerChannel channel, Clock clock, DeletedUsers deleted) {
+    public StompConnectAuthInterceptor(JwtDecoder decoder, MatchAccess matches, RoomAccess rooms,
+            InboundRateLimiter rateLimiter, PlayerChannel channel, Clock clock, DeletedUsers deleted) {
         this.decoder = decoder;
         this.matches = matches;
+        this.rooms = rooms;
         this.rateLimiter = rateLimiter;
         this.channel = channel;
         this.clock = clock;
@@ -94,7 +99,7 @@ public final class StompConnectAuthInterceptor implements ChannelInterceptor {
                 }
                 if (command == StompCommand.SUBSCRIBE && !mayReceive(accessor.getUser().getName(), destination)) {
                     throw new MessageDeliveryException(
-                            "clients may only subscribe to /user/** or the /topic/match/{matchId} of their own live match");
+                            "clients may only subscribe to /user/**, or the /topic/match/{matchId} or /topic/room/{roomId} of their own live match or room");
                 }
             }
         }
@@ -121,12 +126,16 @@ public final class StompConnectAuthInterceptor implements ChannelInterceptor {
         if (startsWith(destination, "/user/")) {
             return true;
         }
-        Matcher topic = destination == null ? null : MATCH_TOPIC.matcher(destination);
-        if (topic == null || !topic.matches()) {
+        if (destination == null) {
             return false;
         }
         try {
-            return matches.isParticipant(UUID.fromString(topic.group(1)), sub);
+            Matcher match = MATCH_TOPIC.matcher(destination);
+            if (match.matches()) {
+                return matches.isParticipant(UUID.fromString(match.group(1)), sub);
+            }
+            Matcher room = ROOM_TOPIC.matcher(destination);
+            return room.matches() && rooms.isMember(UUID.fromString(room.group(1)), sub);
         } catch (IllegalArgumentException e) {
             return false;
         }
