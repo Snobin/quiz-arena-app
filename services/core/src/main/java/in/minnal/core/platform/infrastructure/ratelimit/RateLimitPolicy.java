@@ -18,6 +18,12 @@ public record RateLimitPolicy(String action, int capacity, int refillTokens, Dur
     /** Recent-topic writes (Story 4.1): 30 selections, refilling 1 every 4 seconds. */
     public static final RateLimitPolicy RECENT_TOPIC = new RateLimitPolicy("recent-topic", 30, 1, Duration.ofSeconds(4));
 
+    /** Solo Practice session starts (Story 4.3): 10 starts, refilling 1 every 6 seconds. */
+    public static final RateLimitPolicy SOLO_START = new RateLimitPolicy("solo-start", 10, 1, Duration.ofSeconds(6));
+
+    /** Solo Practice answers (Story 4.3): 60 answers, refilling 1 per second. */
+    public static final RateLimitPolicy SOLO_ANSWER = new RateLimitPolicy("solo-answer", 60, 1, Duration.ofSeconds(1));
+
     public RateLimitPolicy {
         if (action == null || action.isBlank() || action.contains(":")) {
             throw new IllegalArgumentException("action must be a non-blank name without ':'");

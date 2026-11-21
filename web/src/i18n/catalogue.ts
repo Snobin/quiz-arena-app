@@ -16,6 +16,7 @@
  * Display names are always interpolated unchanged, never inflected into Malayalam grammar.
  */
 
+import type { PracticeKey } from '../screens/practice/practiceCatalogue.ts';
 import { LANGUAGES, type Language } from './language.ts';
 
 export { LANGUAGES, type Language } from './language.ts';
@@ -771,7 +772,6 @@ export const catalogue = {
     en: 'That topic has too few questions right now. Pick another.',
     signoff: ['ml', 'en'],
   },
-  'topics.stub.unavailable': { ml: 'ഇതുവരെ ലഭ്യമല്ല', en: 'Not available yet', signoff: ['ml', 'en'] },
 
   // Voice and Tone (EXPERIENCE.md)
   'matchmaking.searching': { moment: 'Matchmaking', ml: 'എതിരാളിയെ തിരയുന്നു…', en: 'Finding an opponent…' },
@@ -920,6 +920,6 @@ declare module 'i18next' {
   interface CustomTypeOptions {
     keySeparator: false;
     nsSeparator: false;
-    resources: { translation: Record<CatalogueKey, string> };
+    resources: { translation: Record<CatalogueKey | PracticeKey, string> };
   }
 }

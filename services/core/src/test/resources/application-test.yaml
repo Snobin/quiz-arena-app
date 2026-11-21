@@ -11,6 +11,8 @@ spring:
       - org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
 
 minnal:
+  solo:
+    store: memory
   ratelimit:
     store: memory
   outbox:
