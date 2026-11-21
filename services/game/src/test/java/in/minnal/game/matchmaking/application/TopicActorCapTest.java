@@ -22,17 +22,19 @@ class TopicActorCapTest extends GameIntegrationTest {
         String a = newSub();
         String b = newSub();
         String c = newSub();
-        int before = service.actorCount();
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
         try (StompTestClient anju = connect(userToken(a, "Anju"));
                 StompTestClient biju = connect(userToken(b, "Biju"));
                 StompTestClient chitra = connect(userToken(c, "Chitra"))) {
-            anju.send("/app/matchmaking/TOPIC_DUEL/join", "{\"topicId\":\"" + UUID.randomUUID() + "\"}");
-            await().until(() -> service.actorCount() == before + 1);
+            anju.send("/app/matchmaking/TOPIC_DUEL/join", "{\"topicId\":\"" + first + "\"}");
+            await().until(() -> service.hasTopicActor(first));
 
-            biju.send("/app/matchmaking/TOPIC_DUEL/join", "{\"topicId\":\"" + UUID.randomUUID() + "\"}");
+            biju.send("/app/matchmaking/TOPIC_DUEL/join", "{\"topicId\":\"" + second + "\"}");
             biju.error("MODE_UNAVAILABLE");
             assertThat(participation.activityOf(b)).isEmpty();
-            assertThat(service.actorCount()).isEqualTo(before + 1);
+            assertThat(service.hasTopicActor(second)).isFalse();
+            assertThat(service.hasTopicActor(first)).isTrue();
 
             // Quick Match is unaffected by the cap.
             chitra.join();
