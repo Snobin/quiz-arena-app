@@ -138,6 +138,11 @@ public class MatchmakingService implements DisposableBean {
         }
     }
 
+    /** Whether the Topic Duel actor of {@code topicId} exists (tests). */
+    synchronized boolean hasTopicActor(UUID topicId) {
+        return actors.containsKey(new Key(MatchMode.TOPIC_DUEL, topicId));
+    }
+
     /** How many actors exist (tests). */
     synchronized int actorCount() {
         return actors.size();

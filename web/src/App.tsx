@@ -31,6 +31,9 @@ const AuthReturn = lazyWithRetry(() => import('./screens/AuthReturn.tsx').then((
 
 // The topic picker and the Duel and Solo stubs load only when opened (entry budget). Paths are matched by prefix.
 const TopicsRoutes = lazyWithRetry(() => import('./screens/topics/TopicsRoutes.tsx'));
+// Battle Room Create and the host lobby (Story 5.2) load on demand too; `/rooms` itself is RoomsScreen's.
+const RoomsRoutes = lazyWithRetry(() => import('./screens/rooms/RoomsRoutes.tsx'));
+const isRoomsPath = (pathname: string) => pathname === '/rooms/create' || pathname.startsWith('/r/');
 const isTopicsPath = (pathname: string) => pathname === '/play/topics' || pathname.startsWith('/play/duel/') || pathname.startsWith('/practice/');
 
 /**
@@ -143,7 +146,7 @@ export function App() {
   // The admin console is outside the player shell (no tab bar); its guard decides who may load it.
   if (pathname === '/admin' || pathname.startsWith('/admin/')) return <AdminRoute />;
 
-  const Screen = ROUTES[pathname] ?? (isTopicsPath(pathname) ? TopicsRoutes : Home);
+  const Screen = ROUTES[pathname] ?? (isTopicsPath(pathname) ? TopicsRoutes : isRoomsPath(pathname) ? RoomsRoutes : Home);
   // One element for every way of reaching setup, so the form is never remounted (and typed input never lost)
   // when the profile finishes loading.
   const screen =

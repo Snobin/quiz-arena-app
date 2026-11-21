@@ -59,7 +59,8 @@ class MatchDrainIntegrationTest {
 
         String a = UUID.randomUUID().toString();
         String b = UUID.randomUUID().toString();
-        StompTestClient anju = StompTestClient.connect(port, guestToken(a));
+        org.springframework.messaging.simp.user.SimpUserRegistry registry = app.getBean(org.springframework.messaging.simp.user.SimpUserRegistry.class);
+        StompTestClient anju = StompTestClient.connect(port, guestToken(a)).withRegistry(registry);
         StompTestClient vishnu = StompTestClient.connect(port, guestToken(b));
         StompTestClient late = StompTestClient.connect(port, guestToken(UUID.randomUUID().toString()));
         anju.join();

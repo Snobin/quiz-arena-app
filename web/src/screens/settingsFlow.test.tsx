@@ -13,6 +13,7 @@ import { resetAnnouncements, useAnnouncements } from '../shell/announce.ts';
 import { closeRealtime } from '../realtime/connection.ts';
 import { syncFromLocation } from '../shell/router.ts';
 import { clearScrollMemory } from '../shell/scrollMemory.ts';
+import { loadRecentRooms, saveRecentRoom } from './rooms/recentRooms.ts';
 import { guestTokenBody, jsonResponse, utf8Jwt } from '../test-utils/guest.ts';
 
 vi.mock('../realtime/connection.ts', async (importOriginal) => ({
@@ -171,11 +172,15 @@ describe('Settings', () => {
     const user = userEvent.setup();
     const core = stub({ registered: true });
     await boot();
+    const userId = session.userId()!;
+    saveRecentRoom(userId, { source: { type: 'BANK', topicId: 't1' }, topicName: 'Kerala History', subjectName: 'History', questionCount: 10, hostedAt: '2026-11-11T10:00:00.000Z' });
+    expect(loadRecentRooms(userId)).toHaveLength(1);
     renderApp('/settings');
     await user.click(await screen.findByRole('button', { name: 'Delete account' }));
     const dialog = await screen.findByRole('alertdialog');
     await user.click(within(dialog).getByRole('button', { name: 'Delete account' }));
     await waitFor(() => expect(session.store.getState().status).toBe('guest'));
+    expect(loadRecentRooms(userId)).toEqual([]);
     expect(core.calls).toContain(`DELETE ${ME_PATH}`);
     expect(closeRealtime).toHaveBeenCalledTimes(1);
     expect(await screen.findByTestId('account-deleted')).toHaveTextContent('Your account was deleted');

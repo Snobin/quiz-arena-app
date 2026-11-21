@@ -117,7 +117,7 @@ describe('/auth/return', () => {
 });
 
 describe('registered Home', () => {
-  it('has no Sign-in nudge; Quick Match is playable; Topic Duel and Solo Practice are live links; Battle Room is "Coming soon"', async () => {
+  it('has no Sign-in nudge; Quick Match is playable; Topic Duel, Solo Practice and Battle Room are live links', async () => {
     await boot('Anju');
     renderApp('/');
 
@@ -128,19 +128,10 @@ describe('registered Home', () => {
     expect(screen.getByRole('button', { name: 'Quick Match' })).not.toHaveAttribute('aria-disabled');
     expect(screen.getByRole('link', { name: /Topic Duel/ })).toHaveAttribute('href', '/play/topics?for=duel');
     expect(screen.getByRole('link', { name: /Solo Practice/ })).toHaveAttribute('href', '/play/topics?for=solo');
-    const row = screen.getByRole('button', { name: 'Battle Room, coming soon' });
-    expect(row).toHaveAttribute('aria-disabled', 'true');
-    expect(within(row).getByText('Coming soon')).toBeInTheDocument();
-    expect(screen.getAllByText('Coming soon')).toHaveLength(1);
+    expect(screen.getByRole('link', { name: /Battle Room/ })).toHaveAttribute('href', '/rooms');
+    expect(screen.queryByText('Coming soon')).toBeNull();
     // A registered player never fetches a guest token.
     expect(vi.mocked(fetch).mock.calls.map(([input]) => String(input))).not.toContain(GUEST_TOKEN_PATH);
-  });
-
-  it('tapping the coming-soon row opens nothing', async () => {
-    await boot('Anju');
-    renderApp('/');
-    (await screen.findByRole('button', { name: 'Battle Room, coming soon' })).click();
-    expect(window.location.pathname).toBe('/');
   });
 });
 

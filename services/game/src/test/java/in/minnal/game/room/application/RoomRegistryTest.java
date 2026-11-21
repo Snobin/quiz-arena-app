@@ -76,7 +76,7 @@ class RoomRegistryTest {
     final PlayerSessions sessions = new PlayerSessions(event -> { });
     final DrainState drain = new DrainState();
     final RoomConfigRules.Config config =
-            new RoomConfigRules.Config(new RoomSource(QuestionSource.BANK, UUID.randomUUID(), "Rivers"), 10);
+            new RoomConfigRules.Config(new RoomSource(QuestionSource.BANK, UUID.randomUUID()), 10);
 
     RoomRegistry registry;
 

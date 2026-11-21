@@ -31,7 +31,7 @@ class RoomFlowTest extends GameIntegrationTest {
     static final Duration WAIT = Duration.ofSeconds(5);
     static final Duration GRACE = Duration.ofSeconds(10);
     static final String TOPIC = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
-    static final String CREATE = "{\"source\":{\"type\":\"BANK\",\"topicId\":\"" + TOPIC + "\",\"topicName\":\"Kerala History\"},\"questionCount\":10}";
+    static final String CREATE = "{\"source\":{\"type\":\"BANK\",\"topicId\":\"" + TOPIC + "\"},\"questionCount\":10}";
 
     @Autowired
     RoomRegistry rooms;
@@ -103,7 +103,7 @@ class RoomFlowTest extends GameIntegrationTest {
         JsonNode room = payload.get("room");
         assertThat(room.get("source").get("type").asString()).isEqualTo("BANK");
         assertThat(room.get("source").get("topicId").asString()).isEqualTo(TOPIC);
-        assertThat(room.get("source").get("topicName").asString()).isEqualTo("Kerala History");
+        assertThat(room.get("source").get("topicName")).isNull();
         assertThat(room.get("questionCount").asInt()).isEqualTo(10);
         assertThat(room.get("rated").asBoolean()).isTrue();
         assertThat(room.get("expiresAt").asString()).isEqualTo(clock.instant().plus(Duration.ofHours(24)).toString());
@@ -255,13 +255,12 @@ class RoomFlowTest extends GameIntegrationTest {
         assertThat(first.get("payload").get("room").get("source").get("topicId").asString()).isEqualTo(TOPIC);
 
         anju.send("/app/room/" + roomId + "/configure",
-                "{\"source\":{\"type\":\"BANK\",\"topicId\":\"" + otherTopic + "\",\"topicName\":\"Rivers\"},\"questionCount\":7}");
+                "{\"source\":{\"type\":\"BANK\",\"topicId\":\"" + otherTopic + "\"},\"questionCount\":7}");
         JsonNode second = anju.nextBroadcast("ROOM_LOBBY_UPDATED");
         assertThat(second.get("seq").asLong()).isEqualTo(2);
         JsonNode room = second.get("payload").get("room");
         assertThat(room.get("questionCount").asInt()).isEqualTo(7);
         assertThat(room.get("source").get("topicId").asString()).isEqualTo(otherTopic);
-        assertThat(room.get("source").get("topicName").asString()).isEqualTo("Rivers");
 
         // Invalid: refused to the host, nothing broadcast, nothing changed.
         anju.send("/app/room/" + roomId + "/configure", "{\"questionCount\":3}");

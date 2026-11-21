@@ -31,6 +31,7 @@ public final class StompTestClient implements AutoCloseable {
     private final StompSession session;
     private final BlockingQueue<JsonNode> inbox = new LinkedBlockingQueue<>();
     private final BlockingQueue<JsonNode> topic = new LinkedBlockingQueue<>();
+    private volatile org.springframework.messaging.simp.user.SimpUserRegistry registry;
 
     private StompTestClient(int port, String token) throws Exception {
         client = new WebSocketStompClient(new StandardWebSocketClient());
@@ -51,9 +52,18 @@ public final class StompTestClient implements AutoCloseable {
         });
     }
 
-    /** Subscribes to {@code destination}; its frames go to {@link #nextBroadcast}. */
+    /**
+     * Subscribes to {@code destination}; its frames go to {@link #nextBroadcast}. SUBSCRIBE is asynchronous: with a
+     * registry (see {@link #withRegistry}) this returns once the broker shows this subscription (found by the unique
+     * subscription id sent with it, so another session's subscription coming or going does not matter). If the registry
+     * never shows it, a short fixed settle follows instead: the helper itself never fails a test.
+     */
     public void subscribe(String destination) {
-        session.subscribe(destination, new StompFrameHandler() {
+        StompHeaders headers = new StompHeaders();
+        headers.setDestination(destination);
+        String id = "sub-" + java.util.UUID.randomUUID();
+        headers.setId(id);
+        session.subscribe(headers, new StompFrameHandler() {
             @Override
             public Type getPayloadType(StompHeaders headers) {
                 return byte[].class;
@@ -64,6 +74,25 @@ public final class StompTestClient implements AutoCloseable {
                 topic.add(JSON.readTree(new String((byte[]) payload, StandardCharsets.UTF_8)));
             }
         });
+        if (registry == null) {
+            return;
+        }
+        try {
+            org.awaitility.Awaitility.await().atMost(Duration.ofSeconds(2)).pollInterval(Duration.ofMillis(5))
+                    .until(() -> !registry.findSubscriptions(sub -> id.equals(sub.getId())).isEmpty());
+        } catch (org.awaitility.core.ConditionTimeoutException e) {
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+    }
+
+    /** Lets {@link #subscribe} wait for the broker to register each subscription. */
+    public StompTestClient withRegistry(org.springframework.messaging.simp.user.SimpUserRegistry userRegistry) {
+        this.registry = userRegistry;
+        return this;
     }
 
     /** The next topic frame, failing after {@code within}. */

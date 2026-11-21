@@ -12,6 +12,7 @@ import { closeRealtime } from '../realtime/connection.ts';
 import { announce } from '../shell/announce.ts';
 import { navigate } from '../shell/router.ts';
 import { DeleteAccountDialog } from './DeleteAccountDialog.tsx';
+import { clearRecentRooms } from './rooms/recentRooms.ts';
 
 /**
  * Settings (Story 2.8): Language, Reduce effects, and for a registered player Sign out and Delete account.
@@ -96,6 +97,7 @@ export function SettingsScreen() {
     setDeleting(true);
     deletingRef.current = true;
     setDeleteError(false);
+    const userId = session.userId();
     const ok = await session.deleteAccount();
     setDeleting(false);
     deletingRef.current = false;
@@ -104,6 +106,7 @@ export function SettingsScreen() {
       return;
     }
     setConfirming(false);
+    if (userId) clearRecentRooms(userId);
     closeRealtime();
     resetProfile();
     showAccountDeleted();

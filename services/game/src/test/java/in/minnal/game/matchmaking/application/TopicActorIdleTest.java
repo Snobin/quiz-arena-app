@@ -21,20 +21,19 @@ class TopicActorIdleTest extends GameIntegrationTest {
     void anEmptyTopicActorIsStoppedAfter60sAndTheNextJoinRecreatesIt() {
         String a = newSub();
         UUID topic = UUID.randomUUID();
-        int before = service.actorCount();
         try (StompTestClient anju = connect(userToken(a, "Anju"))) {
             anju.send("/app/matchmaking/TOPIC_DUEL/join", "{\"topicId\":\"" + topic + "\"}");
-            await().until(() -> service.actorCount() == before + 1);
+            await().until(() -> service.hasTopicActor(topic));
             anju.send("/app/matchmaking/TOPIC_DUEL/cancel");
             anju.next("MATCHMAKING_CANCELLED");
 
             clock.advance(Duration.ofSeconds(59));
-            await().pollDelay(Duration.ofMillis(600)).until(() -> service.actorCount() == before + 1);
+            await().pollDelay(Duration.ofMillis(600)).until(() -> service.hasTopicActor(topic));
             clock.advance(Duration.ofSeconds(2));
-            await().until(() -> service.actorCount() == before);
+            await().until(() -> !service.hasTopicActor(topic));
 
             anju.send("/app/matchmaking/TOPIC_DUEL/join", "{\"topicId\":\"" + topic + "\"}");
-            await().until(() -> service.actorCount() == before + 1);
+            await().until(() -> service.hasTopicActor(topic));
             clock.advance(Duration.ofSeconds(8));
             JsonNode found = anju.next("MATCH_FOUND");
             assertThat(found.get("payload").get("participants").get(1).get("kind").asString()).isEqualTo("BOT");
@@ -47,12 +46,11 @@ class TopicActorIdleTest extends GameIntegrationTest {
     void aTopicActorWithSomeoneQueuedIsNeverReaped() {
         String a = newSub();
         UUID topic = UUID.randomUUID();
-        int before = service.actorCount();
         try (StompTestClient anju = connect(userToken(a, "Anju"))) {
             anju.send("/app/matchmaking/TOPIC_DUEL/join", "{\"topicId\":\"" + topic + "\"}");
-            await().until(() -> service.actorCount() == before + 1);
+            await().until(() -> service.hasTopicActor(topic));
             clock.advance(Duration.ofSeconds(7)); // still queued, just short of the bot
-            await().pollDelay(Duration.ofMillis(600)).until(() -> service.actorCount() == before + 1);
+            await().pollDelay(Duration.ofMillis(600)).until(() -> service.hasTopicActor(topic));
             anju.send("/app/matchmaking/TOPIC_DUEL/cancel");
             anju.next("MATCHMAKING_CANCELLED");
         }

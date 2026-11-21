@@ -76,6 +76,14 @@ export class FakeStomp implements RealtimeClient {
     handler({ body: typeof message === 'string' ? message : JSON.stringify(message) });
   }
 
+  /** A broadcast on `/topic/room/{roomId}`. */
+  deliverRoomTopic(roomId: string, message: unknown): void {
+    const destination = `/topic/room/${roomId}`;
+    const handler = this.subscriptions.get(destination);
+    if (!handler) throw new Error('not subscribed to ' + destination);
+    handler({ body: typeof message === 'string' ? message : JSON.stringify(message) });
+  }
+
   /** Bodies published to a destination, parsed. */
   bodiesTo(destination: string): unknown[] {
     return this.published.filter((p) => p.destination === destination).map((p) => JSON.parse(p.body ?? 'null'));

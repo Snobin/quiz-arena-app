@@ -123,9 +123,9 @@ export type MatchmakingFailedPayload = { reason: string };
 export type ErrorPayload = { code: ErrorCode; matchId?: string; roomId?: string };
 
 /** A Battle Room's question source (Story 5.1): tagged, so Epic 6 can add `CUSTOM`. Only `BANK` is accepted today. */
-export type RoomSource = { type: QuestionSource; topicId?: string; topicName?: string };
+export type RoomSource = { type: QuestionSource; topicId?: string };
 
-/** The lobby as `ROOM_JOINED` and `ROOM_LOBBY_UPDATED` show it. Types only: the room screens (Story 5.2) add the parsers. */
+/** The lobby as `ROOM_JOINED` and `ROOM_LOBBY_UPDATED` show it. Types only: the parsers are in the lazy rooms chunk (`screens/rooms/roomProtocol.ts`). */
 export type RoomView = {
   hostParticipantId: string;
   source: RoomSource;

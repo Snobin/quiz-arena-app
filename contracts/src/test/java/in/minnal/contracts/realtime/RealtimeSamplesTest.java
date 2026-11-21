@@ -65,7 +65,7 @@ class RealtimeSamplesTest {
         List<Participant> participants = List.of(
                 new Participant(ANJU, "Guest 4821", ParticipantKind.GUEST),
                 new Participant(BOT, "Minnal Bot", ParticipantKind.BOT));
-        RoomView lobby = new RoomView(ANJU, new RoomSource(QuestionSource.BANK, TOPIC_ID, "Kerala History"), 10, true,
+        RoomView lobby = new RoomView(ANJU, new RoomSource(QuestionSource.BANK, TOPIC_ID), 10, true,
                 Instant.parse("2026-11-13T10:15:30.123Z"), List.of(new Participant(ANJU, "Anju", ParticipantKind.USER)), 1);
         return List.of(
                 new Sample("room-joined.json",
@@ -90,7 +90,7 @@ class RealtimeSamplesTest {
                         ServerMessage.error(ErrorCode.INVALID_ROOM_CONFIG, null, SERVER_TIME),
                         new TypeReference<ServerMessage<ErrorPayload>>() { }),
                 new Sample("client-room-create.json",
-                        new RoomCreateSample(new RoomSource(QuestionSource.BANK, TOPIC_ID, "Kerala History"), 10),
+                        new RoomCreateSample(new RoomSource(QuestionSource.BANK, TOPIC_ID), 10),
                         new TypeReference<RoomCreateSample>() { }),
                 new Sample("match-found.json",
                         ServerMessage.aboutMatch(MessageType.MATCH_FOUND, MATCH_ID, SERVER_TIME, new MatchFoundPayload(
@@ -373,12 +373,12 @@ class RealtimeSamplesTest {
         JsonNode room = joined.get("payload").get("room");
         assertThat(room.propertyNames()).containsExactly("hostParticipantId", "source", "questionCount", "rated",
                 "expiresAt", "participants", "humanCount");
-        assertThat(room.get("source").propertyNames()).containsExactly("type", "topicId", "topicName");
+        assertThat(room.get("source").propertyNames()).containsExactly("type", "topicId");
         JsonNode busy = ContractJson.MAPPER.valueToTree(ServerMessage.error(ErrorCode.ALREADY_IN_MATCH, null, ROOM_ID, null, SERVER_TIME));
         assertThat(busy.get("roomId").asString()).isEqualTo(ROOM_ID.toString());
         assertThat(busy.get("payload").get("roomId").asString()).isEqualTo(ROOM_ID.toString());
-        assertThat(new RoomSource(QuestionSource.BANK, TOPIC_ID, "x").rated()).isTrue();
-        assertThat(new RoomSource(QuestionSource.CUSTOM, null, null).rated()).isFalse();
+        assertThat(new RoomSource(QuestionSource.BANK, TOPIC_ID).rated()).isTrue();
+        assertThat(new RoomSource(QuestionSource.CUSTOM, null).rated()).isFalse();
     }
 
     @Test

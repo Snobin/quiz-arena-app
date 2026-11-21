@@ -1096,14 +1096,36 @@ export function cancelMatchmaking(): CancelResult {
   return instance().cancelMatchmaking();
 }
 
+/**
+ * The socket environment (client factory, token, URL) as this module uses it. Lazily loaded clients that open their
+ * own connection, such as the Battle Room client, take it from here, so they share the factory and the token.
+ */
+export function realtimeEnv(): RealtimeEnv {
+  return { ...defaultEnv(), ...envOverride };
+}
+
+const closeHooks = new Set<() => void>();
+
+/** Runs `hook` whenever the realtime connection is closed on purpose (sign-out, account deletion, tests). Returns its remover. */
+export function onRealtimeClose(hook: () => void): () => void {
+  closeHooks.add(hook);
+  return () => closeHooks.delete(hook);
+}
+
+function runCloseHooks(): void {
+  for (const hook of [...closeHooks]) hook();
+}
+
 /** Closes the socket and clears the live game (sign-out and account deletion). A later join connects again with the then-current token. */
 export function closeRealtime(): void {
   realtime?.reset();
+  runCloseHooks();
 }
 
 /** Test helper: replaces parts of the environment (e.g. the client factory) and resets the module. */
 export function configureRealtimeForTests(override: Partial<RealtimeEnv>): void {
   realtime?.reset();
+  runCloseHooks();
   liveMatchId.clear();
   realtime = null;
   envOverride = override;
@@ -1112,6 +1134,7 @@ export function configureRealtimeForTests(override: Partial<RealtimeEnv>): void 
 /** Test helper: closes the socket, resets the store and drops overrides. */
 export function resetRealtime(): void {
   realtime?.reset();
+  runCloseHooks();
   liveMatchId.clear();
   realtime = null;
   envOverride = {};

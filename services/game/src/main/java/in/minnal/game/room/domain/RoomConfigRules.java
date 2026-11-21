@@ -59,7 +59,7 @@ public final class RoomConfigRules {
             if (topicId == null) {
                 return new Result(null, ErrorCode.INVALID_TOPIC);
             }
-            source = new RoomSource(QuestionSource.BANK, topicId, trimName(input.topicName()));
+            source = new RoomSource(QuestionSource.BANK, topicId);
         } else if (current != null) {
             source = current.source();
         } else {
@@ -76,21 +76,6 @@ public final class RoomConfigRules {
             count = current.questionCount();
         }
         return new Result(new Config(source, count), null);
-    }
-
-    /** Display text only: trimmed, at most {@value RoomSource#MAX_TOPIC_NAME} characters, null when blank. */
-    static String trimName(String name) {
-        if (name == null) {
-            return null;
-        }
-        String trimmed = name.strip();
-        if (trimmed.isEmpty()) {
-            return null;
-        }
-        if (trimmed.codePointCount(0, trimmed.length()) <= RoomSource.MAX_TOPIC_NAME) {
-            return trimmed;
-        }
-        return trimmed.substring(0, trimmed.offsetByCodePoints(0, RoomSource.MAX_TOPIC_NAME)).strip();
     }
 
     private static UUID parseUuid(String text) {

@@ -7,11 +7,12 @@ import { LOCKED_MODES } from './LockedModeRows.tsx';
 const LIVE_MODE_PATHS: Record<string, string> = {
   homeModeTopicDuel: '/play/topics?for=duel',
   homeModeSolo: '/play/topics?for=solo',
+  homeModeBattleRoom: '/rooms',
 };
 
 /**
- * The mode rows for a registered player (UX-DR22): Topic Duel and Solo Practice open the topic picker; until its
- * epic ships Battle Room is `aria-disabled` with the caption "Coming soon" and opens nothing. Each row is a focusable
+ * The mode rows for a registered player (UX-DR22): Topic Duel and Solo Practice open the topic picker and Battle Room opens
+ * the Rooms tab (Story 5.2); a mode without a path is `aria-disabled` with the caption "Coming soon" and opens nothing. Each row is a focusable
  * button (like Button's disabled state), so the caption is announced with the mode name.
  */
 export function ComingSoonModeRows() {
