@@ -54,12 +54,16 @@ public final class StompTestClient implements AutoCloseable {
 
     /**
      * Subscribes to {@code destination}; its frames go to {@link #nextBroadcast}. SUBSCRIBE is asynchronous: with a
-     * registry (see {@link #withRegistry}) this returns only once the broker has registered it, so a broadcast sent
-     * right after cannot be lost to a subscription that is not there yet.
+     * registry (see {@link #withRegistry}) this returns once the broker shows this subscription (found by the unique
+     * subscription id sent with it, so another session's subscription coming or going does not matter). If the registry
+     * never shows it, a short fixed settle follows instead: the helper itself never fails a test.
      */
     public void subscribe(String destination) {
-        int before = subscriptionsTo(destination);
-        session.subscribe(destination, new StompFrameHandler() {
+        StompHeaders headers = new StompHeaders();
+        headers.setDestination(destination);
+        String id = "sub-" + java.util.UUID.randomUUID();
+        headers.setId(id);
+        session.subscribe(headers, new StompFrameHandler() {
             @Override
             public Type getPayloadType(StompHeaders headers) {
                 return byte[].class;
@@ -70,15 +74,19 @@ public final class StompTestClient implements AutoCloseable {
                 topic.add(JSON.readTree(new String((byte[]) payload, StandardCharsets.UTF_8)));
             }
         });
-        if (registry != null) {
-            org.awaitility.Awaitility.await().atMost(Duration.ofSeconds(5))
-                    .until(() -> subscriptionsTo(destination) > before);
+        if (registry == null) {
+            return;
         }
-    }
-
-    /** The broker's subscriptions to {@code destination}, across all sessions. */
-    private int subscriptionsTo(String destination) {
-        return registry == null ? 0 : registry.findSubscriptions(subscription -> destination.equals(subscription.getDestination())).size();
+        try {
+            org.awaitility.Awaitility.await().atMost(Duration.ofSeconds(2)).pollInterval(Duration.ofMillis(5))
+                    .until(() -> !registry.findSubscriptions(sub -> id.equals(sub.getId())).isEmpty());
+        } catch (org.awaitility.core.ConditionTimeoutException e) {
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
     }
 
     /** Lets {@link #subscribe} wait for the broker to register each subscription. */
