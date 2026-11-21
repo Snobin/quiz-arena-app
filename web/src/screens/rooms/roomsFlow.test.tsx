@@ -536,12 +536,12 @@ const memberJoined = (others: ReturnType<typeof person>[] = []) => ({
   ...joinedMessage(),
   payload: { ...joinedMessage().payload, role: 'MEMBER', selfParticipantId: BIJU, room: roomOf([person(SELF, 'Rajeev'), person(BIJU, 'Biju'), ...others]) },
 });
-const lobbyUpdate = (seq: number, participants: ReturnType<typeof person>[], joined: string[] = [], left: string[] = []) => ({
+const lobbyUpdate = (seq: number, participants: ReturnType<typeof person>[], joined: string[] = [], left: string[] = [], phase?: 'LOBBY' | 'STARTING') => ({
   type: 'ROOM_LOBBY_UPDATED',
   roomId: ROOM_ID,
   seq,
   serverTime: SERVER_TIME,
-  payload: { room: roomOf(participants), joined, left },
+  payload: { room: roomOf(participants), joined, left, ...(phase && { phase }) },
 });
 
 /** Opens /r/<code> as a registered player and answers the join with `reply`. */
@@ -752,6 +752,21 @@ describe('the player lobby', () => {
   });
 });
 
+describe('a player in a starting lobby', () => {
+  it('sees "Starting…" in place of "Waiting for <host> to start", and the waiting line again after a failure', async () => {
+    await boot();
+    await openLink('/r/K7M-Q2X', memberJoined());
+    await screen.findByRole('heading', { level: 1, name: 'Battle Room' });
+    expect(screen.getByText('Waiting for Rajeev to start')).toBeInTheDocument();
+    act(() => socket().deliverRoomTopic(ROOM_ID, lobbyUpdate(1, [person(SELF, 'Rajeev'), person(BIJU, 'Biju')], [], [], 'STARTING')));
+    expect(await screen.findByText('Starting…')).toBeInTheDocument();
+    expect(screen.queryByText('Waiting for Rajeev to start')).toBeNull();
+    act(() => socket().deliverRoomTopic(ROOM_ID, { type: 'ROOM_START_FAILED', roomId: ROOM_ID, seq: 2, serverTime: SERVER_TIME, payload: { reason: 'UNAVAILABLE' } }));
+    expect(await screen.findByText('Waiting for Rajeev to start')).toBeInTheDocument();
+    expect(screen.queryByText('Starting…')).toBeNull();
+  });
+});
+
 describe('the host lobby with players', () => {
   async function hostWithBiju() {
     const user = await openLobby();
@@ -760,7 +775,7 @@ describe('the host lobby with players', () => {
     return user;
   }
 
-  it('enables the start bar at 2 humans; a start is still answered "Starting a match arrives soon"', async () => {
+  it('enables the start bar at 2 humans; a tap shows "…" and Starting… until the match or a failure', async () => {
     await boot();
     const user = await hostWithBiju();
     const start = screen.getByRole('button', { name: 'Start · 2 players' });
@@ -768,8 +783,43 @@ describe('the host lobby with players', () => {
     expect(screen.getByText('Leaving closes the room')).toBeInTheDocument();
     await user.click(start);
     expect(socket().sentTo(roomStart(ROOM_ID))).toBe(1);
-    act(() => socket().deliver({ type: 'ERROR', roomId: ROOM_ID, serverTime: SERVER_TIME, payload: { code: 'NOT_AVAILABLE_YET', roomId: ROOM_ID } }));
-    expect(await screen.findByText('Starting a match arrives soon')).toBeInTheDocument();
+    // The host's button is "…" (disabled) and the lobby says Starting….
+    expect(screen.getByRole('button', { name: '…' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getAllByText('Starting…').length).toBeGreaterThan(0);
+    act(() => socket().deliverRoomTopic(ROOM_ID, lobbyUpdate(2, [person(SELF, 'Rajeev'), person(BIJU, 'Biju')], [], [], 'STARTING')));
+    expect(screen.getByRole('button', { name: '…' })).toBeInTheDocument();
+    expect(screen.getAllByText('Starting…').length).toBeGreaterThan(0);
+    expect(useAnnouncements.getState().polite.text.trim()).toBe('Starting…');
+  });
+
+  it('a start that fails: too few questions offers Change topic (the picker for the room); another failure offers Try again', async () => {
+    await boot();
+    const user = await hostWithBiju();
+    await user.click(screen.getByRole('button', { name: 'Start · 2 players' }));
+    act(() => socket().deliverRoomTopic(ROOM_ID, { type: 'ROOM_START_FAILED', roomId: ROOM_ID, seq: 2, serverTime: SERVER_TIME, payload: { reason: 'TOPIC_UNAVAILABLE' } }));
+    expect(await screen.findByText('That topic has too few questions right now. Pick another.')).toBeInTheDocument();
+    const change = screen.getByRole('link', { name: 'Change topic' });
+    expect(change.getAttribute('href')).toContain(ROOM_ID);
+    expect(screen.queryByText(/422/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Start · 2 players' })).not.toHaveAttribute('aria-disabled');
+
+    await user.click(screen.getByRole('button', { name: 'Start · 2 players' }));
+    act(() => socket().deliverRoomTopic(ROOM_ID, { type: 'ROOM_START_FAILED', roomId: ROOM_ID, seq: 3, serverTime: SERVER_TIME, payload: { reason: 'UNAVAILABLE' } }));
+    expect(await screen.findByText("Couldn't start. Try again.")).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Change topic' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Start · 2 players' })).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('Change topic keeps the room (no leave) and opens the picker for it', async () => {
+    await boot();
+    const user = await hostWithBiju();
+    await user.click(screen.getByRole('button', { name: 'Start · 2 players' }));
+    act(() => socket().deliverRoomTopic(ROOM_ID, { type: 'ROOM_START_FAILED', roomId: ROOM_ID, seq: 2, serverTime: SERVER_TIME, payload: { reason: 'TOPIC_UNAVAILABLE' } }));
+    await user.click(await screen.findByRole('link', { name: 'Change topic' }));
+    expect(window.location.pathname).toBe('/play/topics');
+    expect(window.location.search).toContain(`roomId=${ROOM_ID}`);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Battle Room · choose a topic' })).toBeInTheDocument();
+    expect(socket().sentTo(roomLeave(ROOM_ID))).toBe(0);
   });
 
   it('Leave with others asks first: Stay is focused and Esc stays; Close room sends leave', async () => {

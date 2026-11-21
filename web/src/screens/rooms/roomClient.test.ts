@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { closeRealtime, configureRealtimeForTests, resetRealtime, RETRY_WINDOW_MS } from '../../realtime/connection.ts';
-import { USER_PRIVATE_QUEUE } from '../../realtime/protocol.ts';
+import { liveGameStore } from '../../realtime/liveGameStore.ts';
+import { matchTopic, USER_PRIVATE_QUEUE } from '../../realtime/protocol.ts';
+import { syncFromLocation } from '../../shell/router.ts';
 import { FakeStomp, SERVER_TIME } from '../../test-utils/realtime.ts';
 import { CREATE_TIMEOUT_MS, JOIN_TIMEOUT_MS, RESYNC_RETRY_MS, resetRoomClient, roomClient, useRoom } from './roomClient.ts';
 import { ROOM_CREATE, ROOM_JOIN, roomConfigure, roomLeave, roomResync, roomStart, roomTopic } from './roomProtocol.ts';
@@ -51,6 +53,8 @@ beforeEach(() => {
 afterEach(() => {
   resetRoomClient();
   resetRealtime();
+  window.history.replaceState(null, '', '/');
+  syncFromLocation();
 });
 
 async function createAndOpen() {
@@ -260,16 +264,86 @@ describe('joining (Story 5.3)', () => {
     expect(useRoom.getState()).toMatchObject({ session: null, notice: 'HOST_CLOSED', noticeHost: 'Anju' });
   });
 
-  it('the host start sends start and keeps the answer', async () => {
+  it('the host start sends start; STARTING clears the wait; a refusal stays on the lobby', async () => {
     const result = createAndOpen();
     await flush();
     socket().deliver(joined());
     await result;
+    const topic = (message: unknown) =>
+      (socket() as unknown as { subscriptions: Map<string, (m: { body: string }) => void> }).subscriptions.get(roomTopic(ROOM_ID))!({ body: JSON.stringify(message) });
     roomClient().start();
     expect(socket().sentTo(roomStart(ROOM_ID))).toBe(1);
     expect(useRoom.getState().starting).toBe(true);
-    socket().deliver(error('NOT_AVAILABLE_YET', { roomId: ROOM_ID }));
-    expect(useRoom.getState()).toMatchObject({ starting: false, startError: { code: 'NOT_AVAILABLE_YET' } });
+    // Repeat taps while waiting send nothing more.
+    roomClient().start();
+    expect(socket().sentTo(roomStart(ROOM_ID))).toBe(1);
+    topic({ ...lobbyUpdated(2), payload: { room: view(), joined: [], left: [], phase: 'STARTING' } });
+    expect(useRoom.getState()).toMatchObject({ starting: false, lobbyPhase: 'STARTING', startFailure: null });
+
+    // The failure returns the lobby, with the reason, in seq order with the lobby updates.
+    topic({ type: 'ROOM_START_FAILED', roomId: ROOM_ID, seq: 3, serverTime: SERVER_TIME, payload: { reason: 'TOPIC_UNAVAILABLE' } });
+    expect(useRoom.getState()).toMatchObject({ lobbyPhase: 'LOBBY', startFailure: 'TOPIC_UNAVAILABLE', session: { lastSeq: 3 } });
+    // A new topic answers the "too few questions" line.
+    topic({ ...lobbyUpdated(4, view({ source: { type: 'BANK', topicId: '7c1f0c9a-3333-4a2b-8c3d-0e1f2a3b4c5d' } })), payload: { room: view({ source: { type: 'BANK', topicId: '7c1f0c9a-3333-4a2b-8c3d-0e1f2a3b4c5d' } }), joined: [], left: [], phase: 'LOBBY' } });
+    expect(useRoom.getState().startFailure).toBeNull();
+
+    roomClient().start();
+    socket().deliver(error('SERVER_DRAINING', { roomId: ROOM_ID }));
+    expect(useRoom.getState()).toMatchObject({ starting: false, startError: { code: 'SERVER_DRAINING' } });
+  });
+
+  it('ROOM_MATCH_STARTED hands the match to the match connection, opens /match and closes the room', async () => {
+    const OTHER = '9d8c7b6a-5f4e-4d3c-b2a1-0f9e8d7c6b5a';
+    const MATCH = '6f1c2a3e-8a4b-4c1d-9e2f-0a1b2c3d4e5f';
+    const result = createAndOpen();
+    await flush();
+    socket().deliver(joined());
+    await result;
+    const roomSocket = socket();
+    const people = [
+      { participantId: SELF, displayName: 'Anju', kind: 'USER' },
+      { participantId: OTHER, displayName: 'Biju', kind: 'USER' },
+    ];
+    const topic = (message: unknown) =>
+      (roomSocket as unknown as { subscriptions: Map<string, (m: { body: string }) => void> }).subscriptions.get(roomTopic(ROOM_ID))!({ body: JSON.stringify(message) });
+
+    // Out of order: seq 3 waits for seq 2 (a resync is asked for), the start applies once the lobby has caught up.
+    topic({
+      type: 'ROOM_MATCH_STARTED',
+      roomId: ROOM_ID,
+      seq: 3,
+      serverTime: SERVER_TIME,
+      payload: { roomId: ROOM_ID, matchId: MATCH, mode: 'BATTLE_ROOM', participants: people, questionCount: 10, topic: { topicId: TOPIC, name: 'Kerala History', subjectName: 'History' }, firstQuestionAt: '2026-11-12T10:15:33.623Z' },
+    });
+    expect(liveGameStore.getState().live).toBeNull();
+    expect(roomSocket.sentTo(roomResync(ROOM_ID))).toBe(1);
+    topic(lobbyUpdated(2, view({ participants: people, humanCount: 2 })));
+    expect(liveGameStore.getState().live).toBeNull(); // held frames wait for the fresh ROOM_JOINED
+    roomSocket.deliver(joined(view({ participants: people, humanCount: 2 })));
+    await flush();
+
+    const live = liveGameStore.getState().live;
+    expect(live).toMatchObject({
+      matchId: MATCH,
+      mode: 'BATTLE_ROOM',
+      selfParticipantId: SELF,
+      total: 10,
+      firstQuestionAt: '2026-11-12T10:15:33.623Z',
+      phase: 'lead-in',
+      topic: { name: 'Kerala History' },
+    });
+    expect(live?.participants).toHaveLength(2);
+    // The server clock offset comes from the frame's own serverTime.
+    expect(Math.abs(liveGameStore.getState().clockOffsetMs - (Date.parse(SERVER_TIME) - Date.now()))).toBeLessThan(2_000);
+    expect(window.location.pathname).toBe('/match');
+    // The match connection subscribed to the match topic; the room's own socket is closed and the room forgotten.
+    await flush();
+    const matchSocket = clients[clients.length - 1]!;
+    expect(matchSocket).not.toBe(roomSocket);
+    matchSocket.open();
+    expect(matchSocket.subscribed).toContain(matchTopic(MATCH));
+    expect(roomSocket.deactivations).toBeGreaterThan(0);
+    expect(useRoom.getState()).toMatchObject({ session: null, phase: 'idle' });
   });
 });
 

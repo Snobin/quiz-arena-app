@@ -70,11 +70,17 @@ class ArchitectureTest {
 
     @Test
     void roomCodeDoesNotCallCore() {
+        // Story 5.4: the room actor's start step (and the registry that hands it the client) is the one place a room asks
+        // core for a set; nothing else in rooms may, and no room class may do I/O by itself.
         noClasses().that().resideInAPackage("in.minnal.game.room..")
+                .and().haveSimpleNameNotStartingWith("RoomActor").and().haveSimpleNameNotStartingWith("RoomRegistry")
                 .should().dependOnClassesThat().areAssignableTo(QuestionSetClient.class)
-                .orShould().dependOnClassesThat().resideInAnyPackage("org.springframework.web.client..",
-                        "org.springframework.http.client..", "java.net.http..", "java.sql..", "org.springframework.data..", "io.lettuce..")
                 .because("AD-2: game-service calls core only at match start, never while a room is in the lobby")
+                .check(classes);
+        noClasses().that().resideInAPackage("in.minnal.game.room..")
+                .should().dependOnClassesThat().resideInAnyPackage("org.springframework.web.client..",
+                        "org.springframework.http.client..", "java.net.http..", "java.sql..", "org.springframework.data..", "io.lettuce..")
+                .because("AD-2: a room reaches core only through the question-set client")
                 .check(classes);
     }
 

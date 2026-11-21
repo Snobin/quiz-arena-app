@@ -72,6 +72,8 @@ public final class MatchState {
     /** When Q1 opened; null before. */
     private Instant q1StartedAt;
     private long seq;
+    /** Whether {@link #answer} leaves the {@code SCOREBOARD} to the caller (coalesced in a room); see {@link #scoreboard}. */
+    private boolean deferScoreboard;
     /** The last {@code QUESTION_REVEALED} payload; null before Q1 is revealed. */
     private QuestionRevealedPayload lastReveal;
 
@@ -147,7 +149,7 @@ public final class MatchState {
 
         /**
          * Taken: the private ack for the sender (with her own result in 1v1 modes), then the
-         * {@code SCOREBOARD} broadcast (who answered, never what).
+         * {@code SCOREBOARD} broadcast (who answered, never what); null when it is deferred (a room coalesces).
          */
         record Accepted(ServerMessage<AnswerAcceptedPayload> ack, ServerMessage<ScoreboardPayload> scoreboard,
                 RecordedAnswer answer) implements AnswerOutcome {
@@ -205,9 +207,23 @@ public final class MatchState {
                 : AnswerAcceptedPayload.receipt(current);
         ServerMessage<AnswerAcceptedPayload> ack = ServerMessage.reply(MessageType.ANSWER_ACCEPTED, matchId, seq, now,
                 ackPayload);
-        ServerMessage<ScoreboardPayload> scoreboard = ServerMessage.broadcast(MessageType.SCOREBOARD, matchId, ++seq, now,
-                new ScoreboardPayload(current, answered));
+        // Deferred (a room coalesces): no seq is spent until the caller asks for the scoreboard it sends.
+        ServerMessage<ScoreboardPayload> scoreboard = deferScoreboard ? null : scoreboard(now);
         return new AnswerOutcome.Accepted(ack, scoreboard, answer);
+    }
+
+    /**
+     * Makes {@link #answer} return no {@code SCOREBOARD} (null in {@link AnswerOutcome.Accepted}): the caller sends
+     * {@link #scoreboard} when its coalescing window allows (Story 5.4).
+     */
+    public void deferScoreboard(boolean defer) {
+        this.deferScoreboard = defer;
+    }
+
+    /** The {@code SCOREBOARD} broadcast now: who has answered the open question (never what), with the next {@code seq}. */
+    public ServerMessage<ScoreboardPayload> scoreboard(Instant now) {
+        return ServerMessage.broadcast(MessageType.SCOREBOARD, matchId, ++seq, now,
+                new ScoreboardPayload(current, List.copyOf(answered)));
     }
 
     /**

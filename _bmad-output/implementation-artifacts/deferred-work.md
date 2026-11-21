@@ -319,3 +319,28 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-3-join-a-room-and-the-live-lobby.md`
   summary: Widen the code-normalisation fixture with non-ASCII case-folding and zero-width rows, and get Malayalam sign-off on the TBD strings.
   evidence: No fixture rows for `ſ`, the Kelvin sign or U+200B; several ML strings are flagged awaiting sign-off.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-4-play-a-room-match.md`
+  summary: Battle Room scoreboard polish: top 8 plus own row and "+N more", answered meter, rank arrows, overtake jump and crack with announcements, and the "Battle Room · topic" header.
+  evidence: Split from Story 5.4 as a separate shippable UI deliverable; the spec above plays a room match on the existing live screen with plain standings.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-4-play-a-room-match.md`
+  summary: `SNAPSHOT` should carry `mode`, `roomId`, `questionCount` and the scoreboard, so a reload mid-room-match shows the room screen for a two-human room too; and the 3-2-1 digit could scale (transform and opacity only) outside reduced effects.
+  evidence: The web infers a room from `mode` or, after a rejoin, from more than two participants; the countdown swaps digits with no animation.
+
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-4-play-a-room-match.md`
+  summary: `ROOM_JOINED`/resync carry no phase and a member who missed `ROOM_START_FAILED` or `ROOM_MATCH_STARTED` has no path into the match; fix with the SNAPSHOT extension (mode, roomId, scoreboard).
+  evidence: Review finding (medium, real); the same root cause as the already-deferred two-human-room reload bug.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-4-play-a-room-match.md`
+  summary: Unverified (would be medium): an IN_MATCH room is never freed if `MatchEnded` never reaches the room actor.
+  evidence: Settle by checking that `MatchRegistry` calls the end callback on every end path, including match-actor failure.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-4-play-a-room-match.md`
+  summary: Countdown digits are silent to screen readers and the final-standings `h1` is neither focused nor announced.
+  evidence: Review finding (low a11y); fold into the Battle Room polish story.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-4-play-a-room-match.md`
+  summary: Unverified (would be medium): `MatchActorRoomTest` relies on sleeps and wall-clock bounds and checks "p95 under 200 ms" as a single-run max.
+  evidence: Settle by running the class repeatedly on CI hardware; consider a manual-clock variant.

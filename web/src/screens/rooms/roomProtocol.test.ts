@@ -23,8 +23,36 @@ describe('room parsers over the golden samples', () => {
     expect(lobby.payload.left).toEqual([]);
     const member = parseRoomIncoming(text('room-joined-member.json'));
     expect(member).toMatchObject({ type: 'ROOM_JOINED', payload: { role: 'MEMBER', room: { humanCount: 2 } } });
+    expect(lobby.payload.phase).toBe('LOBBY');
     const closed = parseRoomIncoming(text('room-closed.json'));
     expect(closed).toMatchObject({ type: 'ROOM_CLOSED', payload: { reason: 'EXPIRED' } });
+  });
+
+  it('parse the Story 5.4 start frames: STARTING, the failure and the match', () => {
+    expect(parseRoomIncoming(text('room-lobby-updated-starting.json'))).toMatchObject({
+      type: 'ROOM_LOBBY_UPDATED',
+      payload: { phase: 'STARTING', joined: [], left: [] },
+    });
+    expect(parseRoomIncoming(text('room-start-failed.json'))).toMatchObject({
+      type: 'ROOM_START_FAILED',
+      message: { seq: 4 },
+      payload: { reason: 'TOPIC_UNAVAILABLE' },
+    });
+    const started = parseRoomIncoming(text('room-match-started.json'));
+    expect(started).toMatchObject({
+      type: 'ROOM_MATCH_STARTED',
+      payload: {
+        mode: 'BATTLE_ROOM',
+        questionCount: 10,
+        firstQuestionAt: '2026-11-12T10:15:33.623Z',
+        topic: { name: 'Kerala History' },
+      },
+    });
+    expect(started?.type === 'ROOM_MATCH_STARTED' && started.payload.participants).toHaveLength(2);
+    const bad = JSON.parse(text('room-match-started.json')) as { payload: Record<string, unknown> };
+    expect(parseRoomIncoming(JSON.stringify({ ...bad, type: 'ROOM_MATCH_STARTED', payload: { ...bad.payload, firstQuestionAt: 'soon' } }))).toBeNull();
+    const failed = JSON.parse(text('room-start-failed.json')) as { payload: Record<string, unknown> };
+    expect(parseRoomIncoming(JSON.stringify({ ...failed, payload: { reason: '422' } }))).toBeNull();
   });
 
   it('parse the room errors, with their room id', () => {

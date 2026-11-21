@@ -25,6 +25,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
@@ -111,6 +112,15 @@ public class MatchRegistry implements MatchAccess, DisposableBean {
      * @return the match, or empty when draining (nothing was started)
      */
     public Optional<MatchActor> start(MatchSetup setup) {
+        return start(setup, null, match -> { });
+    }
+
+    /**
+     * As {@link #start(MatchSetup)}, for a Battle Room match (Story 5.4): Q1 opens at {@code firstQuestionAt} (instead of
+     * after the lead-in), and {@code whenEnded} is called on the match's thread after it ended and its players were freed
+     * (finished, aborted or failed).
+     */
+    public Optional<MatchActor> start(MatchSetup setup, Instant firstQuestionAt, Consumer<MatchActor> whenEnded) {
         MatchActor match;
         synchronized (idle) {
             if (drain.isDraining()) {
@@ -118,8 +128,13 @@ public class MatchRegistry implements MatchAccess, DisposableBean {
             }
             MatchState state = MatchState.of(setup, settings.window(), sessions::hasSession);
             UUID matchId = setup.matchId();
-            match = new MatchActor(setup, state, settings, clock, timers, channel, broadcaster, bots, metrics, this::ended,
-                    sessions::hasSession, sub -> participation.release(sub, new Activity.InMatch(matchId)), publisher);
+            match = new MatchActor(setup, state, settings, clock, timers, channel, broadcaster, bots, metrics,
+                    m -> {
+                        ended(m);
+                        whenEnded.accept(m);
+                    },
+                    sessions::hasSession, sub -> participation.release(sub, new Activity.InMatch(matchId)), publisher,
+                    firstQuestionAt);
             live.put(setup.matchId(), match);
         }
         for (String sub : setup.humans().keySet()) {

@@ -8,7 +8,7 @@ import { detectLanguage } from '../../i18n/Lang.tsx';
 import { useDocumentTitle } from '../../i18n/useDocumentTitle.ts';
 import { useReducedEffects } from '../../motion/reduceEffects.ts';
 import * as lastResult from '../../realtime/lastResult.ts';
-import { cancelRejoin, leaveMatch, rejoinMatch, submitAnswer, useLiveGame, type LiveMatch } from '../../realtime/liveGameStore.ts';
+import { cancelRejoin, isRoomMatch, leaveMatch, rejoinMatch, submitAnswer, useLiveGame, type LiveMatch } from '../../realtime/liveGameStore.ts';
 import * as liveMatchId from '../../realtime/liveMatchId.ts';
 import { announce } from '../../shell/announce.ts';
 import { Link } from '../../shell/Link.tsx';
@@ -19,6 +19,7 @@ import { LeaveDialog } from './LeaveDialog.tsx';
 import { OptionList, type OptionReveal } from './OptionList.tsx';
 import { QuestionCard } from './QuestionCard.tsx';
 import { ReconnectBanner } from './ReconnectBanner.tsx';
+import { Countdown, RoomFinal, RoomHeader, RoomStandings } from './RoomMatchParts.tsx';
 import { ReportQuestion } from '../../report/ReportQuestion.tsx';
 import { RevealDetails } from './RevealDetails.tsx';
 import { opponentsOf } from './opponents.tsx';
@@ -164,8 +165,9 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
   // Questions she marked "Something wrong?" during the reveals (Story 3.5); they survive a reload.
   const [marks, setMarks] = useState(() => new Set(lastResult.loadMarks(live.matchId)));
   const opponents = opponentsOf(live);
-  // A 1v1 (Quick Match, Topic Duel) has one opponent; a Battle Room has several.
-  const oneVsOne = opponents.length === 1;
+  // A Battle Room (Story 5.4) has its own header, countdown and standings; a 1v1 has one opponent.
+  const room = isRoomMatch(live);
+  const oneVsOne = !room && opponents.length === 1;
   const opponentLeftKey = oneVsOne ? 'match.opponentLeftWin' : 'match.opponentLeft';
 
   // A new question: focus its heading (whose name is the text, then the position).
@@ -186,6 +188,8 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
   // The opponent answering, once per question each.
   const answeredAnnounced = useRef(new Set<string>());
   useEffect(() => {
+    // Never in a room: fifty announcements per question would bury the one that matters.
+    if (room) return;
     for (const opponent of opponents) {
       const key = `${index}:${opponent.participantId}`;
       if (live.answered.includes(opponent.participantId) && !answeredAnnounced.current.has(key)) {
@@ -227,7 +231,8 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
   let optionReveal: OptionReveal | null = null;
   if (reveal) {
     const picks: OptionReveal['picks'] = {};
-    for (const opponent of opponents) {
+    // In a room the options carry no opponent names (there may be forty-nine): the standings are the place for them.
+    for (const opponent of room ? [] : opponents) {
       const result = reveal.results.find((r) => r.participantId === opponent.participantId);
       if (result?.pickedIndex != null) {
         (picks[result.pickedIndex] ??= []).push({ participantId: opponent.participantId, name: opponent.displayName });
@@ -288,6 +293,13 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
       navigate('/', { replace: true });
       return undefined;
     }
+    if (room) {
+      // A room has no 1v1 results: she stays on the standings (Story 5.5 replaces them with the podium).
+      // One who confirmed Leave has nothing left to watch: Home.
+      if (outcome.kind === 'left') navigate('/', { replace: true });
+      else if (outcome.kind === 'forfeited') announce(forfeitedNotice);
+      return undefined;
+    }
     if (outcome.kind === 'left') {
       navigate('/results', { replace: true });
       return undefined;
@@ -304,7 +316,7 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
   // MATCH_ENDED are in (in either order), after the reveal hold. With no MATCH_ENDED by
   // `MATCH_ENDED_WAIT_MS` after the hold (a match settled from NOT_IN_MATCH, say), the results
   // open anyway on the minimal view, which upgrades in place if MATCH_ENDED still comes.
-  const completedHere = outcome?.kind === 'completed' && outcome !== initialOutcome.current;
+  const completedHere = !room && outcome?.kind === 'completed' && outcome !== initialOutcome.current;
   const [held, setHeld] = useState(false);
   useEffect(() => {
     if (!completedHere) return undefined;
@@ -360,6 +372,13 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
   }, [inPlay, outcome?.kind]);
 
   const blocked = reconnecting || showDialog;
+  const leaveButton = inPlay ? (
+    <Button variant="danger-text" data-testid="leave-button" className="ml-auto" onClick={() => setDialogOpen(true)}>
+      {t('match.leave')}
+    </Button>
+  ) : null;
+  // The interim final list (Story 5.5 replaces it): once the room's match has run its course for her.
+  const showFinal = room && (live.ended !== null || outcome?.kind === 'completed');
 
   const answerable =
     live.phase === 'open' && live.myAnswer === null && reveal === null && !reconnecting && outcome === null;
@@ -389,21 +408,11 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
           </div>
         ) : null}
 
-        <ScoreStrip
-          live={live}
-          trailing={
-            inPlay ? (
-              <Button
-                variant="danger-text"
-                data-testid="leave-button"
-                className="ml-auto"
-                onClick={() => setDialogOpen(true)}
-              >
-                {t('match.leave')}
-              </Button>
-            ) : null
-          }
-        />
+        {room ? (
+          <RoomHeader live={live} trailing={leaveButton} />
+        ) : (
+          <ScoreStrip live={live} trailing={leaveButton} />
+        )}
 
         {leftOpponents.map((opponent) => (
           <p key={opponent.participantId} data-testid="notice-opponent-left" className="mt-2 text-label text-muted">
@@ -415,7 +424,11 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
             <p data-testid="notice-forfeited" className="text-body font-bold text-ink">
               {forfeitedNotice}
             </p>
-            {outcome === initialOutcome.current ? (
+            {room ? (
+              <Link to="/" className={HOME_LINK}>
+                {t('common.home')}
+              </Link>
+            ) : outcome === initialOutcome.current ? (
               <Link to="/results" className={HOME_LINK}>
                 {t('results.title')}
               </Link>
@@ -424,9 +437,15 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
         ) : null}
 
         {!started || !view ? (
-          <h1 ref={headingRef} tabIndex={-1} className="mt-8 font-title text-title">
-            {t('match.getReady')}
-          </h1>
+          <>
+            <h1 ref={headingRef} tabIndex={-1} className="mt-8 font-title text-title">
+              {t('match.getReady')}
+            </h1>
+            {room && live.firstQuestionAt !== null ? (
+              <Countdown firstQuestionAt={live.firstQuestionAt} clockOffsetMs={clockOffsetMs} />
+            ) : null}
+            {room ? <RoomStandings live={live} /> : null}
+          </>
         ) : (
           <>
             {own ? (
@@ -494,6 +513,8 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
                     : t('match.firstTapHint')}
               </p>
             )}
+
+            {room ? showFinal ? <RoomFinal live={live} /> : <RoomStandings live={live} /> : null}
 
           </>
         )}

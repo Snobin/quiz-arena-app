@@ -1,6 +1,8 @@
 package in.minnal.game.room.application;
 
 import in.minnal.contracts.realtime.RoomClosedReason;
+import in.minnal.game.match.application.MatchRegistry;
+import in.minnal.game.matchmaking.application.QuestionSetClient;
 import in.minnal.game.platform.drain.DrainState;
 import in.minnal.game.platform.infrastructure.security.MinnalPrincipal;
 import in.minnal.game.platform.session.Activity;
@@ -52,7 +54,8 @@ import org.springframework.web.socket.messaging.SessionSubscribeEvent;
  * A {@code sub} with {@value #MAX_FAILED_LOOKUPS} failed lookups (no live room for the code) in a rolling minute is
  * refused with {@code RATE_LIMITED} until the oldest of them is a minute old; successful joins never count.
  *
- * <p>A draining service closes its open lobbies at once ({@code ROOM_CLOSED SERVER_DRAINING}); hosts re-create.
+ * <p>A draining service closes its open lobbies at once ({@code ROOM_CLOSED SERVER_DRAINING}); hosts re-create. A room
+ * whose match runs (Story 5.4) plays on: the match drain waits for it, and the room ends with its match.
  * Codes are never logged.
  */
 @Component
@@ -135,10 +138,14 @@ public class RoomRegistry implements RoomAccess, DisposableBean {
     private final RoomSettings settings;
     private final RoomCodes roomCodes;
     private final RoomMetrics metrics;
+    private final QuestionSetClient questions;
+    private final MatchRegistry matches;
 
     public RoomRegistry(DrainState drain, ParticipationRegistry participation, PlayerSessions sessions,
             PlayerChannel channel, RoomBroadcaster broadcaster, Clock clock, RoomTimers timers, RoomSettings settings,
-            RoomCodes roomCodes, MeterRegistry meters) {
+            RoomCodes roomCodes, MeterRegistry meters, QuestionSetClient questions, MatchRegistry matches) {
+        this.questions = questions;
+        this.matches = matches;
         this.drain = drain;
         this.participation = participation;
         this.sessions = sessions;
@@ -176,7 +183,7 @@ public class RoomRegistry implements RoomAccess, DisposableBean {
             String name = host.name() == null || host.name().isBlank() ? "Player" : host.name();
             RoomState state = new RoomState(roomId, code, host.sub(), name, config, now, now.plus(settings.ttl()));
             room = new RoomActor(state, settings, clock, timers, channel, broadcaster, sessions::hasSession,
-                    this::released, this::closed);
+                    this::released, this::closed, questions, matches, metrics, drain::isDraining);
             codes.put(code, roomId);
             rooms.put(roomId, room);
             claims.computeIfAbsent(roomId, id -> new HashSet<>()).add(host.sub());
@@ -330,7 +337,7 @@ public class RoomRegistry implements RoomAccess, DisposableBean {
         long deadline = System.nanoTime() + DRAIN_WAIT.toNanos();
         synchronized (this) {
             try {
-                while (!rooms.isEmpty()) {
+                while (rooms.values().stream().anyMatch(room -> !room.inMatch())) {
                     long left = deadline - System.nanoTime();
                     if (left <= 0) {
                         log.warn("drain: {} room(s) did not close in {}", rooms.size(), DRAIN_WAIT);

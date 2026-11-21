@@ -5,6 +5,7 @@ import type {
   ErrorCode,
   MatchEndedPayload,
   MatchFoundPayload,
+  MatchMode,
   Participant,
   QuestionRevealedPayload,
   QuestionStartedPayload,
@@ -70,10 +71,17 @@ export type MatchOutcome = {
  */
 export type LiveMatch = {
   matchId: string;
+  /** MATCH_FOUND's mode; null after a rejoin, whose SNAPSHOT does not carry it (more than two players then means a room). */
+  mode: MatchMode | null;
   participants: Participant[];
   selfParticipantId: string;
   /** Questions in the match (MATCH_FOUND questionCount). */
   total: number;
+  /**
+   * A Battle Room match's server instant for Q1 (ROOM_MATCH_STARTED): the 3-2-1 counts down to it. Null for a 1v1 and
+   * after a rejoin.
+   */
+  firstQuestionAt: string | null;
   /** MATCH_FOUND's question source; null after a rejoin, whose SNAPSHOT does not carry it (no report link then). */
   questionSource: QuestionSource | null;
   /** The Topic Duel topic (MATCH_FOUND, or a rejoin's SNAPSHOT); absent in Quick Match. */
@@ -158,9 +166,16 @@ export const INITIAL_LIVE_GAME: LiveGameState = {
   rematch: null,
 };
 
-/** A fresh live match for a MATCH_FOUND. */
-export function liveMatchFor(found: MatchFoundPayload): LiveMatch {
+/** Whether the match is a Battle Room's (a room has a mode, or, after a rejoin, more than two players). */
+export function isRoomMatch(match: Pick<LiveMatch, 'mode' | 'participants'>): boolean {
+  return match.mode === 'BATTLE_ROOM' || (match.mode === null && match.participants.length > 2);
+}
+
+/** A fresh live match for a MATCH_FOUND (or, as the same shape, a ROOM_MATCH_STARTED, which adds `firstQuestionAt`). */
+export function liveMatchFor(found: MatchFoundPayload, firstQuestionAt?: string): LiveMatch {
   return liveMatchBase({
+    mode: found.mode,
+    firstQuestionAt,
     matchId: found.matchId,
     participants: found.participants,
     selfParticipantId: found.selfParticipantId,
@@ -175,6 +190,8 @@ export function liveMatchFor(found: MatchFoundPayload): LiveMatch {
  * rejoin after a reload, where a SNAPSHOT (participants, total, `selfParticipantId`) is all there is.
  */
 export function liveMatchBase(base: {
+  mode?: MatchMode;
+  firstQuestionAt?: string;
   matchId: string;
   participants: Participant[];
   selfParticipantId: string;
@@ -184,6 +201,8 @@ export function liveMatchBase(base: {
 }): LiveMatch {
   return {
     matchId: base.matchId,
+    mode: base.mode ?? null,
+    firstQuestionAt: base.firstQuestionAt ?? null,
     participants: base.participants,
     selfParticipantId: base.selfParticipantId,
     total: base.total,
@@ -219,5 +238,6 @@ export {
   leaveMatch,
   rejoinMatch,
   requestRematch,
+  startRoomMatch,
   submitAnswer,
 } from './connection.ts';

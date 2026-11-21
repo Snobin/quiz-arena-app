@@ -14,6 +14,7 @@ minnal:
     window: 200ms
     close-grace: 50ms
     reveal-hold: 30ms
+    room-reveal-hold: 30ms
     drain-timeout: 10s
   bot:
     min-delay: 20ms

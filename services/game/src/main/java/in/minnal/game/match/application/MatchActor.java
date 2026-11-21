@@ -86,6 +86,13 @@ public final class MatchActor implements AutoCloseable {
     private final Map<String, Long> graceEpochs = new HashMap<>();
     /** Each human's armed grace timer, cancelled on a reconnect. Actor thread only. */
     private final Map<String, Future<?>> graceTimers = new HashMap<>();
+    /** Battle Room: the instant Q1 opens, fixed by the room before it told the clients; null otherwise. */
+    private final Instant firstQuestionAt;
+    /** A room's coalesced {@code SCOREBOARD}: when the last one went, whether answers wait for the next, their trigger. */
+    private Instant lastScoreboardAt;
+    private boolean scoreboardDirty;
+    private Instant scoreboardTrigger;
+    private Future<?> scoreboardTimer;
     private volatile boolean failed;
     private volatile boolean aborted;
     private volatile boolean ended;
@@ -121,6 +128,19 @@ public final class MatchActor implements AutoCloseable {
             PlayerChannel channel, MatchBroadcaster broadcaster, BotBrain bots, MatchMetrics metrics,
             Consumer<MatchActor> onEnded, Predicate<String> hasSession, Consumer<String> onForfeited,
             MatchCompletedPublisher publisher) {
+        this(setup, state, settings, clock, timers, channel, broadcaster, bots, metrics, onEnded, hasSession, onForfeited,
+                publisher, null);
+    }
+
+    /**
+     * @param firstQuestionAt a Battle Room's fixed instant for Q1 (its {@code startedAt}), replacing the lead-in; null
+     *                        for the lead-in of the settings
+     */
+    public MatchActor(MatchSetup setup, MatchState state, MatchSettings settings, Clock clock, MatchTimers timers,
+            PlayerChannel channel, MatchBroadcaster broadcaster, BotBrain bots, MatchMetrics metrics,
+            Consumer<MatchActor> onEnded, Predicate<String> hasSession, Consumer<String> onForfeited,
+            MatchCompletedPublisher publisher, Instant firstQuestionAt) {
+        this.firstQuestionAt = firstQuestionAt;
         this.publisher = publisher;
         this.hasSession = hasSession;
         this.onForfeited = onForfeited;
@@ -134,6 +154,7 @@ public final class MatchActor implements AutoCloseable {
         this.bots = bots;
         this.metrics = metrics;
         this.onEnded = onEnded;
+        state.deferScoreboard(!settings.scoreboardCoalesceFor(setup.mode()).isZero());
         this.actor = new Actor<>("match-" + setup.matchId().toString().substring(0, 8), this::handle);
     }
 
@@ -188,7 +209,7 @@ public final class MatchActor implements AutoCloseable {
         }
         try {
             switch (event) {
-                case MatchEvent.Begin begin -> after(settings.leadIn(), due -> new MatchEvent.NextQuestion(0, due));
+                case MatchEvent.Begin begin -> onBegin();
                 case MatchEvent.NextQuestion next -> openQuestion(next);
                 case MatchEvent.Answer answer -> onAnswer(answer, answer.receivedAt());
                 // A bot's answer is an ordinary answer, stamped when its timer fired.
@@ -200,6 +221,7 @@ public final class MatchActor implements AutoCloseable {
                 case MatchEvent.GraceExpired expired -> onGraceExpired(expired);
                 case MatchEvent.Leave leave -> forfeit(leave.sub());
                 case MatchEvent.Resync resync -> onResync(resync);
+                case MatchEvent.FlushScoreboard flush -> onFlushScoreboard(flush.index());
             }
         } catch (RuntimeException e) {
             // A match that cannot go on must not hold its players forever.
@@ -212,6 +234,22 @@ public final class MatchActor implements AutoCloseable {
                 log.atWarn().addKeyValue("matchId", matchId()).setCause(abortFailure).log("could not broadcast the abort");
             }
             end();
+        }
+    }
+
+    private void onBegin() {
+        if (firstQuestionAt != null) {
+            at(firstQuestionAt, new MatchEvent.NextQuestion(0, firstQuestionAt));
+        } else {
+            after(settings.leadIn(), due -> new MatchEvent.NextQuestion(0, due));
+        }
+        if (firstQuestionAt != null) {
+            // A member whose session dropped while the room was starting has the match's grace to come back.
+            for (String sub : setup.humans().keySet()) {
+                if (!hasSession.test(sub)) {
+                    onDisconnect(sub);
+                }
+            }
         }
     }
 
@@ -332,7 +370,9 @@ public final class MatchActor implements AutoCloseable {
     }
 
     private void openQuestion(MatchEvent.NextQuestion next) {
-        Instant now = clock.instant();
+        // A room's Q1 opens at the instant it promised the clients, whatever the timer's jitter.
+        Instant now = next.index() == 0 && firstQuestionAt != null ? firstQuestionAt : clock.instant();
+        resetScoreboard();
         ServerMessage<QuestionStartedPayload> started = state.startQuestion(next.index(), now);
         broadcast(started, next.dueAt());
         int index = next.index();
@@ -360,7 +400,11 @@ public final class MatchActor implements AutoCloseable {
                     channel.toPlayer(replyTo.sub(), accepted.ack());
                     metrics.ack(answer.receivedAt(), clock.instant());
                 }
-                broadcast(accepted.scoreboard(), trigger);
+                if (accepted.scoreboard() != null) {
+                    broadcast(accepted.scoreboard(), trigger);
+                } else if (!state.allAnswered()) {
+                    scoreboardAfterAnswer(trigger);
+                }
                 if (state.allAnswered()) {
                     closeEarly();
                 }
@@ -374,6 +418,49 @@ public final class MatchActor implements AutoCloseable {
                 // Only the first answer counts; a later one changes nothing and gets no reply.
             }
         }
+    }
+
+    /** A room's {@code SCOREBOARD}: at most one per coalescing window, the first answer of a quiet spell going out at once. */
+    private void scoreboardAfterAnswer(Instant trigger) {
+        if (scoreboardDirty) {
+            return; // a flush is already armed; it carries this answer too
+        }
+        Duration window = settings.scoreboardCoalesceFor(state.mode());
+        Instant now = clock.instant();
+        Duration since = lastScoreboardAt == null ? window : Duration.between(lastScoreboardAt, now);
+        if (since.compareTo(window) >= 0) {
+            sendScoreboard(trigger);
+            return;
+        }
+        scoreboardDirty = true;
+        scoreboardTrigger = trigger;
+        int index = state.currentIndex();
+        pending.removeIf(Future::isDone);
+        scoreboardTimer = timers.schedule(window.minus(since), () -> actor.tell(new MatchEvent.FlushScoreboard(index)));
+        pending.add(scoreboardTimer);
+    }
+
+    private void onFlushScoreboard(int index) {
+        if (scoreboardDirty && state.phase() == MatchPhase.QUESTION_OPEN && index == state.currentIndex()) {
+            sendScoreboard(scoreboardTrigger);
+        }
+    }
+
+    private void sendScoreboard(Instant trigger) {
+        scoreboardDirty = false;
+        scoreboardTimer = null;
+        lastScoreboardAt = clock.instant();
+        broadcast(state.scoreboard(lastScoreboardAt), trigger);
+    }
+
+    /** The question is over (or a new one opens): no scoreboard is waiting and the next one may go at once. */
+    private void resetScoreboard() {
+        if (scoreboardTimer != null) {
+            scoreboardTimer.cancel(false);
+            scoreboardTimer = null;
+        }
+        scoreboardDirty = false;
+        lastScoreboardAt = null;
     }
 
     /**
@@ -393,13 +480,14 @@ public final class MatchActor implements AutoCloseable {
         if (reveal.isEmpty()) {
             return; // a stale timer
         }
+        resetScoreboard();
         broadcast(reveal.get(), close.dueAt());
         if (state.phase() == MatchPhase.ENDED) {
             log.atInfo().addKeyValue("matchId", matchId()).log("match ended after {} questions", state.total());
             end();
         } else {
             int nextIndex = close.index() + 1;
-            after(settings.revealHold(), due -> new MatchEvent.NextQuestion(nextIndex, due));
+            after(settings.revealHoldFor(state.mode()), due -> new MatchEvent.NextQuestion(nextIndex, due));
         }
     }
 
@@ -464,7 +552,10 @@ public final class MatchActor implements AutoCloseable {
                 log.atWarn().addKeyValue("matchId", matchId()).setCause(e).log("could not send MATCH_ENDED to a player");
             }
         }
-        publisher.publish(outcome.completedEvent(endedAt));
+        if (state.mode() != MatchMode.BATTLE_ROOM) {
+            // Story 5.5 turns the Battle Room's completed event on; until then a room match leaves no event.
+            publisher.publish(outcome.completedEvent(endedAt));
+        }
     }
 
     /** The state, for tests that read it once the actor is idle or ended. */

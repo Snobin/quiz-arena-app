@@ -1,15 +1,21 @@
 import {
+  isMatchMode,
   parseErrorPayload,
   parseParticipant,
   parseServerMessage,
+  parseTopic,
   ROOM_CLOSED_REASONS,
+  ROOM_LOBBY_PHASES,
   ROOM_ROLES,
+  ROOM_START_FAILED_REASONS,
   type ErrorPayload,
   type Participant,
   type RoomClosedPayload,
   type RoomConfigRequest,
   type RoomJoinedPayload,
   type RoomLobbyUpdatedPayload,
+  type RoomMatchStartedPayload,
+  type RoomStartFailedPayload,
   type RoomView,
   type ServerMessage,
 } from '../../realtime/protocol.ts';
@@ -70,8 +76,27 @@ export function parseRoomLobbyUpdated(value: unknown): RoomLobbyUpdatedPayload |
   const room = parseRoomView(value.room);
   const joined = value.joined ?? [];
   const left = value.left ?? [];
-  if (!room || !isIdList(joined) || !isIdList(left)) return null;
-  return { room, joined, left };
+  // `phase` (Story 5.4) reads as LOBBY when absent; anything else but the two phases rejects the frame.
+  const phase = value.phase ?? 'LOBBY';
+  if (!room || !isIdList(joined) || !isIdList(left) || !(ROOM_LOBBY_PHASES as readonly unknown[]).includes(phase)) return null;
+  return { room, joined, left, phase: phase as RoomLobbyUpdatedPayload['phase'] };
+}
+
+export function parseRoomStartFailed(value: unknown): RoomStartFailedPayload | null {
+  if (!isObject(value) || !(ROOM_START_FAILED_REASONS as readonly unknown[]).includes(value.reason)) return null;
+  return { reason: value.reason as RoomStartFailedPayload['reason'] };
+}
+
+export function parseRoomMatchStarted(value: unknown): RoomMatchStartedPayload | null {
+  if (!isObject(value)) return null;
+  const { roomId, matchId, mode, participants, questionCount, firstQuestionAt } = value;
+  if (typeof roomId !== 'string' || typeof matchId !== 'string' || !isMatchMode(mode) || !isInt(questionCount)) return null;
+  if (typeof firstQuestionAt !== 'string' || !Number.isFinite(Date.parse(firstQuestionAt)) || !Array.isArray(participants)) return null;
+  const parsed = participants.map(parseParticipant);
+  if (parsed.some((p) => p === null)) return null;
+  const topic = parseTopic(value.topic);
+  if (topic === null) return null;
+  return { roomId, matchId, mode, participants: parsed as Participant[], questionCount, firstQuestionAt, ...(topic && { topic }) };
 }
 
 export function parseRoomClosed(value: unknown): RoomClosedPayload | null {
@@ -84,6 +109,8 @@ export type RoomIncoming =
   | { type: 'ROOM_JOINED'; message: ServerMessage; payload: RoomJoinedPayload }
   | { type: 'ROOM_LOBBY_UPDATED'; message: ServerMessage; payload: RoomLobbyUpdatedPayload }
   | { type: 'ROOM_CLOSED'; message: ServerMessage; payload: RoomClosedPayload }
+  | { type: 'ROOM_START_FAILED'; message: ServerMessage; payload: RoomStartFailedPayload }
+  | { type: 'ROOM_MATCH_STARTED'; message: ServerMessage; payload: RoomMatchStartedPayload }
   | { type: 'ERROR'; message: ServerMessage; payload: ErrorPayload }
   | { type: 'OTHER'; message: ServerMessage };
 
@@ -109,6 +136,14 @@ export function parseRoomIncoming(body: string): RoomIncoming | null {
     case 'ROOM_CLOSED': {
       const payload = parseRoomClosed(message.payload);
       return payload ? { type: 'ROOM_CLOSED', message, payload } : null;
+    }
+    case 'ROOM_START_FAILED': {
+      const payload = parseRoomStartFailed(message.payload);
+      return payload ? { type: 'ROOM_START_FAILED', message, payload } : null;
+    }
+    case 'ROOM_MATCH_STARTED': {
+      const payload = parseRoomMatchStarted(message.payload);
+      return payload ? { type: 'ROOM_MATCH_STARTED', message, payload } : null;
     }
     case 'ERROR': {
       const payload = parseErrorPayload(message.payload);

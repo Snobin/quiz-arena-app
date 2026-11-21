@@ -56,4 +56,8 @@ public sealed interface MatchEvent {
     /** She asks for a {@code SNAPSHOT}, sent to that one session (after a reconnect or a {@code seq} gap). */
     record Resync(String sub, String sessionId) implements MatchEvent {
     }
+
+    /** Timer: the coalescing window of a room's {@code SCOREBOARD} closed; stale unless {@code index} is still open. */
+    record FlushScoreboard(int index) implements MatchEvent {
+    }
 }

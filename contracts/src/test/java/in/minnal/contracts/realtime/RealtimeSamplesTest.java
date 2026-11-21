@@ -87,6 +87,19 @@ class RealtimeSamplesTest {
                         ServerMessage.roomBroadcast(MessageType.ROOM_LOBBY_UPDATED, ROOM_ID, 2, SERVER_TIME,
                                 new RoomLobbyUpdatedPayload(joinedLobby, List.of(BOT), List.of())),
                         new TypeReference<ServerMessage<RoomLobbyUpdatedPayload>>() { }),
+                new Sample("room-lobby-updated-starting.json",
+                        ServerMessage.roomBroadcast(MessageType.ROOM_LOBBY_UPDATED, ROOM_ID, 3, SERVER_TIME,
+                                new RoomLobbyUpdatedPayload(joinedLobby, List.of(), List.of(), RoomLobbyPhase.STARTING)),
+                        new TypeReference<ServerMessage<RoomLobbyUpdatedPayload>>() { }),
+                new Sample("room-start-failed.json",
+                        ServerMessage.roomBroadcast(MessageType.ROOM_START_FAILED, ROOM_ID, 4, SERVER_TIME,
+                                new RoomStartFailedPayload(RoomStartFailedReason.TOPIC_UNAVAILABLE)),
+                        new TypeReference<ServerMessage<RoomStartFailedPayload>>() { }),
+                new Sample("room-match-started.json",
+                        ServerMessage.roomBroadcast(MessageType.ROOM_MATCH_STARTED, ROOM_ID, 5, SERVER_TIME,
+                                new RoomMatchStartedPayload(ROOM_ID, MATCH_ID, MatchMode.BATTLE_ROOM,
+                                        joinedLobby.participants(), 10, TOPIC, Instant.parse("2026-11-12T10:15:33.623Z"))),
+                        new TypeReference<ServerMessage<RoomMatchStartedPayload>>() { }),
                 new Sample("room-closed.json",
                         ServerMessage.roomBroadcast(MessageType.ROOM_CLOSED, ROOM_ID, 3, SERVER_TIME,
                                 new RoomClosedPayload(RoomClosedReason.EXPIRED)),
@@ -314,7 +327,8 @@ class RealtimeSamplesTest {
         Map<String, List<String>> enums = new LinkedHashMap<>();
         for (Class<? extends Enum<?>> type : List.<Class<? extends Enum<?>>>of(MessageType.class, ErrorCode.class,
                 MatchMode.class, ParticipantKind.class, QuestionSource.class, SnapshotPhase.class, AbortReason.class,
-                RematchDeclineReason.class, RoomRole.class, RoomClosedReason.class)) {
+                RematchDeclineReason.class, RoomRole.class, RoomClosedReason.class, RoomLobbyPhase.class,
+                RoomStartFailedReason.class)) {
             enums.put(type.getSimpleName(), Arrays.stream(type.getEnumConstants()).map(Enum::name).toList());
         }
         assertGolden("enums.json", ContractJson.MAPPER.writeValueAsString(enums) + "\n");
@@ -403,7 +417,7 @@ class RealtimeSamplesTest {
         assertThat(room.get("source").propertyNames()).containsExactly("type", "topicId");
         JsonNode updated = ContractJson.MAPPER.valueToTree(samples().stream()
                 .filter(s -> s.file().equals("room-lobby-updated.json")).findFirst().orElseThrow().value());
-        assertThat(updated.get("payload").propertyNames()).containsExactly("room", "joined", "left");
+        assertThat(updated.get("payload").propertyNames()).containsExactly("room", "joined", "left", "phase");
         assertThat(ContractJson.MAPPER.valueToTree(new RoomLobbyUpdatedPayload(null, null, null)).get("joined").isArray()).isTrue();
         JsonNode busy = ContractJson.MAPPER.valueToTree(ServerMessage.error(ErrorCode.ALREADY_IN_MATCH, null, ROOM_ID, null, SERVER_TIME));
         assertThat(busy.get("roomId").asString()).isEqualTo(ROOM_ID.toString());

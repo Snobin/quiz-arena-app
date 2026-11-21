@@ -8,5 +8,7 @@
   "AbortReason" : [ "ALL_LEFT", "ERROR" ],
   "RematchDeclineReason" : [ "CANCELLED", "UNAVAILABLE" ],
   "RoomRole" : [ "HOST", "MEMBER" ],
-  "RoomClosedReason" : [ "HOST_LEFT", "HOST_DISCONNECTED", "EXPIRED", "SERVER_DRAINING" ]
+  "RoomClosedReason" : [ "HOST_LEFT", "HOST_DISCONNECTED", "EXPIRED", "SERVER_DRAINING", "MATCH_ENDED" ],
+  "RoomLobbyPhase" : [ "LOBBY", "STARTING" ],
+  "RoomStartFailedReason" : [ "TOPIC_UNAVAILABLE", "UNAVAILABLE" ]
 }
