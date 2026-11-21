@@ -7,6 +7,8 @@ import { ensureProfileLoaded, resetProfile, useProfile } from './profile/profile
 import { PageColumn } from './design/PageColumn.tsx';
 import { GuestHome } from './screens/home/GuestHome.tsx';
 import { RegisteredHome } from './screens/home/RegisteredHome.tsx';
+import { ChunkErrorBoundary } from './shell/ChunkErrorBoundary.tsx';
+import { lazyWithRetry } from './shell/lazyWithRetry.ts';
 import { AppShell } from './shell/AppShell.tsx';
 import { pendingAttr, ScreenReady } from './shell/ScreenReady.tsx';
 import { navigate, usePathname, useRouterSync } from './shell/router.ts';
@@ -14,21 +16,21 @@ import { AdminRoute } from './screens/admin/AdminRoute.tsx';
 import { safeReturnPath } from './screens/home/signInPath.ts';
 
 // Screens reached after first paint load on demand (entry budget).
-const LiveMatchScreen = lazy(() => import('./screens/match/LiveMatchScreen.tsx').then((m) => ({ default: m.LiveMatchScreen })));
-const MatchmakingScreen = lazy(() => import('./screens/matchmaking/MatchmakingScreen.tsx').then((m) => ({ default: m.MatchmakingScreen })));
-const RanksScreen = lazy(() => import('./screens/RanksScreen.tsx').then((m) => ({ default: m.RanksScreen })));
-const ResultsScreen = lazy(() => import('./screens/results/ResultsScreen.tsx').then((m) => ({ default: m.ResultsScreen })));
-const RoomsScreen = lazy(() => import('./screens/RoomsScreen.tsx').then((m) => ({ default: m.RoomsScreen })));
-const SettingsScreen = lazy(() => import('./screens/SettingsScreen.tsx').then((m) => ({ default: m.SettingsScreen })));
-const MeScreen = lazy(() => import('./screens/MeScreen.tsx').then((m) => ({ default: m.MeScreen })));
-const SignInPrompt = lazy(() => import('./screens/SignInPrompt.tsx').then((m) => ({ default: m.SignInPrompt })));
+const LiveMatchScreen = lazyWithRetry(() => import('./screens/match/LiveMatchScreen.tsx').then((m) => ({ default: m.LiveMatchScreen })));
+const MatchmakingScreen = lazyWithRetry(() => import('./screens/matchmaking/MatchmakingScreen.tsx').then((m) => ({ default: m.MatchmakingScreen })));
+const RanksScreen = lazyWithRetry(() => import('./screens/RanksScreen.tsx').then((m) => ({ default: m.RanksScreen })));
+const ResultsScreen = lazyWithRetry(() => import('./screens/results/ResultsScreen.tsx').then((m) => ({ default: m.ResultsScreen })));
+const RoomsScreen = lazyWithRetry(() => import('./screens/RoomsScreen.tsx').then((m) => ({ default: m.RoomsScreen })));
+const SettingsScreen = lazyWithRetry(() => import('./screens/SettingsScreen.tsx').then((m) => ({ default: m.SettingsScreen })));
+const MeScreen = lazyWithRetry(() => import('./screens/MeScreen.tsx').then((m) => ({ default: m.MeScreen })));
+const SignInPrompt = lazyWithRetry(() => import('./screens/SignInPrompt.tsx').then((m) => ({ default: m.SignInPrompt })));
 
-const ProfileSetup = lazy(() => import('./screens/profile/ProfileSetup.tsx').then((m) => ({ default: m.ProfileSetup })));
+const ProfileSetup = lazyWithRetry(() => import('./screens/profile/ProfileSetup.tsx').then((m) => ({ default: m.ProfileSetup })));
 
-const AuthReturn = lazy(() => import('./screens/AuthReturn.tsx').then((m) => ({ default: m.AuthReturn })));
+const AuthReturn = lazyWithRetry(() => import('./screens/AuthReturn.tsx').then((m) => ({ default: m.AuthReturn })));
 
 // The topic picker and the Duel and Solo stubs load only when opened (entry budget). Paths are matched by prefix.
-const TopicsRoutes = lazy(() => import('./screens/topics/TopicsRoutes.tsx'));
+const TopicsRoutes = lazyWithRetry(() => import('./screens/topics/TopicsRoutes.tsx'));
 const isTopicsPath = (pathname: string) => pathname === '/play/topics' || pathname.startsWith('/play/duel/') || pathname.startsWith('/practice/');
 
 /**
@@ -148,15 +150,19 @@ export function App() {
     profileLoading ? (
       <HomePending />
     ) : needsSetup || (pathname === '/profile/setup' && !setupNotNeeded) ? (
-      <Suspense fallback={<ScreenPending />}>
-        <ProfileSetup to={pathname === '/profile/setup' ? (new URLSearchParams(window.location.search).get('to') ?? '/') : `${pathname}${window.location.search}`} />
-        <ScreenReady />
-      </Suspense>
+      <ChunkErrorBoundary key="setup">
+        <Suspense fallback={<ScreenPending />}>
+          <ProfileSetup to={pathname === '/profile/setup' ? (new URLSearchParams(window.location.search).get('to') ?? '/') : `${pathname}${window.location.search}`} />
+          <ScreenReady />
+        </Suspense>
+      </ChunkErrorBoundary>
     ) : (
-      <Suspense key={pathname} fallback={<ScreenPending />}>
-        <Screen />
-        <ScreenReady />
-      </Suspense>
+      <ChunkErrorBoundary key={pathname}>
+        <Suspense fallback={<ScreenPending />}>
+          <Screen />
+          <ScreenReady />
+        </Suspense>
+      </ChunkErrorBoundary>
     );
   return (
     <AppShell>

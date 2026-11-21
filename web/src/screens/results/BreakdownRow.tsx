@@ -1,4 +1,4 @@
-import { lazy, Suspense, useId, useState } from 'react';
+import { Suspense, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatNumber, formatSigned, formatTenths } from '../../i18n/format.ts';
 import { uiLanguage } from '../../i18n/index.ts';
@@ -6,6 +6,8 @@ import { detectLanguage } from '../../i18n/Lang.tsx';
 import type { BreakdownAnswer, QuestionSource, ResultQuestion } from '../../realtime/protocol.ts';
 import { ReportQuestion } from '../../report/ReportQuestion.tsx';
 import { baseLanguage } from '../match/QuestionCard.tsx';
+import { ChunkErrorBoundary } from '../../shell/ChunkErrorBoundary.tsx';
+import { lazyWithRetry } from '../../shell/lazyWithRetry.ts';
 import { RevealDetails } from '../match/RevealDetails.tsx';
 
 /**
@@ -17,7 +19,7 @@ export type RowReport = { matchId: string; questionSource: QuestionSource; marke
 type BreakdownRowProps = { index: number; question: ResultQuestion; answer: BreakdownAnswer; report?: RowReport; practise?: boolean };
 
 // The "Practise this topic" link, its strings and its start logic load only when a row shows it (the bundle budget).
-const PractiseLink = lazy(() => import('./PractiseLink.tsx'));
+const PractiseLink = lazyWithRetry(() => import('./PractiseLink.tsx'));
 
 const HEADER = 'flex w-full min-h-target-min items-center gap-3 px-4 py-2 text-left text-body';
 
@@ -128,9 +130,11 @@ function Details({
         />
       ) : null}
       {practise && question.topicId ? (
-        <Suspense fallback={null}>
-          <PractiseLink topicId={question.topicId} index={index} />
-        </Suspense>
+        <ChunkErrorBoundary variant="silent">
+          <Suspense fallback={null}>
+            <PractiseLink topicId={question.topicId} index={index} />
+          </Suspense>
+        </ChunkErrorBoundary>
       ) : null}
     </div>
   );
