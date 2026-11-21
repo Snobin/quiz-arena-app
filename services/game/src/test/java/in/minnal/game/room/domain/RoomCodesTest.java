@@ -3,6 +3,8 @@ package in.minnal.game.room.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.util.HashSet;
 import java.util.Optional;
@@ -10,6 +12,8 @@ import java.util.Random;
 import java.util.Set;
 import java.util.random.RandomGenerator;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 class RoomCodesTest {
 
@@ -81,6 +85,29 @@ class RoomCodesTest {
         assertThat(RoomCodes.normalize("K7M-Q2O")).isEqualTo(Optional.empty()); // O is not in the alphabet
         assertThat(RoomCodes.normalize("K7M-Q2X1")).isEmpty();
         assertThat(RoomCodes.normalize(null)).isEmpty();
+    }
+
+    /** Story 5.3: the table shared with the web app's normaliser ({@code contracts/samples/code-normalisation.json}). */
+    @Test
+    void theSharedNormaliserTablePasses() throws Exception {
+        JsonNode table = JsonMapper.builder().build().readTree(Files.readString(fixture()));
+        JsonNode cases = table.get("cases");
+        assertThat(cases.size()).isGreaterThan(20);
+        for (JsonNode c : cases) {
+            String input = c.get("input").asString();
+            JsonNode code = c.get("code");
+            Optional<String> expected = code == null || code.isNull() ? Optional.empty() : Optional.of(code.asString());
+            assertThat(RoomCodes.normalize(input)).as("normalize(%s)", input).isEqualTo(expected);
+        }
+    }
+
+    static Path fixture() {
+        Path dir = Path.of("").toAbsolutePath();
+        while (dir != null && !Files.exists(dir.resolve("contracts/samples/code-normalisation.json"))) {
+            dir = dir.getParent();
+        }
+        assertThat(dir).as("the repo root above the working directory").isNotNull();
+        return dir.resolve("contracts/samples/code-normalisation.json");
     }
 
     @Test

@@ -45,6 +45,8 @@ public final class Destinations {
     public static final String ROOM_START = "/room/{roomId}/start";
     public static final String ROOM_LEAVE = "/room/{roomId}/leave";
     public static final String ROOM_PLAY_AGAIN = "/room/{roomId}/playAgain";
+    /** A member's lobby {@code resync} (a {@code seq} gap): answered with a fresh private {@code ROOM_JOINED} (Story 5.3). */
+    public static final String ROOM_RESYNC = "/room/{roomId}/resync";
 
     private Destinations() {
     }

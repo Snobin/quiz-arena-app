@@ -1,8 +1,11 @@
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { announce } from '../../shell/announce.ts';
 import { Link } from '../../shell/Link.tsx';
-import { formatCode } from './roomCode.ts';
+import { navigate } from '../../shell/router.ts';
+import { formatCode, normalizeCode } from './roomCode.ts';
 import type { RoomError as RoomErrorValue } from './roomClient.ts';
-import { useRoom } from './roomClient.ts';
+import { roomClient, useRoom } from './roomClient.ts';
 import './roomCatalogue.ts';
 
 const LINK = 'hit-target inline-flex min-h-target-min items-center text-body font-semibold text-ink underline';
@@ -46,6 +49,88 @@ export function RoomError({ error, scope, returnTo }: { error: RoomErrorValue; s
       {action ? (
         <Link to={action.to} className={LINK}>
           {action.label}
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
+/** The inline message for a join that failed (Story 5.3), keyed by its code. */
+function joinText(t: ReturnType<typeof useTranslation>['t'], error: RoomErrorValue, typed: string): string {
+  switch (error.code) {
+    case 'BAD_CODE':
+      return t('rooms.join.error.badCode');
+    case 'ROOM_NOT_FOUND':
+      return t('rooms.join.error.notFound');
+    case 'ROOM_EXPIRED':
+      return t('rooms.join.error.expired', { code: formatCode(normalizeCode(typed) ?? typed.trim()) });
+    case 'ROOM_FULL':
+      return t('rooms.join.error.full');
+    case 'ROOM_STARTED':
+      return t('rooms.join.error.started');
+    case 'RATE_LIMITED':
+      return t('rooms.join.error.rateLimited');
+    case 'ALREADY_IN_MATCH':
+      return t('rooms.error.busy');
+    case 'PROFILE_REQUIRED':
+      return t('rooms.join.error.profile');
+    case 'SERVER_DRAINING':
+      return t('rooms.error.draining');
+    case 'FORBIDDEN_MODE':
+      return t('rooms.error.forbidden');
+    case 'CONNECTION':
+    case 'TIMEOUT':
+      return t('rooms.error.connection');
+    default:
+      return t('rooms.join.error.generic');
+  }
+}
+
+/** Back to the room or match she is already in: a room is re-read from the socket (it knows the code), then opened. */
+function returnToActive(error: RoomErrorValue): void {
+  if (error.matchId) {
+    navigate('/match');
+    return;
+  }
+  const open = useRoom.getState().session;
+  if (open) {
+    navigate(`/r/${formatCode(open.code)}`);
+    return;
+  }
+  void roomClient()
+    .resume()
+    .then((found) => {
+      const session = useRoom.getState().session;
+      if (found && session) navigate(`/r/${formatCode(session.code)}`);
+    });
+}
+
+/**
+ * A failed join under the code field (`id` is the field's `aria-describedby`), announced politely once.
+ * `ALREADY_IN_MATCH` adds a button back to the match or room she is in.
+ */
+export function JoinError({ id, error, typed }: { id: string; error: RoomErrorValue; typed: string }) {
+  const { t } = useTranslation();
+  const text = joinText(t, error, typed);
+  useEffect(() => {
+    announce(text);
+    // Once per error, not on every keystroke or language change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [error]);
+  const busyWithSomething = error.code === 'ALREADY_IN_MATCH' && (error.matchId !== undefined || error.roomId !== undefined);
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <p id={id} className="text-body text-brick">
+        {text}
+      </p>
+      {busyWithSomething ? (
+        <button type="button" onClick={() => returnToActive(error)} className={LINK}>
+          {t('rooms.error.busyReturn')}
+        </button>
+      ) : null}
+      {error.code === 'PROFILE_REQUIRED' ? (
+        <Link to={`/profile/setup?to=${encodeURIComponent('/rooms')}`} className={LINK}>
+          {t('rooms.error.profileLink')}
         </Link>
       ) : null}
     </div>

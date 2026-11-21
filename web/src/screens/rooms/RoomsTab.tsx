@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { session as authSession } from '../../auth/session.ts';
 import { Button } from '../../design/Button.tsx';
@@ -12,8 +12,9 @@ import { navigate } from '../../shell/router.ts';
 import { useOnline } from '../../shell/online.ts';
 import { createPath } from './pickerReturn.ts';
 import { loadRecentRooms, type RecentRoom } from './recentRooms.ts';
-import { formatCode } from './roomCode.ts';
-import { roomClient, useRoom, type RoomNotice } from './roomClient.ts';
+import { JoinError } from './RoomError.tsx';
+import { formatCode, normalizeCode } from './roomCode.ts';
+import { roomClient, useRoom, type RoomError, type RoomNotice } from './roomClient.ts';
 import { shortDate } from './roomTime.ts';
 import { findTopic, useCatalogue } from './useCatalogue.ts';
 import './roomCatalogue.ts';
@@ -23,6 +24,8 @@ const NOTICE_KEY = {
   DISCONNECTED: 'rooms.notice.disconnected',
   DRAINING: 'rooms.notice.draining',
   CLOSED: 'rooms.notice.closed',
+  HOST_CLOSED: 'rooms.notice.hostClosed',
+  LOST: 'rooms.notice.lost',
 } as const satisfies Record<RoomNotice, string>;
 
 function Chevron() {
@@ -37,13 +40,115 @@ function Chevron() {
 function Notice() {
   const { t } = useTranslation();
   const notice = useRoom((s) => s.notice);
+  const host = useRoom((s) => s.noticeHost);
+  // The host's name is inserted unchanged (never inflected).
+  const text = notice ? t(NOTICE_KEY[notice], { host: host ?? '' }) : '';
   useEffect(() => {
-    if (notice) announce(t(NOTICE_KEY[notice]));
+    if (notice) announce(text);
     // Said once per notice, not again when the language changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notice]);
   useEffect(() => () => roomClient().dismissNotice(), []);
-  return notice ? <p className="rounded-lg border border-hairline bg-card px-4 py-3 text-body text-ink">{t(NOTICE_KEY[notice])}</p> : null;
+  return notice ? <p className="rounded-lg border border-hairline bg-card px-4 py-3 text-body text-ink">{text}</p> : null;
+}
+
+/**
+ * Join with code (Story 5.3): a labelled field, Join and Enter-to-submit. A code that is not 6 alphabet characters is
+ * refused here without asking the server; a server refusal shows under the field (`aria-describedby` +
+ * `aria-invalid`), announced politely, and the typed code stays. A link's failed join arrives prefilled the same way.
+ */
+function JoinForm() {
+  const { t } = useTranslation();
+  const online = useOnline();
+  const failure = useRoom((s) => s.joinFailure);
+  const [typed, setTyped] = useState(failure?.typed ?? '');
+  const [error, setError] = useState<RoomError | null>(failure?.error ?? null);
+  const [sending, setSending] = useState(false);
+  const inFlight = useRef(false);
+  const fieldRef = useRef<HTMLInputElement>(null);
+  const errorId = 'roomsJoinError';
+
+  // A failed link join: shown once here, then forgotten by the client.
+  useEffect(() => {
+    if (failure) {
+      setTyped(failure.typed);
+      setError(failure.error);
+      roomClient().clearJoinFailure();
+    }
+  }, [failure]);
+
+  const submit = () => {
+    if (inFlight.current) return; // "…": taps are ignored while the join is out
+    const code = normalizeCode(typed);
+    if (!code) {
+      setError({ code: 'BAD_CODE' });
+      return;
+    }
+    inFlight.current = true;
+    setSending(true);
+    setError(null);
+    void roomClient()
+      .join(code)
+      .then((result) => {
+        inFlight.current = false;
+        setSending(false);
+        if (result.ok) navigate(`/r/${formatCode(result.session.code)}`);
+        else {
+          setError(result.error);
+          fieldRef.current?.focus();
+        }
+      });
+  };
+
+  return (
+    <section aria-labelledby="roomsJoin" className="flex flex-col gap-2">
+      <h2 id="roomsJoin" className="text-body font-semibold text-muted">
+        {t('rooms.join.heading')}
+      </h2>
+      <form
+        className="flex flex-col gap-2"
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          submit();
+        }}
+      >
+        <label htmlFor="roomsJoinCode" className="text-caption text-muted">
+          {t('rooms.join.label')}
+        </label>
+        <input
+          id="roomsJoinCode"
+          ref={fieldRef}
+          type="text"
+          inputMode="text"
+          autoCapitalize="characters"
+          autoComplete="off"
+          spellCheck={false}
+          value={typed}
+          onChange={(event) => {
+            setTyped(event.target.value);
+            if (error) setError(null);
+          }}
+          aria-invalid={error ? 'true' : undefined}
+          aria-describedby={error ? errorId : undefined}
+          className={[
+            'min-h-target-min w-full min-w-[0] rounded-md border-[1.5px] bg-card px-3 py-2 font-room-code text-body text-ink',
+            error ? 'border-brick' : 'border-ink',
+          ].join(' ')}
+        />
+        {error ? <JoinError id={errorId} error={error} typed={typed} /> : null}
+        {!online ? (
+          <Button variant="secondary" disabled disabledReason={t('rooms.offline')} className="w-full">
+            {t('rooms.join.button')}
+          </Button>
+        ) : (
+          <Button variant="secondary" type="submit" aria-busy={sending || undefined} className="w-full">
+            {sending ? t('rooms.join.sending') : t('rooms.join.button')}
+          </Button>
+        )}
+      </form>
+    </section>
+  );
 }
 
 /** A room she has open but is not looking at (she left for the topic picker): one row back into it. */
@@ -79,7 +184,7 @@ function RecentRow({ entry, name }: { entry: RecentRoom; name: string }) {
 }
 
 /**
- * The Rooms tab for a registered player (Story 5.2): Create room, Join with code (present but inert until Story 5.3) and
+ * The Rooms tab for a registered player (Story 5.2): Create room, Join with code (Story 5.3) and
  * up to 3 recently hosted rooms. A recent room whose topic is no longer in the catalogue is hidden.
  */
 export default function RoomsTab() {
@@ -106,35 +211,7 @@ export default function RoomsTab() {
           {t('rooms.create')}
         </Button>
 
-        <section aria-labelledby="roomsJoin" className="flex flex-col gap-2">
-          <h2 id="roomsJoin" className="text-body font-semibold text-muted">
-            {t('rooms.join.heading')}
-          </h2>
-          <form
-            className="flex flex-col gap-2"
-            onSubmit={(event) => {
-              // Joining arrives with Story 5.3: the field and button are here, and inert.
-              event.preventDefault();
-            }}
-          >
-            <label htmlFor="roomsJoinCode" className="text-caption text-muted">
-              {t('rooms.join.label')}
-            </label>
-            <input
-              id="roomsJoinCode"
-              type="text"
-              inputMode="text"
-              autoCapitalize="characters"
-              autoComplete="off"
-              spellCheck={false}
-              readOnly
-              className="min-h-target-min w-full min-w-[0] rounded-md border-[1.5px] border-ink bg-card px-3 py-2 font-room-code text-body text-ink"
-            />
-            <Button variant="secondary" disabled disabledReason={t('rooms.join.soon')} className="w-full">
-              {t('rooms.join.button')}
-            </Button>
-          </form>
-        </section>
+        <JoinForm />
 
         {rows.length > 0 ? (
           <section aria-labelledby="roomsRecent" className="flex flex-col gap-2">

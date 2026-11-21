@@ -1,9 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../../design/Button.tsx';
 import { PageColumn } from '../../design/PageColumn.tsx';
 import { roomLink } from '../../config/publicOrigin.ts';
-import { detectLanguage, Lang } from '../../i18n/Lang.tsx';
+import { detectLanguage } from '../../i18n/Lang.tsx';
 import { useDocumentTitle } from '../../i18n/useDocumentTitle.ts';
 import { announce } from '../../shell/announce.ts';
 import { isPlainLeftClick, Link } from '../../shell/Link.tsx';
@@ -11,6 +11,7 @@ import { navigate, setNavigationGuard } from '../../shell/router.ts';
 import { useOnline } from '../../shell/online.ts';
 import { useHideTabBar } from '../../shell/useHideTabBar.ts';
 import { CountStepper } from './CountStepper.tsx';
+import { JoinedChips } from './JoinedChips.tsx';
 import { pickerPath } from './pickerReturn.ts';
 import { RoomError } from './RoomError.tsx';
 import { clampCount, countLimits } from './roomConfig.ts';
@@ -211,11 +212,92 @@ function ConfigCard({ session, leaveForPicker }: { session: RoomSession; leaveFo
 }
 
 /**
- * The host's lobby at `/r/<code>` (Story 5.2): top bar, the code block with Share and copy, the config card with Edit,
- * who has joined, and the fixed start bar (disabled until Story 5.3 brings players and Story 5.4 starts the match).
- * No tab bar, no volt and no flash.
+ * The host's close confirm (Story 5.3), only when others are in the lobby: `role="alertdialog"`, "Stay" focused, a brick
+ * "Close room" text button; Esc (and Android back, through the lobby's guard) means Stay.
  */
-export default function HostLobby({ session }: { session: RoomSession }) {
+function CloseRoomDialog({ onStay, onClose }: { onStay: () => void; onClose: () => void }) {
+  const { t } = useTranslation();
+  const titleId = useId();
+  const stayRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    stayRef.current?.querySelector('button')?.focus();
+  }, []);
+  return (
+    <div className="fixed inset-[0] z-20 flex items-center justify-center bg-ink/40 px-4">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="flex w-full max-w-[24rem] flex-col gap-4 rounded-lg border border-hairline bg-card p-4"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            onStay();
+          }
+        }}
+      >
+        <h2 id={titleId} className="font-body text-body text-ink">
+          {t('rooms.close.title')}
+        </h2>
+        <div className="flex flex-wrap items-center gap-3">
+          <div ref={stayRef}>
+            <Button onClick={onStay}>{t('rooms.close.stay')}</Button>
+          </div>
+          <Button variant="danger-text" onClick={onClose}>
+            {t('rooms.close.confirm')}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The host's fixed start bar: disabled below 2 humans, enabled at 2 or more (the start itself is Story 5.4's). */
+function StartBar({ session, barRef }: { session: RoomSession; barRef: React.RefObject<HTMLDivElement | null> }) {
+  const { t } = useTranslation();
+  const starting = useRoom((s) => s.starting);
+  const startError = useRoom((s) => s.startError);
+  const count = session.room.humanCount;
+  const label = <span className="tabular-nums">{t('rooms.start.label', { count })}</span>;
+  let caption: string | null = null;
+  if (startError) caption = startError.code === 'NOT_AVAILABLE_YET' ? t('rooms.start.soon') : t('rooms.start.failed');
+  useEffect(() => {
+    if (caption) announce(caption);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startError]);
+  return (
+    <div ref={barRef} className="fixed inset-x-[0] bottom-[0] z-10 border-t border-hairline bg-card pb-[env(safe-area-inset-bottom)]">
+      <div className="mx-auto flex w-full max-w-[480px] flex-col gap-1 px-gutter-card py-3">
+        {count < 2 ? (
+          <Button className="w-full" disabled disabledReason={t('rooms.start.waiting')}>
+            {label}
+          </Button>
+        ) : starting ? (
+          <Button className="w-full" disabled disabledReason={t('rooms.start.sending')}>
+            {label}
+          </Button>
+        ) : (
+          <Button className="w-full" onClick={() => roomClient().start()}>
+            {label}
+          </Button>
+        )}
+        {caption ? <p className="text-caption text-muted">{caption}</p> : null}
+        <p className="text-caption text-muted">{t('rooms.start.leaveCloses')}</p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The lobby at `/r/<code>` (Stories 5.2 and 5.3), for the host and for a player: top bar, the code block with Share and
+ * copy (any player may re-share), the config card (Edit links for the host only), the joined chips, then the host's
+ * fixed start bar or, for a player, "Waiting for <host> to start". No tab bar, no volt and no flash.
+ *
+ * Leaving (the button, or Android back / browser Back) sends leave and returns to the Rooms tab, with no confirm for a
+ * player or a host alone; a host with others in the lobby confirms first. Going to the topic picker on purpose is the
+ * one move that keeps the room.
+ */
+export default function Lobby({ session }: { session: RoomSession }) {
   const { t } = useTranslation();
   const code = formatCode(session.code);
   useDocumentTitle(t('rooms.lobby.title', { code }));
@@ -224,23 +306,41 @@ export default function HostLobby({ session }: { session: RoomSession }) {
   const isHost = session.role === 'HOST';
   const barRef = useRef<HTMLDivElement>(null);
   useFixedBarHeight(barRef);
+  const [confirming, setConfirming] = useState(false);
+  const needsConfirm = isHost && session.room.humanCount > 1;
+  const needsConfirmRef = useRef(needsConfirm);
+  needsConfirmRef.current = needsConfirm;
+  const confirmingRef = useRef(false);
+  confirmingRef.current = confirming;
 
-  // Leaving (the button, or Android back / browser Back) sends leave with no confirm and returns to the Rooms tab.
-  // Going to the topic picker on purpose is the one move that keeps the room.
   const keepRoom = useRef(false);
   // Shown (again): the room is hers to leave once more, whatever an earlier Edit click set.
   useEffect(() => {
     keepRoom.current = false;
   }, []);
-  const leave = () => {
+  const leaveNow = () => {
     keepRoom.current = true;
+    setConfirming(false);
     roomClient().leave();
     navigate('/rooms', { replace: true });
+  };
+  const leave = () => {
+    if (needsConfirmRef.current) setConfirming(true);
+    else leaveNow();
   };
   useEffect(
     () =>
       setNavigationGuard(() => {
         if (keepRoom.current) return false;
+        if (confirmingRef.current) {
+          // Android back on the open confirm: Stay.
+          setConfirming(false);
+          return true;
+        }
+        if (needsConfirmRef.current) {
+          setConfirming(true);
+          return true;
+        }
         keepRoom.current = true;
         roomClient().leave();
         // After the guard's caller has restored the location, so the Rooms tab replaces the lobby entry.
@@ -250,7 +350,7 @@ export default function HostLobby({ session }: { session: RoomSession }) {
     [],
   );
 
-  const humans = session.room.participants.filter((p) => p.kind !== 'BOT');
+  const hostName = session.room.participants.find((p) => p.participantId === session.room.hostParticipantId)?.displayName;
 
   return (
     <PageColumn className="py-4">
@@ -274,36 +374,17 @@ export default function HostLobby({ session }: { session: RoomSession }) {
           }}
         />
 
-        <section aria-labelledby="lobbyJoined" className="flex flex-col gap-2">
-          <h2 id="lobbyJoined" className="text-body font-semibold text-muted">
-            {t('rooms.joined.count', { n: session.room.humanCount })}
-          </h2>
-          <ul className="flex flex-wrap gap-2">
-            {humans.map((p) => {
-              const self = p.participantId === session.selfParticipantId;
-              return (
-                <li
-                  key={p.participantId}
-                  className={['rounded-full px-3 py-1 text-body break-words', self ? 'bg-band text-on-band' : 'border border-hairline bg-card text-ink'].join(' ')}
-                >
-                  {self ? t('rooms.you') : <Lang>{p.displayName}</Lang>}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+        <JoinedChips session={session} />
+
+        {!isHost && hostName ? (
+          <p className="text-body text-muted">
+            {t('rooms.lobby.waitingFor', { host: hostName })}
+          </p>
+        ) : null}
       </main>
 
-      {isHost ? (
-        <div ref={barRef} className="fixed inset-x-[0] bottom-[0] z-10 border-t border-hairline bg-card pb-[env(safe-area-inset-bottom)]">
-          <div className="mx-auto flex w-full max-w-[480px] flex-col gap-1 px-gutter-card py-3">
-            <Button className="w-full" disabled disabledReason={session.room.humanCount < 2 ? t('rooms.start.waiting') : t('rooms.start.leaveCloses')}>
-              {t('rooms.start.label', { count: session.room.humanCount })}
-            </Button>
-            {session.room.humanCount < 2 ? <p className="text-caption text-muted">{t('rooms.start.leaveCloses')}</p> : null}
-          </div>
-        </div>
-      ) : null}
+      {isHost ? <StartBar session={session} barRef={barRef} /> : null}
+      {confirming ? <CloseRoomDialog onStay={() => setConfirming(false)} onClose={leaveNow} /> : null}
     </PageColumn>
   );
 }

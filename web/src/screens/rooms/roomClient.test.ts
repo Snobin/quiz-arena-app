@@ -3,7 +3,7 @@ import { closeRealtime, configureRealtimeForTests, resetRealtime } from '../../r
 import { USER_PRIVATE_QUEUE } from '../../realtime/protocol.ts';
 import { FakeStomp, SERVER_TIME } from '../../test-utils/realtime.ts';
 import { CREATE_TIMEOUT_MS, resetRoomClient, roomClient, useRoom } from './roomClient.ts';
-import { ROOM_CREATE, roomConfigure, roomLeave, roomTopic } from './roomProtocol.ts';
+import { ROOM_CREATE, ROOM_JOIN, roomConfigure, roomLeave, roomResync, roomStart, roomTopic } from './roomProtocol.ts';
 
 const ROOM_ID = '8e9f0a1b-2c3d-4e5f-a6b7-c8d9e0f1a2b3';
 const TOPIC = '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d';
@@ -179,5 +179,96 @@ describe('the room client', () => {
     expect(useRoom.getState().session).toBeNull();
     expect(socket().deactivations).toBe(1);
     expect(roomClient()).not.toBe(before);
+  });
+});
+
+describe('joining (Story 5.3)', () => {
+  const OTHER = '9d8c7b6a-5f4e-4d3c-b2a1-0f9e8d7c6b5a';
+  const member = (room = view({ participants: [...view().participants, { participantId: OTHER, displayName: 'Biju', kind: 'USER' }], humanCount: 2 })) => ({
+    ...joined(room),
+    payload: { ...joined(room).payload, role: 'MEMBER', selfParticipantId: OTHER },
+  });
+  const topic = (message: unknown) =>
+    (socket() as unknown as { subscriptions: Map<string, (m: { body: string }) => void> }).subscriptions.get(roomTopic(ROOM_ID))!({ body: JSON.stringify(message) });
+
+  async function joinAndOpen() {
+    const result = roomClient().join('K7MQ2X');
+    await flush();
+    socket().open();
+    return result;
+  }
+
+  it('sends the canonical code after subscribing, and the ROOM_JOINED with that code opens the lobby', async () => {
+    const result = joinAndOpen();
+    await flush();
+    expect(socket().subscribed).toEqual([USER_PRIVATE_QUEUE]);
+    expect(socket().bodiesTo(ROOM_JOIN)).toEqual([{ code: 'K7MQ2X' }]);
+    expect(useRoom.getState().phase).toBe('joining');
+    // A second tap while it is out: the same promise, no second send.
+    void roomClient().join('K7MQ2X');
+    expect(socket().sentTo(ROOM_JOIN)).toBe(1);
+    // Another code while it is out is refused, and never gets this room's answer.
+    expect(await roomClient().join('ABC234')).toEqual({ ok: false, error: { code: 'BAD_REQUEST' } });
+    expect(socket().sentTo(ROOM_JOIN)).toBe(1);
+    socket().deliver(member());
+    const outcome = await result;
+    expect(outcome.ok).toBe(true);
+    expect(useRoom.getState()).toMatchObject({ phase: 'lobby', session: { role: 'MEMBER', selfParticipantId: OTHER } });
+    expect(socket().subscribed).toContain(roomTopic(ROOM_ID));
+  });
+
+  it('resolves a refused join with its code and closes the socket', async () => {
+    const result = joinAndOpen();
+    await flush();
+    socket().deliver(error('ROOM_FULL'));
+    expect(await result).toEqual({ ok: false, error: { code: 'ROOM_FULL' } });
+    expect(useRoom.getState()).toMatchObject({ phase: 'idle', session: null, error: null });
+    expect(socket().deactivations).toBe(1);
+  });
+
+  it('holds a lobby frame after a seq gap, sends one resync, and applies the held frames above the fresh ROOM_JOINED', async () => {
+    const result = joinAndOpen();
+    await flush();
+    socket().deliver(member());
+    await result;
+    const three = view({ humanCount: 3, participants: [...member().payload.room.participants, { participantId: 'c', displayName: 'Chitra', kind: 'USER' }] });
+    topic({ ...lobbyUpdated(3, three), payload: { room: three, joined: ['c'], left: [] } });
+    expect(useRoom.getState().session?.room.humanCount).toBe(2); // held: seq 2 is missing
+    expect(socket().sentTo(roomResync(ROOM_ID))).toBe(1);
+    topic(lobbyUpdated(4, three));
+    expect(socket().sentTo(roomResync(ROOM_ID))).toBe(1); // one resync for the gap
+    // The resync answer reflects seq 2; frames 3 and 4 then apply in order.
+    socket().deliver({ ...member(), refSeq: 2 });
+    expect(useRoom.getState().session).toMatchObject({ lastSeq: 4, room: { humanCount: 3 } });
+  });
+
+  it('records each applied membership change for the chips', async () => {
+    const result = joinAndOpen();
+    await flush();
+    socket().deliver(member());
+    await result;
+    topic({ ...lobbyUpdated(2), payload: { room: view(), joined: [], left: [OTHER] } });
+    expect(useRoom.getState().lobbyEvent).toEqual({ seq: 2, joined: [], left: [OTHER] });
+  });
+
+  it('a player whose host left goes back with the host-closed notice naming the host', async () => {
+    const result = joinAndOpen();
+    await flush();
+    socket().deliver(member());
+    await result;
+    socket().deliver(closed('HOST_DISCONNECTED'));
+    expect(useRoom.getState()).toMatchObject({ session: null, notice: 'HOST_CLOSED', noticeHost: 'Anju' });
+  });
+
+  it('the host start sends start and keeps the answer', async () => {
+    const result = createAndOpen();
+    await flush();
+    socket().deliver(joined());
+    await result;
+    roomClient().start();
+    expect(socket().sentTo(roomStart(ROOM_ID))).toBe(1);
+    expect(useRoom.getState().starting).toBe(true);
+    socket().deliver(error('NOT_AVAILABLE_YET', { roomId: ROOM_ID }));
+    expect(useRoom.getState()).toMatchObject({ starting: false, startError: { code: 'NOT_AVAILABLE_YET' } });
   });
 });

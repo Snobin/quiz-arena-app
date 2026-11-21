@@ -17,8 +17,14 @@
         "participantId" : "0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
         "displayName" : "Anju",
         "kind" : "USER"
+      }, {
+        "participantId" : "9d8c7b6a-5f4e-4d3c-b2a1-0f9e8d7c6b5a",
+        "displayName" : "ബിജു",
+        "kind" : "USER"
       } ],
-      "humanCount" : 1
-    }
+      "humanCount" : 2
+    },
+    "joined" : [ "9d8c7b6a-5f4e-4d3c-b2a1-0f9e8d7c6b5a" ],
+    "left" : [ ]
   }
 }

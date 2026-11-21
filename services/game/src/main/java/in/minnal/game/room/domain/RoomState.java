@@ -17,6 +17,9 @@ import java.util.UUID;
  */
 public final class RoomState {
 
+    /** The most humans a room holds, the host included (FR34). */
+    public static final int MAX_HUMANS = 50;
+
     private record Member(UUID participantId, String displayName) {
     }
 
@@ -86,6 +89,41 @@ public final class RoomState {
 
     public int humanCount() {
         return members.size();
+    }
+
+    public boolean isFull() {
+        return members.size() >= MAX_HUMANS;
+    }
+
+    /**
+     * Adds {@code sub} as a {@code USER} participant with a fresh participant id (never her {@code sub}); the caller has
+     * checked the phase, the cap and that she is not in yet.
+     *
+     * @return her participant id
+     */
+    public UUID add(String sub, String displayName) {
+        if (members.containsKey(sub)) {
+            throw new IllegalStateException("already a member");
+        }
+        if (isFull()) {
+            throw new IllegalStateException("room full");
+        }
+        Member member = new Member(UUID.randomUUID(), displayName);
+        members.put(sub, member);
+        return member.participantId();
+    }
+
+    /**
+     * Removes a member who is not the host (a host leaving closes the room instead).
+     *
+     * @return her participant id, or null when she was not in the room
+     */
+    public UUID remove(String sub) {
+        if (isHost(sub)) {
+            throw new IllegalStateException("the host is not removed; the room closes");
+        }
+        Member member = members.remove(sub);
+        return member == null ? null : member.participantId();
     }
 
     public UUID participantIdOf(String sub) {

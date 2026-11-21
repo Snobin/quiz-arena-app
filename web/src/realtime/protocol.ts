@@ -49,6 +49,11 @@ export const ERROR_CODES = [
   'SOURCE_NOT_AVAILABLE',
   'NOT_HOST',
   'NOT_AVAILABLE_YET',
+  'ROOM_NOT_FOUND',
+  'ROOM_EXPIRED',
+  'ROOM_FULL',
+  'ROOM_STARTED',
+  'NOT_ENOUGH_PLAYERS',
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
@@ -140,8 +145,11 @@ export type RoomView = {
 /** ROOM_JOINED (private, with `refSeq`). `code` is the canonical 6 characters, shown as `XXX-XXX`. */
 export type RoomJoinedPayload = { roomId: string; code: string; role: RoomRole; selfParticipantId: string; room: RoomView };
 
-/** ROOM_LOBBY_UPDATED (broadcast on `/topic/room/{roomId}`). */
-export type RoomLobbyUpdatedPayload = { room: RoomView };
+/**
+ * ROOM_LOBBY_UPDATED (broadcast on `/topic/room/{roomId}`): the whole lobby, and the participant ids that joined and
+ * left since the previous broadcast (Story 5.3; membership changes are coalesced, at most one broadcast per 250 ms).
+ */
+export type RoomLobbyUpdatedPayload = { room: RoomView; joined: string[]; left: string[] };
 
 /** ROOM_CLOSED (broadcast, and private to each member). */
 export type RoomClosedPayload = { reason: RoomClosedReason };

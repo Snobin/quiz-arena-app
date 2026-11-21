@@ -17,6 +17,11 @@ import in.minnal.game.room.domain.RoomState;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Future;
@@ -28,16 +33,26 @@ import org.slf4j.LoggerFactory;
 /**
  * One Battle Room (AD-4): its {@link RoomState} lives on this actor's own thread, and every lobby change is an event on
  * its queue. In the lobby it answers a host's {@code configure} (validated as on create, then a
- * {@code ROOM_LOBBY_UPDATED} on the room topic with the next {@code seq}) and {@code leave}; a lobby with other humans
- * is not built yet (Stories 5.3 and 5.5), so those cases answer {@code NOT_AVAILABLE_YET}. It closes when its host
- * leaves alone, when her reconnect grace runs out, at {@code expiresAt}, or when the service drains, and then reports
- * to its registry, which frees the code and the players.
+ * {@code ROOM_LOBBY_UPDATED} with the next {@code seq} at once), a join (Story 5.3: up to {@value RoomState#MAX_HUMANS}
+ * humans, the host included), a member's leave, and a start (still the {@code NOT_AVAILABLE_YET} stub once the host and
+ * player-count checks pass, until Story 5.4).
+ *
+ * <p>Joins and leaves are coalesced: the first one arms a {@value #COALESCE_MS} ms timer, and when it fires one
+ * {@code ROOM_LOBBY_UPDATED {room, joined[], left[]}} goes out with the next {@code seq}; a configure in between flushes
+ * them with it. Every member whose last session drops has the AD-11 grace to come back (keyed by {@code sub}); a
+ * member's runs out by removing her, the host's by closing the room. The room also closes when its host leaves, at
+ * {@code expiresAt}, or when the service drains, and then reports to its registry, which frees the code, keeps a
+ * tombstone and frees the players.
  *
  * <p>Timers only {@code tell} events here. The room has no way to add a bot.
  */
 final class RoomActor {
 
     private static final Logger log = LoggerFactory.getLogger(RoomActor.class);
+
+    /** At most one membership broadcast per this window (Story 5.3). */
+    static final long COALESCE_MS = 250;
+    static final Duration COALESCE = Duration.ofMillis(COALESCE_MS);
 
     private final RoomState state;
     private final RoomSettings settings;
@@ -46,6 +61,7 @@ final class RoomActor {
     private final PlayerChannel channel;
     private final RoomBroadcaster broadcaster;
     private final Predicate<String> hasSession;
+    private final BiConsumer<RoomActor, String> onRelease;
     private final BiConsumer<RoomActor, RoomClosedReason> onClosed;
     private final Actor<RoomEvent> actor;
 
@@ -53,12 +69,20 @@ final class RoomActor {
     private volatile Set<String> members;
 
     private Future<?> expiryTimer;
-    private Future<?> graceTimer;
+    /** One armed grace per dropped member: its timer and the epoch it was armed with. */
+    private final Map<String, Grace> graces = new HashMap<>();
     private long graceEpoch;
+    private final LinkedHashSet<UUID> joined = new LinkedHashSet<>();
+    private final LinkedHashSet<UUID> left = new LinkedHashSet<>();
+    private Future<?> flushTimer;
     private boolean closed;
 
+    private record Grace(long epoch, Future<?> timer) {
+    }
+
     RoomActor(RoomState state, RoomSettings settings, Clock clock, RoomTimers timers, PlayerChannel channel,
-            RoomBroadcaster broadcaster, Predicate<String> hasSession, BiConsumer<RoomActor, RoomClosedReason> onClosed) {
+            RoomBroadcaster broadcaster, Predicate<String> hasSession, BiConsumer<RoomActor, String> onRelease,
+            BiConsumer<RoomActor, RoomClosedReason> onClosed) {
         this.state = state;
         this.settings = settings;
         this.clock = clock;
@@ -66,6 +90,7 @@ final class RoomActor {
         this.channel = channel;
         this.broadcaster = broadcaster;
         this.hasSession = hasSession;
+        this.onRelease = onRelease;
         this.onClosed = onClosed;
         this.members = Set.copyOf(state.memberSubs());
         // Last: the thread starts here and reads every field above.
@@ -108,11 +133,14 @@ final class RoomActor {
         switch (event) {
             case RoomEvent.Begin begin -> onBegin();
             case RoomEvent.Configure configure -> onConfigure(configure);
+            case RoomEvent.Join join -> onJoin(join);
+            case RoomEvent.Start start -> onStart(start);
             case RoomEvent.Leave leave -> onLeave(leave);
             case RoomEvent.Disconnected disconnected -> onDisconnected(disconnected.sub());
-            case RoomEvent.Reconnected reconnected -> onReconnected(reconnected.sub());
+            case RoomEvent.Reconnected reconnected -> cancelGrace(reconnected.sub());
             case RoomEvent.Announce announce -> onAnnounce(announce);
-            case RoomEvent.GraceExpired expired -> onGraceExpired(expired.epoch());
+            case RoomEvent.GraceExpired expired -> onGraceExpired(expired.sub(), expired.epoch());
+            case RoomEvent.Flush flush -> onFlush();
             case RoomEvent.Expire expire -> onExpire();
             case RoomEvent.Drain drain -> finish(RoomClosedReason.SERVER_DRAINING);
         }
@@ -124,8 +152,8 @@ final class RoomActor {
     }
 
     private void armExpiry() {
-        Duration left = Duration.between(clock.instant(), state.expiresAt());
-        expiryTimer = timers.schedule(left, () -> actor.tell(new RoomEvent.Expire()));
+        Duration timeLeft = Duration.between(clock.instant(), state.expiresAt());
+        expiryTimer = timers.schedule(timeLeft, () -> actor.tell(new RoomEvent.Expire()));
     }
 
     private void onExpire() {
@@ -151,34 +179,96 @@ final class RoomActor {
             return;
         }
         state.configure(result.config());
-        broadcaster.broadcast(roomId(), ServerMessage.roomBroadcast(MessageType.ROOM_LOBBY_UPDATED, roomId(),
-                state.nextSeq(), clock.instant(), new RoomLobbyUpdatedPayload(state.view())));
+        broadcastLobby(); // at once, carrying any joins and leaves still waiting in the window
+    }
+
+    private void onJoin(RoomEvent.Join join) {
+        String sub = join.sub();
+        if (state.isMember(sub)) {
+            // Another tab, or a second tap on the link: the room as it stands, and no second participant.
+            cancelGrace(sub);
+            channel.toSession(sub, join.sessionId(), joinedFor(sub));
+            return;
+        }
+        if (state.phase() != RoomPhase.LOBBY) {
+            refuseJoin(join, ErrorCode.ROOM_STARTED);
+            return;
+        }
+        if (state.isFull()) {
+            refuseJoin(join, ErrorCode.ROOM_FULL);
+            return;
+        }
+        String name = join.displayName() == null || join.displayName().isBlank() ? "Player" : join.displayName();
+        UUID participantId = state.add(sub, name);
+        members = Set.copyOf(state.memberSubs());
+        joined.add(participantId);
+        channel.toSession(sub, join.sessionId(), joinedFor(sub));
+        armFlush();
+        if (!hasSession.test(sub)) {
+            armGrace(sub); // her session dropped while the join was queued: the drop was ignored then
+        }
+        log.atInfo().addKeyValue("roomId", roomId()).addKeyValue("userId", sub).log("joined the room");
+    }
+
+    /** A join the room cannot take: her claim on this room is handed back first, so she is free at once. */
+    private void refuseJoin(RoomEvent.Join join, ErrorCode code) {
+        onRelease.accept(this, join.sub());
+        // No roomId: a refused joiner is not a member and learns nothing about the room.
+        channel.toSession(join.sub(), join.sessionId(), ServerMessage.error(code, null, clock.instant()));
+    }
+
+    private void onStart(RoomEvent.Start start) {
+        if (!state.isHost(start.sub())) {
+            refuse(start.sub(), start.sessionId(), ErrorCode.NOT_HOST);
+            return;
+        }
+        if (state.phase() == RoomPhase.LOBBY && state.humanCount() < 2) {
+            refuse(start.sub(), start.sessionId(), ErrorCode.NOT_ENOUGH_PLAYERS);
+            return;
+        }
+        // Story 5.4 builds the start itself.
+        refuse(start.sub(), start.sessionId(), ErrorCode.NOT_AVAILABLE_YET);
     }
 
     private void onLeave(RoomEvent.Leave leave) {
-        // A host with other humans, and a member who is not the host, wait for Stories 5.3 and 5.5.
-        if (state.isHost(leave.sub()) && state.humanCount() == 1) {
-            finish(RoomClosedReason.HOST_LEFT);
+        if (state.isHost(leave.sub())) {
+            finish(RoomClosedReason.HOST_LEFT); // the client confirmed first when others were in the lobby
             return;
         }
-        refuse(leave.sub(), leave.sessionId(), ErrorCode.NOT_AVAILABLE_YET);
+        if (state.isMember(leave.sub())) {
+            removeMember(leave.sub());
+        }
+        // Not a member: nothing to leave, ignored (as for a room that is gone).
     }
 
-    /** The host's last session closed: she has the grace to come back. */
+    /** A member who is not the host goes: out of the list, her {@code sub} free at once, and in the next broadcast. */
+    private void removeMember(String sub) {
+        cancelGrace(sub);
+        UUID participantId = state.remove(sub);
+        members = Set.copyOf(state.memberSubs());
+        onRelease.accept(this, sub);
+        if (participantId != null && !joined.remove(participantId)) {
+            left.add(participantId); // one who joined and left inside the window is in neither list
+        }
+        armFlush();
+        log.atInfo().addKeyValue("roomId", roomId()).addKeyValue("userId", sub).log("left the room");
+    }
+
+    /** A member's last session closed: she has the grace to come back, and stays listed meanwhile. */
     private void onDisconnected(String sub) {
-        if (!state.isHost(sub) || hasSession.test(sub)) {
+        if (!state.isMember(sub) || hasSession.test(sub)) {
             return; // a reconnect raced the disconnect
         }
-        cancelGrace();
-        long epoch = graceEpoch;
-        graceTimer = timers.schedule(settings.grace(), () -> actor.tell(new RoomEvent.GraceExpired(epoch)));
-        log.atInfo().addKeyValue("roomId", roomId()).log("the host disconnected; grace of {} armed", settings.grace());
+        armGrace(sub);
     }
 
-    private void onReconnected(String sub) {
-        if (state.isHost(sub)) {
-            cancelGrace();
-        }
+    private void armGrace(String sub) {
+        cancelGrace(sub);
+        long epoch = ++graceEpoch;
+        Future<?> timer = timers.schedule(settings.grace(), () -> actor.tell(new RoomEvent.GraceExpired(sub, epoch)));
+        graces.put(sub, new Grace(epoch, timer));
+        log.atInfo().addKeyValue("roomId", roomId()).addKeyValue("userId", sub)
+                .log("{} disconnected; grace of {} armed", state.isHost(sub) ? "the host" : "a member", settings.grace());
     }
 
     private void onAnnounce(RoomEvent.Announce announce) {
@@ -187,24 +277,55 @@ final class RoomActor {
         }
     }
 
-    private void onGraceExpired(long epoch) {
-        if (epoch != graceEpoch || graceTimer == null) {
+    private void onGraceExpired(String sub, long epoch) {
+        Grace grace = graces.get(sub);
+        if (grace == null || grace.epoch() != epoch) {
             return; // stale: she came back (or dropped again) since it was armed
         }
-        graceTimer = null;
-        if (hasSession.test(state.hostSub())) {
+        graces.remove(sub);
+        if (hasSession.test(sub) || !state.isMember(sub)) {
             return;
         }
-        log.atInfo().addKeyValue("roomId", roomId()).log("the host's reconnect grace ran out");
-        finish(RoomClosedReason.HOST_DISCONNECTED);
+        if (state.isHost(sub)) {
+            log.atInfo().addKeyValue("roomId", roomId()).log("the host's reconnect grace ran out");
+            finish(RoomClosedReason.HOST_DISCONNECTED);
+            return;
+        }
+        removeMember(sub);
     }
 
-    private void cancelGrace() {
-        graceEpoch++;
-        if (graceTimer != null) {
-            graceTimer.cancel(false);
-            graceTimer = null;
+    private void cancelGrace(String sub) {
+        Grace grace = graces.remove(sub);
+        if (grace != null) {
+            grace.timer().cancel(false);
         }
+    }
+
+    private void armFlush() {
+        if (flushTimer == null) {
+            flushTimer = timers.schedule(COALESCE, () -> actor.tell(new RoomEvent.Flush()));
+        }
+    }
+
+    private void onFlush() {
+        flushTimer = null;
+        if (!joined.isEmpty() || !left.isEmpty()) {
+            broadcastLobby();
+        }
+    }
+
+    /** One {@code ROOM_LOBBY_UPDATED} with the next {@code seq}: the whole lobby and what came and went since the last. */
+    private void broadcastLobby() {
+        if (flushTimer != null) {
+            flushTimer.cancel(false);
+            flushTimer = null;
+        }
+        List<UUID> came = new ArrayList<>(joined);
+        List<UUID> went = new ArrayList<>(left);
+        joined.clear();
+        left.clear();
+        broadcaster.broadcast(roomId(), ServerMessage.roomBroadcast(MessageType.ROOM_LOBBY_UPDATED, roomId(),
+                state.nextSeq(), clock.instant(), new RoomLobbyUpdatedPayload(state.view(), came, went)));
     }
 
     private ServerMessage<RoomJoinedPayload> joinedFor(String sub) {
@@ -221,9 +342,13 @@ final class RoomActor {
     private void finish(RoomClosedReason reason) {
         closed = true;
         state.end();
-        cancelGrace();
+        List.copyOf(graces.keySet()).forEach(this::cancelGrace);
         if (expiryTimer != null) {
             expiryTimer.cancel(false);
+        }
+        if (flushTimer != null) {
+            flushTimer.cancel(false);
+            flushTimer = null;
         }
         Instant now = clock.instant();
         try {
@@ -240,11 +365,6 @@ final class RoomActor {
             onClosed.accept(this, reason);
             actor.close();
         }
-    }
-
-    /** The humans of the room at the moment it closes (for the registry to release). */
-    Set<String> memberSubsAtClose() {
-        return Set.copyOf(state.memberSubs());
     }
 
     String hostSub() {
