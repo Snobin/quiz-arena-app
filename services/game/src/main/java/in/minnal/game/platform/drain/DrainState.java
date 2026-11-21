@@ -1,5 +1,7 @@
 package in.minnal.game.platform.drain;
 
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
@@ -17,16 +19,49 @@ public class DrainState implements SmartLifecycle {
 
     private volatile boolean draining;
     private volatile boolean running;
+    private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
 
     public boolean isDraining() {
         return draining;
     }
 
+    /**
+     * Runs {@code listener} once when draining begins (rooms close their open lobbies then, Story 5.1). A listener
+     * registered after draining began runs at once.
+     */
+    public void onBegin(Runnable listener) {
+        boolean already;
+        synchronized (this) {
+            already = draining;
+            if (!already) {
+                listeners.add(listener);
+            }
+        }
+        if (already) {
+            try {
+                listener.run();
+            } catch (RuntimeException e) {
+                log.error("a drain listener failed", e);
+            }
+        }
+    }
+
     /** Starts draining (shutdown, or a test). There is no way back short of a restart. */
     public void begin() {
-        if (!draining) {
+        boolean first;
+        synchronized (this) {
+            first = !draining;
             draining = true;
+        }
+        if (first) {
             log.info("draining: new joins are refused");
+            for (Runnable listener : listeners) {
+                try {
+                    listener.run();
+                } catch (RuntimeException e) {
+                    log.error("a drain listener failed", e);
+                }
+            }
         }
     }
 

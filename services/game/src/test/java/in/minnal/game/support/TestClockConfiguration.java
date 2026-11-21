@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Primary;
 /**
  * Replaces the server clock with a {@link MutableClock}, so the 4 s and 8 s rules need no sleeps,
  * the {@code minnal.match.completed} publisher with a {@link RecordingMatchCompletedPublisher}, and
- * the inbound rate limiter's time source with {@link ControllableNanos} (real time until a test
+ * the room timers with {@link ManualRoomTimers}, and the inbound rate limiter's time source with {@link ControllableNanos} (real time until a test
  * freezes it). The production {@code InboundRateLimiter} component still exists but is shadowed by
  * the {@code @Primary} test one, which the interceptor and the WebSocket config use.
  */
@@ -28,6 +28,13 @@ public class TestClockConfiguration {
     @Primary
     RecordingMatchCompletedPublisher recordingMatchCompletedPublisher() {
         return new RecordingMatchCompletedPublisher();
+    }
+
+    /** Room expiry and host grace fire when a test says so, not after real hours or seconds. */
+    @Bean
+    @Primary
+    ManualRoomTimers manualRoomTimers() {
+        return new ManualRoomTimers();
     }
 
     @Bean

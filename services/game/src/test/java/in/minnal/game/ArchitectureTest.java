@@ -8,8 +8,11 @@ import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
 import in.minnal.contracts.realtime.ParticipantKind;
 import in.minnal.contracts.scoring.Scoring;
+import in.minnal.game.match.application.BotBrain;
+import in.minnal.game.match.application.BotSettings;
 import in.minnal.game.match.domain.MatchParticipant;
 import in.minnal.game.match.domain.MatchState;
+import in.minnal.game.matchmaking.application.MatchmakingService;
 import in.minnal.game.matchmaking.application.QuestionSetClient;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -51,6 +54,28 @@ class ArchitectureTest {
                 .orShould().dependOnClassesThat().areAssignableTo(java.net.Socket.class)
                 .because("AD-4: no DB, Valkey or network I/O during a match; effects are WebSocket sends only");
         rule.check(classes);
+    }
+
+    /** FR40: a Battle Room holds humans only; its code cannot reach the bot brain, its settings or the pairing that adds a bot. */
+    @Test
+    void roomCodeCannotReachTheBotPath() {
+        noClasses().that().resideInAPackage("in.minnal.game.room..")
+                .should().dependOnClassesThat().belongToAnyOf(BotBrain.class, BotSettings.class, MatchmakingService.class)
+                .orShould().dependOnClassesThat().haveFullyQualifiedName("in.minnal.game.matchmaking.application.MatchStarter")
+                .orShould().dependOnClassesThat().haveFullyQualifiedName("in.minnal.game.matchmaking.application.MatchmakingActor")
+                .orShould().dependOnClassesThat().haveSimpleNameStartingWith("Bot")
+                .because("FR40: there is no bot path in rooms")
+                .check(classes);
+    }
+
+    @Test
+    void roomCodeDoesNotCallCore() {
+        noClasses().that().resideInAPackage("in.minnal.game.room..")
+                .should().dependOnClassesThat().areAssignableTo(QuestionSetClient.class)
+                .orShould().dependOnClassesThat().resideInAnyPackage("org.springframework.web.client..",
+                        "org.springframework.http.client..", "java.net.http..", "java.sql..", "org.springframework.data..", "io.lettuce..")
+                .because("AD-2: game-service calls core only at match start, never while a room is in the lobby")
+                .check(classes);
     }
 
     @Test

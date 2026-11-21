@@ -77,8 +77,8 @@ development_status:
   4-4-practise-this-topic: done
   epic-4-retrospective: done
 
-  epic-5: backlog
-  5-1-room-server-create-configure-and-expire: backlog
+  epic-5: in-progress
+  5-1-room-server-create-configure-and-expire: done
   5-2-create-a-room-and-share-it: backlog
   5-3-join-a-room-and-the-live-lobby: backlog
   5-4-play-a-room-match: backlog

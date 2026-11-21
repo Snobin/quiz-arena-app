@@ -4,7 +4,7 @@ package in.minnal.contracts.realtime;
 public enum ErrorCode {
     /** The STOMP session has no verified identity. */
     UNAUTHENTICATED,
-    /** The {@code sub} is already queued or in a match ({@code matchId} set when in a match). */
+    /** The {@code sub} is already queued, in a room or in a match ({@code matchId} or {@code roomId} set). */
     ALREADY_IN_MATCH,
     /** game-service is shutting down; try again in a moment. */
     SERVER_DRAINING,
@@ -25,5 +25,15 @@ public enum ErrorCode {
     /** An answer for a question that is not open, after the deadline, or with an option outside 0–3. */
     ANSWER_REJECTED,
     /** A Topic Duel join with no {@code topicId}, or one that is not a UUID. */
-    INVALID_TOPIC
+    INVALID_TOPIC,
+    /** A room create needs a registered player with a finished profile (the token's {@code profileComplete}). */
+    PROFILE_REQUIRED,
+    /** A room's question count is missing or outside 5-30, or its source is missing (a configure that changes nothing too). */
+    INVALID_ROOM_CONFIG,
+    /** A room source other than {@code BANK} (custom topics arrive in Epic 6). */
+    SOURCE_NOT_AVAILABLE,
+    /** Only the room's host may do this. */
+    NOT_HOST,
+    /** The room action exists in the protocol but is not built yet (join, start, and the leave and play-again cases of later stories). */
+    NOT_AVAILABLE_YET
 }

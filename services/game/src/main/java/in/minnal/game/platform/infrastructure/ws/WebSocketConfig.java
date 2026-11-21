@@ -6,6 +6,7 @@ import in.minnal.game.platform.infrastructure.security.StompConnectAuthIntercept
 import in.minnal.game.platform.session.DeletedUsers;
 import in.minnal.game.platform.session.MatchAccess;
 import in.minnal.game.platform.session.PlayerChannel;
+import in.minnal.game.platform.session.RoomAccess;
 import java.time.Clock;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,6 +50,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private JsonMapper jsonMapper;
     private TaskScheduler brokerScheduler;
     private MatchAccess matchAccess;
+    private RoomAccess roomAccess;
     private PlayerChannel playerChannel;
     private InboundRateLimiter rateLimiter;
     private Clock clock;
@@ -82,6 +84,12 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Autowired
     void setMatchAccess(@Lazy MatchAccess matchAccess) {
         this.matchAccess = matchAccess;
+    }
+
+    /** Lazy for the same reason: the room registry broadcasts through the messaging template. */
+    @Autowired
+    void setRoomAccess(@Lazy RoomAccess roomAccess) {
+        this.roomAccess = roomAccess;
     }
 
     /** Lazy for the same reason: {@code RATE_LIMITED} goes out through the messaging template. */
@@ -130,7 +138,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         // a session's frames are handled in order (SUBSCRIBE before the join that follows it), and
         // handlers only hand events to actors, so they never block the socket for long.
         registration.executor(new SyncTaskExecutor());
-        registration.interceptors(new StompConnectAuthInterceptor(jwtDecoder, matchAccess, rateLimiter, playerChannel, clock, deletedUsers));
+        registration.interceptors(new StompConnectAuthInterceptor(jwtDecoder, matchAccess, roomAccess, rateLimiter, playerChannel, clock, deletedUsers));
     }
 
     @Override

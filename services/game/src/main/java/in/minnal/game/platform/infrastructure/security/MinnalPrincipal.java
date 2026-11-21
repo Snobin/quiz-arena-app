@@ -9,17 +9,26 @@ import org.springframework.security.oauth2.jwt.Jwt;
 
 /**
  * The caller's identity, taken only from a verified Minnal access token (AD-9): {@code sub},
- * {@code roles}, {@code name} and {@code lang}. Unknown role names are ignored.
+ * {@code roles}, {@code name}, {@code lang} and {@code profileComplete}. Unknown role names are ignored.
+ *
+ * @param profileComplete the token's {@code profileComplete} claim; a token issued before the claim existed lacks
+ *                        it and counts as incomplete until it is refreshed (Story 5.1)
  */
-public record MinnalPrincipal(String sub, Set<Role> roles, String name, String lang) {
+public record MinnalPrincipal(String sub, Set<Role> roles, String name, String lang, boolean profileComplete) {
 
     public MinnalPrincipal {
         roles = roles.isEmpty() ? Set.of() : Set.copyOf(EnumSet.copyOf(roles));
     }
 
+    /** A principal whose profile is not known to be complete. */
+    public MinnalPrincipal(String sub, Set<Role> roles, String name, String lang) {
+        this(sub, roles, name, lang, false);
+    }
+
     public static MinnalPrincipal from(Jwt jwt) {
         return new MinnalPrincipal(jwt.getSubject(), roles(jwt), jwt.getClaimAsString(MinnalClaims.NAME),
-                jwt.getClaimAsString(MinnalClaims.LANG));
+                jwt.getClaimAsString(MinnalClaims.LANG),
+                Boolean.TRUE.equals(jwt.getClaim(MinnalClaims.PROFILE_COMPLETE)));
     }
 
     static Set<Role> roles(Jwt jwt) {

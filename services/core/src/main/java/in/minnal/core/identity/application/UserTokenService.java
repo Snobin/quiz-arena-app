@@ -19,7 +19,7 @@ import org.springframework.stereotype.Service;
 /**
  * Issues registered-player access tokens (AD-9): RS256 with the Story 1.5 key, 1 h, {@code sub} = user
  * id, {@code roles} recomputed on every issue (USER always, ADMIN when the verified email is listed in
- * {@code ADMIN_EMAILS}), {@code name} = the Google given name else "Player", and {@code lang}.
+ * {@code ADMIN_EMAILS}), {@code name} = the Google given name else "Player", {@code lang}, and {@code profileComplete} (whether her profile is saved, as of this issue).
  */
 @Service
 public class UserTokenService {
@@ -74,6 +74,8 @@ public class UserTokenService {
                 .claim(MinnalClaims.ROLES, roles)
                 .claim(MinnalClaims.NAME, name)
                 .claim(MinnalClaims.LANG, tokenLang)
+                // A profile row exists exactly when display name and language were saved (Story 2.3).
+                .claim(MinnalClaims.PROFILE_COMPLETE, account.displayName() != null && account.language() != null)
                 .build();
         JwsHeader header = JwsHeader.with(SignatureAlgorithm.RS256).keyId(keys.activeKeyId()).build();
         return new GuestToken(encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue(), expiresAt);

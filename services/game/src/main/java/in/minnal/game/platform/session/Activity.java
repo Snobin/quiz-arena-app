@@ -18,4 +18,8 @@ public sealed interface Activity {
     /** Playing match {@code matchId}. */
     record InMatch(UUID matchId) implements Activity {
     }
+
+    /** In the lobby of Battle Room {@code roomId} (Story 5.1); a room match moves her to {@link InMatch} in Story 5.4. */
+    record InRoom(UUID roomId) implements Activity {
+    }
 }

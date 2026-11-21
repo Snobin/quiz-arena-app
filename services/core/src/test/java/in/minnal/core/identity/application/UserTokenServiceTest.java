@@ -52,4 +52,16 @@ class UserTokenServiceTest {
         assertThat(SignedJWT.parse(token.accessToken()).getJWTClaimsSet().getStringClaim(MinnalClaims.NAME)).isEqualTo("Player");
         assertThatThrownBy(() -> service.issue(account, "fr")).isInstanceOf(UnsupportedLanguageException.class);
     }
+
+    @Test
+    void profileCompleteIsTrueOnlyOnceTheProfileIsSaved() throws Exception {
+        UserTokenService service = service(Set.of());
+
+        var fresh = SignedJWT.parse(service.issue(new Account(UUID.randomUUID(), null, "Anju"), "en").accessToken()).getJWTClaimsSet();
+        var saved = SignedJWT.parse(service.issue(new Account(UUID.randomUUID(), null, "Anju", "Anju", "ml"), "en").accessToken())
+                .getJWTClaimsSet();
+
+        assertThat(fresh.getBooleanClaim(MinnalClaims.PROFILE_COMPLETE)).isFalse();
+        assertThat(saved.getBooleanClaim(MinnalClaims.PROFILE_COMPLETE)).isTrue();
+    }
 }

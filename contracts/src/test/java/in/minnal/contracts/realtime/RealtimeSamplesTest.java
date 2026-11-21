@@ -51,7 +51,12 @@ class RealtimeSamplesTest {
     static final UUID TOPIC_ID = UUID.fromString("1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d");
     static final UUID SUBJECT_ID = UUID.fromString("2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e");
     static final TopicInfo TOPIC = new TopicInfo(TOPIC_ID, "Kerala History", "History");
+    static final UUID ROOM_ID = UUID.fromString("8e9f0a1b-2c3d-4e5f-a6b7-c8d9e0f1a2b3");
     static final UUID EVENT_ID = UUID.fromString("7a8b9c0d-1e2f-4a3b-9c4d-5e6f7a8b9c0d");
+
+    /** The body of {@code /app/room/create} and {@code /app/room/{roomId}/configure} (a client send, never parsed by the web). */
+    record RoomCreateSample(RoomSource source, Integer questionCount) {
+    }
 
     record Sample(String file, Object value, TypeReference<?> type) {
     }
@@ -60,7 +65,33 @@ class RealtimeSamplesTest {
         List<Participant> participants = List.of(
                 new Participant(ANJU, "Guest 4821", ParticipantKind.GUEST),
                 new Participant(BOT, "Minnal Bot", ParticipantKind.BOT));
+        RoomView lobby = new RoomView(ANJU, new RoomSource(QuestionSource.BANK, TOPIC_ID, "Kerala History"), 10, true,
+                Instant.parse("2026-11-13T10:15:30.123Z"), List.of(new Participant(ANJU, "Anju", ParticipantKind.USER)), 1);
         return List.of(
+                new Sample("room-joined.json",
+                        ServerMessage.roomReply(MessageType.ROOM_JOINED, ROOM_ID, 1, SERVER_TIME,
+                                new RoomJoinedPayload(ROOM_ID, "K7MQ2X", RoomRole.HOST, ANJU, lobby)),
+                        new TypeReference<ServerMessage<RoomJoinedPayload>>() { }),
+                new Sample("room-lobby-updated.json",
+                        ServerMessage.roomBroadcast(MessageType.ROOM_LOBBY_UPDATED, ROOM_ID, 2, SERVER_TIME,
+                                new RoomLobbyUpdatedPayload(lobby)),
+                        new TypeReference<ServerMessage<RoomLobbyUpdatedPayload>>() { }),
+                new Sample("room-closed.json",
+                        ServerMessage.roomBroadcast(MessageType.ROOM_CLOSED, ROOM_ID, 3, SERVER_TIME,
+                                new RoomClosedPayload(RoomClosedReason.EXPIRED)),
+                        new TypeReference<ServerMessage<RoomClosedPayload>>() { }),
+                new Sample("error-room-already-in-room.json",
+                        ServerMessage.error(ErrorCode.ALREADY_IN_MATCH, null, ROOM_ID, null, SERVER_TIME),
+                        new TypeReference<ServerMessage<ErrorPayload>>() { }),
+                new Sample("error-room-not-host.json",
+                        ServerMessage.roomError(ErrorCode.NOT_HOST, ROOM_ID, SERVER_TIME),
+                        new TypeReference<ServerMessage<ErrorPayload>>() { }),
+                new Sample("error-room-invalid-config.json",
+                        ServerMessage.error(ErrorCode.INVALID_ROOM_CONFIG, null, SERVER_TIME),
+                        new TypeReference<ServerMessage<ErrorPayload>>() { }),
+                new Sample("client-room-create.json",
+                        new RoomCreateSample(new RoomSource(QuestionSource.BANK, TOPIC_ID, "Kerala History"), 10),
+                        new TypeReference<RoomCreateSample>() { }),
                 new Sample("match-found.json",
                         ServerMessage.aboutMatch(MessageType.MATCH_FOUND, MATCH_ID, SERVER_TIME, new MatchFoundPayload(
                                 MATCH_ID, MatchMode.QUICK, participants, 10, QuestionSource.BANK, ANJU, null)),
@@ -256,7 +287,7 @@ class RealtimeSamplesTest {
         Map<String, List<String>> enums = new LinkedHashMap<>();
         for (Class<? extends Enum<?>> type : List.<Class<? extends Enum<?>>>of(MessageType.class, ErrorCode.class,
                 MatchMode.class, ParticipantKind.class, QuestionSource.class, SnapshotPhase.class, AbortReason.class,
-                RematchDeclineReason.class)) {
+                RematchDeclineReason.class, RoomRole.class, RoomClosedReason.class)) {
             enums.put(type.getSimpleName(), Arrays.stream(type.getEnumConstants()).map(Enum::name).toList());
         }
         assertGolden("enums.json", ContractJson.MAPPER.writeValueAsString(enums) + "\n");
@@ -329,6 +360,25 @@ class RealtimeSamplesTest {
         assertThat(Arrays.stream(MessageType.values()).map(Enum::name).filter(n -> n.startsWith("ROOM_")))
                 .containsExactly("ROOM_JOINED", "ROOM_LOBBY_UPDATED", "ROOM_CLOSED", "ROOM_START_FAILED",
                         "ROOM_MATCH_STARTED", "ROOM_SUCCEEDED");
+    }
+
+    /** Story 5.1: the room JSON has the epic's shape; a room error carries its roomId on both the envelope and the payload. */
+    @Test
+    void theRoomPayloadsHaveTheEpicShape() {
+        JsonNode joined = ContractJson.MAPPER.valueToTree(samples().stream().filter(s -> s.file().equals("room-joined.json"))
+                .findFirst().orElseThrow().value());
+        assertThat(joined.get("roomId").asString()).isEqualTo(ROOM_ID.toString());
+        assertThat(joined.get("matchId")).isNull();
+        assertThat(joined.get("payload").propertyNames()).containsExactly("roomId", "code", "role", "selfParticipantId", "room");
+        JsonNode room = joined.get("payload").get("room");
+        assertThat(room.propertyNames()).containsExactly("hostParticipantId", "source", "questionCount", "rated",
+                "expiresAt", "participants", "humanCount");
+        assertThat(room.get("source").propertyNames()).containsExactly("type", "topicId", "topicName");
+        JsonNode busy = ContractJson.MAPPER.valueToTree(ServerMessage.error(ErrorCode.ALREADY_IN_MATCH, null, ROOM_ID, null, SERVER_TIME));
+        assertThat(busy.get("roomId").asString()).isEqualTo(ROOM_ID.toString());
+        assertThat(busy.get("payload").get("roomId").asString()).isEqualTo(ROOM_ID.toString());
+        assertThat(new RoomSource(QuestionSource.BANK, TOPIC_ID, "x").rated()).isTrue();
+        assertThat(new RoomSource(QuestionSource.CUSTOM, null, null).rated()).isFalse();
     }
 
     @Test

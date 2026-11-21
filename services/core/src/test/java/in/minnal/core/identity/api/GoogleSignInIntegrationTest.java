@@ -320,6 +320,21 @@ class GoogleSignInIntegrationTest extends PostgresIntegrationTest {
         assertThat(jdbc.sql("SELECT count(*) FROM refresh_token WHERE revoked_at IS NOT NULL").query(Long.class).single()).isZero();
     }
 
+    /** Story 5.1: the refresh path reads the profile columns, so a saved profile reaches the token. */
+    @Test
+    void theRefreshedAccessTokenSaysProfileCompleteOnlyOnceTheProfileIsSaved() throws Exception {
+        Started started = startAndPrepare("/", Map.of());
+        String raw = refreshCookieValue(callback(started, started.param("state"), "auth-code"));
+
+        Refreshed before = rotate(raw, "en");
+        assertThat(before.jwt().getJWTClaimsSet().getBooleanClaim(MinnalClaims.PROFILE_COMPLETE)).isFalse();
+
+        jdbc.sql("INSERT INTO user_profile (user_id, display_name, district, exam_level, language, updated_at) "
+                + "SELECT id, 'Anju', 'thrissur', 'DEGREE', 'ml', now() FROM app_user").update();
+        Refreshed after = rotate(before.cookie(), "en");
+        assertThat(after.jwt().getJWTClaimsSet().getBooleanClaim(MinnalClaims.PROFILE_COMPLETE)).isTrue();
+    }
+
     @Test
     void aReturningSignInKeepsTheStoredNameWhenGoogleOmitsIt() throws Exception {
         Started first = startAndPrepare("/", Map.of());
