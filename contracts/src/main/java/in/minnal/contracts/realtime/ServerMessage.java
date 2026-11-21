@@ -49,6 +49,11 @@ public record ServerMessage<P>(
         return new ServerMessage<>(type, null, roomId, null, null, serverTime, payload);
     }
 
+    /** A message about a finished room match and its room (the successor notice of Story 5.6): no {@code seq}. */
+    public static <P> ServerMessage<P> aboutRoomMatch(MessageType type, UUID matchId, UUID roomId, Instant serverTime, P payload) {
+        return new ServerMessage<>(type, matchId, roomId, null, null, serverTime, payload);
+    }
+
     /** A broadcast on a room topic: numbered by the room's {@code seq} (1, 2, 3…). */
     public static <P> ServerMessage<P> roomBroadcast(MessageType type, UUID roomId, long seq, Instant serverTime, P payload) {
         return new ServerMessage<>(type, null, roomId, seq, null, serverTime, payload);

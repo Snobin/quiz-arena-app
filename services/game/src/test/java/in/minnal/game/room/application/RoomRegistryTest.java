@@ -113,7 +113,8 @@ class RoomRegistryTest {
     RoomRegistry registry(int maxLive, int... script) {
         registry = new RoomRegistry(drain, participation, sessions, channel, (roomId, message) -> broadcasts.add(message), clock,
                 timers, new RoomSettings(Duration.ofHours(24), Duration.ofSeconds(10), maxLive),
-                new RoomCodes(new Scripted(script)), meters, questions, matches);
+                new RoomCodes(new Scripted(script)), meters, questions, matches,
+                (matchId, message) -> matchBroadcasts.add(message));
         return registry;
     }
 
@@ -664,5 +665,95 @@ class RoomRegistryTest {
         fetches.getFirst().complete(set(10));
         assertThat(matches.liveCount()).isZero();
         assertThat(broadcastsOf(MessageType.ROOM_MATCH_STARTED)).isEmpty();
+    }
+
+    // ---- Story 5.6: play again from the registry's 60 s link ----
+
+    /** A room of {@code humans} whose match everyone left (it aborts and the room ends with it): the link exists. */
+    UUID finishedRoom(int maxLive, int humans) {
+        registry(maxLive, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1);
+        UUID id = opened(registry.open(host("h"), config)).roomId();
+        sessions.connected("h", "s-h");
+        for (int i = 1; i < humans; i++) {
+            sessions.connected("p" + i, "s-p" + i);
+            registry.join(player("p" + i), "s", "AAAAAA");
+        }
+        await().atMost(Duration.ofSeconds(5)).until(() -> registry.find(id).orElseThrow().members().size() == humans);
+        registry.find(id).orElseThrow().tell(new RoomEvent.Start("h", "s"));
+        await().atMost(Duration.ofSeconds(5)).until(() -> fetches.size() == 1);
+        fetches.getFirst().complete(set(10));
+        await().atMost(Duration.ofSeconds(5)).until(() -> !broadcastsOf(MessageType.ROOM_MATCH_STARTED).isEmpty());
+        String matchId = ((in.minnal.contracts.realtime.RoomMatchStartedPayload) broadcastsOf(MessageType.ROOM_MATCH_STARTED)
+                .getFirst().payload()).matchId().toString();
+        matches.leave("h", matchId);
+        for (int i = 1; i < humans; i++) {
+            matches.leave("p" + i, matchId);
+        }
+        await().atMost(Duration.ofSeconds(5)).until(() -> registry.liveCount() == 0);
+        return id;
+    }
+
+    @SuppressWarnings("unchecked")
+    int links() throws Exception {
+        var field = RoomRegistry.class.getDeclaredField("successions");
+        field.setAccessible(true);
+        synchronized (registry) {
+            return ((java.util.Map<UUID, ?>) field.get(registry)).size();
+        }
+    }
+
+    @Test
+    void playAgainAtTheMaxLiveCapGetsTheCreateRefusalAndKeepsTheLink() {
+        UUID old = finishedRoom(1, 2);
+        opened(registry.open(host("z"), config)); // fills the only slot
+
+        assertThat(registry.playAgain(host("h"), "s", old)).isEqualTo(new RoomRegistry.Succeeding.Full());
+        assertThat(registry.liveCount()).isEqualTo(1);
+    }
+
+    @Test
+    void playAgainWhileDrainingIsRefusedAndCreatesNothing() {
+        UUID old = finishedRoom(10, 2);
+        drain.begin();
+
+        assertThat(registry.playAgain(host("h"), "s", old)).isEqualTo(new RoomRegistry.Succeeding.Draining());
+        assertThat(registry.liveCount()).isZero();
+    }
+
+    @Test
+    void aRepeatTapAfterTheSuccessorClosedIsExpiredAndCreatesNoSecondRoom() {
+        UUID old = finishedRoom(10, 2);
+        var first = registry.playAgain(host("h"), "s", old);
+        assertThat(first).isInstanceOf(RoomRegistry.Succeeding.Opened.class);
+        UUID successor = registry.findByCode(((RoomRegistry.Succeeding.Opened) first).code()).orElseThrow().roomId();
+        // The members were told, the host was not.
+        assertThat(sentTo("p1", MessageType.ROOM_SUCCEEDED)).hasSize(1);
+        assertThat(sentTo("h", MessageType.ROOM_SUCCEEDED)).isEmpty();
+        assertThat(matchBroadcasts).anyMatch(m -> m.type() == MessageType.ROOM_SUCCEEDED);
+
+        registry.find(successor).orElseThrow().tell(new RoomEvent.Leave("h", "s"));
+        await().atMost(Duration.ofSeconds(5)).until(() -> registry.liveCount() == 0);
+
+        assertThat(registry.playAgain(host("h"), "s", old)).isEqualTo(new RoomRegistry.Succeeding.Expired());
+        assertThat(registry.liveCount()).isZero();
+    }
+
+    @Test
+    void aPlayAgainJustInsideTheSixtySecondWindowIsAccepted() throws Exception {
+        UUID old = finishedRoom(10, 2);
+        assertThat(links()).isEqualTo(1);
+        clock.advance(Duration.ofSeconds(60).minusMillis(1));
+
+        assertThat(registry.playAgain(host("h"), "s", old)).isInstanceOf(RoomRegistry.Succeeding.Opened.class);
+    }
+
+    @Test
+    void aPlayAgainAtSixtySecondsIsNotFoundAndTheExpiredLinkIsPruned() throws Exception {
+        UUID old = finishedRoom(10, 2);
+        clock.advance(Duration.ofSeconds(60));
+
+        assertThat(registry.playAgain(host("h"), "s", old)).isEqualTo(new RoomRegistry.Succeeding.NotFound());
+        assertThat(links()).isZero();
+        assertThat(registry.liveCount()).isZero();
     }
 }

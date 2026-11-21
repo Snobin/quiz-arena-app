@@ -178,6 +178,13 @@ export type RoomMatchStartedPayload = {
   firstQuestionAt: string;
 };
 
+/**
+ * ROOM_SUCCEEDED (Story 5.6; private to each player of a finished room match, and best effort on the match topic): the
+ * host played again and this is the new lobby. The envelope names the finished match and room. `source` and
+ * `questionCount` are the old room's.
+ */
+export type RoomSucceededPayload = { code: string; hostDisplayName: string; source: RoomSource; questionCount: number };
+
 /** ROOM_CLOSED (broadcast, and private to each member). */
 export type RoomClosedPayload = { reason: RoomClosedReason };
 
@@ -664,6 +671,20 @@ export function parseRematchExpired(value: unknown): Record<string, never> | nul
   return isObject(value) ? {} : null;
 }
 
+/** ROOM_SUCCEEDED's payload (Story 5.6); anything malformed is null. */
+export function parseRoomSucceeded(value: unknown): RoomSucceededPayload | null {
+  if (!isObject(value)) return null;
+  const { code, hostDisplayName, source, questionCount } = value;
+  if (!isString(code) || code === '' || !isString(hostDisplayName) || !isInt(questionCount)) return null;
+  if (!isObject(source) || !isQuestionSource(source.type) || (source.topicId !== undefined && !isString(source.topicId))) return null;
+  return {
+    code,
+    hostDisplayName,
+    questionCount,
+    source: source.topicId === undefined ? { type: source.type } : { type: source.type, topicId: source.topicId },
+  };
+}
+
 /** A frame body the client acts on. Anything else (unknown type, bad shape) is null. */
 export type Incoming =
   | { type: 'MATCH_FOUND'; message: ServerMessage; payload: MatchFoundPayload }
@@ -681,6 +702,7 @@ export type Incoming =
   | { type: 'REMATCH_REQUESTED'; message: ServerMessage & { matchId: string }; payload: RematchRequestedPayload }
   | { type: 'REMATCH_DECLINED'; message: ServerMessage & { matchId: string }; payload: RematchDeclinedPayload }
   | { type: 'REMATCH_EXPIRED'; message: ServerMessage & { matchId: string } }
+  | { type: 'ROOM_SUCCEEDED'; message: ServerMessage & { matchId: string }; payload: RoomSucceededPayload }
   | { type: 'OTHER'; message: ServerMessage };
 
 /** Parses a frame body (JSON text) into what the client acts on. */
@@ -755,6 +777,11 @@ export function parseIncoming(body: string): Incoming | null {
       return parseRematchExpired(message.payload) && matchId !== undefined
         ? { type: 'REMATCH_EXPIRED', message: { ...message, matchId } }
         : null;
+    }
+    case 'ROOM_SUCCEEDED': {
+      const payload = parseRoomSucceeded(message.payload);
+      const { matchId } = message;
+      return payload && matchId !== undefined ? { type: 'ROOM_SUCCEEDED', message: { ...message, matchId }, payload } : null;
     }
     default:
       return { type: 'OTHER', message };

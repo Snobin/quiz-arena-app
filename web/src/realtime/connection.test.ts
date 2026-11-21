@@ -838,7 +838,30 @@ describe('MATCH_ENDED (Story 1.10)', () => {
     expect(state().live!.outcome).toBeNull();
     const stored = lastResult.load();
     // Played as a guest (the session was not registered): marked so the prompt can be rebuilt after a reload.
-    expect(stored).toEqual({ matchId, selfId: self, payload: state().live!.ended, guest: true });
+    expect(stored).toEqual({ matchId, selfId: self, payload: state().live!.ended, guest: true, endedAt: expect.any(Number), succeeded: null });
+  });
+
+  it('ROOM_SUCCEEDED for the ended match is kept in the store and with the stored result, from the queue or the topic (Story 5.6)', async () => {
+    const { matchId, self, opponent } = await inMatch();
+    last().deliver(ended(matchId, self, opponent));
+    const succeeded = (extra: Record<string, unknown> = {}) => ({
+      type: 'ROOM_SUCCEEDED',
+      matchId,
+      roomId: 'room-1',
+      serverTime: SERVER_TIME,
+      payload: { code: 'K7M2QX', hostDisplayName: 'Rajeev', source: { type: 'BANK', topicId: 't1' }, questionCount: 10 },
+      ...extra,
+    });
+    // Another match's notice, and a malformed one, change nothing.
+    last().deliver(succeeded({ matchId: 'someone-else' }));
+    last().deliver(succeeded({ payload: { code: 7 } }));
+    expect(state().succeeded).toBeNull();
+    last().deliverTopic(matchId, succeeded());
+    expect(state().succeeded).toEqual({ matchId, payload: expect.objectContaining({ code: 'K7M2QX', hostDisplayName: 'Rajeev' }) });
+    expect(lastResult.load()?.succeeded).toMatchObject({ code: 'K7M2QX', questionCount: 10 });
+    // The private copy is the same notice: one value, no change of meaning.
+    last().deliver(succeeded());
+    expect(state().succeeded?.payload.code).toBe('K7M2QX');
   });
 
   it('marks the stored result as a registered player’s own when she was signed in at MATCH_ENDED', async () => {

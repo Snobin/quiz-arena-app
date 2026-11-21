@@ -286,6 +286,21 @@ export const roomCatalogue = {
     },
   },
 
+  // Play again (Story 5.6): the host's "New room" after the window, and a player's Join button. Awaiting sign-off.
+  'room.playAgain.newRoom': { ml: 'പുതിയ റൂം', en: 'New room', signoff: both },
+  'room.playAgain.join': {
+    ml: '{{host}}-ന്റെ പുതിയ റൂമിൽ ചേരാം',
+    en: "Join {{host}}'s new room",
+    signoff: both,
+    params: { ml: { host: 'Rajeev' }, en: { host: 'Rajeev' } },
+  },
+  'room.playAgain.announce': {
+    ml: '{{host}} പുതിയ റൂം തുറന്നു. ചേരാം.',
+    en: '{{host}} opened a new room. You can join.',
+    signoff: both,
+    params: { ml: { host: 'Rajeev' }, en: { host: 'Rajeev' } },
+  },
+
   // Notices on the Rooms tab
   'rooms.notice.expired': { ml: 'ആ റൂമിന്റെ സമയം കഴിഞ്ഞു.', en: 'That room expired.', signoff: both },
   'rooms.notice.disconnected': { ml: 'കണക്ഷൻ പോയതിനാൽ റൂം അടച്ചു.', en: 'The room closed because you were disconnected.', signoff: both },

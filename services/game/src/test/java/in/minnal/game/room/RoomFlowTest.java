@@ -505,7 +505,7 @@ class RoomFlowTest extends GameIntegrationTest {
     }
 
     @Test
-    void startChecksTheHostAndThePlayerCountAndPlayAgainIsAStub() {
+    void startChecksTheHostAndThePlayerCountAndPlayAgainOfARoomWithNoFinishedMatchFindsNothing() {
         StompTestClient anju = host(newSub());
         JsonNode created = create(anju);
         String roomId = roomIdOf(created);
@@ -514,7 +514,7 @@ class RoomFlowTest extends GameIntegrationTest {
         anju.send("/app/room/" + roomId + "/start");
         assertThat(anju.error("NOT_ENOUGH_PLAYERS").get("roomId").asString()).isEqualTo(roomId);
         anju.send("/app/room/" + roomId + "/playAgain");
-        anju.error("NOT_AVAILABLE_YET");
+        anju.error("ROOM_NOT_FOUND");
 
         StompTestClient biju = host(newSub());
         join(biju, codeOf(created));

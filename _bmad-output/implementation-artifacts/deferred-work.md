@@ -352,3 +352,15 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-5-battle-room-results-and-podium.md`
   summary: `POST_MATCH` is only a 60 s tombstone TTL in `MatchRegistry`: no actor state, and Home does not end it; Story 5.6 (Play again) needs a real post-match window and `PLAY_AGAIN` handling.
   evidence: Review finding (medium); the implementer and two reviewers confirmed no state or step was added.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-6-play-again.md`
+  summary: A host can Play again after an aborted or failed room match (the successor link is written on any `MatchEnded`) and players are told; record the link only for a finished match.
+  evidence: Review finding (low); only a crafted client reaches it today.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-6-play-again.md`
+  summary: The Join button stays on the live results screen after the 60 s window and the server and client windows start from different instants (room close vs `MATCH_ENDED` stored).
+  evidence: Review finding (low); a tap shows the Story 5.3 inline error. Settle by measuring the real skew.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-6-play-again.md`
+  summary: Unverified (would be medium): `RoomRegistry.playAgain` sends to each player and the match topic while holding the synchronized registry lock.
+  evidence: Settle by checking that `channel.toPlayer` and the match broadcaster never block, and whether `closed()` already sends under the lock.

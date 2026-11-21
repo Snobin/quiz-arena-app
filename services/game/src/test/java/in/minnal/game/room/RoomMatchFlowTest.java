@@ -312,4 +312,149 @@ class RoomMatchFlowTest extends GameIntegrationTest {
         after.send("/app/room/join", "{\"code\":\"" + room.code() + "\"}");
         after.error("ROOM_EXPIRED");
     }
+
+    /** Starts the room's match, lets it run unanswered to its end and waits until the room is gone and everyone is free. */
+    String playToEnd(Lobby room) {
+        room.host().send("/app/room/" + room.roomId() + "/start");
+        String matchId = broadcast(room.host(), "ROOM_MATCH_STARTED").get("payload").get("matchId").asString();
+        for (StompTestClient each : room.players()) {
+            each.subscribe(Destinations.matchTopic(UUID.fromString(matchId)));
+        }
+        clock.advance(Duration.ofMillis(3500));
+        for (StompTestClient each : room.players()) {
+            each.next("MATCH_ENDED");
+        }
+        for (int i = 0; i < room.players().size(); i++) {
+            String sub = subs.get(subs.size() - room.players().size() + i);
+            await().atMost(WAIT).until(() -> participation.activityOf(sub).isEmpty());
+        }
+        await().atMost(WAIT).until(() -> rooms.liveCount() == 0);
+        return matchId;
+    }
+
+    @Test
+    void theHostPlayingAgainOpensOneSuccessorLobbyAndEveryOtherPlayerIsToldItsCode() {
+        Lobby room = lobby(3);
+        String matchId = playToEnd(room);
+
+        // A player who is not the host is refused and nothing changes.
+        room.players().get(1).send("/app/room/" + room.roomId() + "/playAgain");
+        room.players().get(1).error("NOT_HOST");
+        assertThat(rooms.liveCount()).isZero();
+
+        room.host().send("/app/room/" + room.roomId() + "/playAgain");
+        JsonNode lobby = room.host().next("ROOM_JOINED");
+        String code = lobby.get("payload").get("code").asString();
+        assertThat(lobby.get("payload").get("role").asString()).isEqualTo("HOST");
+        assertThat(code).isNotEqualTo(room.code());
+        assertThat(lobby.get("payload").get("room").get("source").get("topicId").asString()).isEqualTo(TOPIC);
+        assertThat(lobby.get("payload").get("room").get("questionCount").asInt()).isEqualTo(5);
+        assertThat(lobby.get("payload").get("roomId").asString()).isNotEqualTo(room.roomId());
+        for (StompTestClient member : room.players().subList(1, 3)) {
+            JsonNode notice = member.next("ROOM_SUCCEEDED");
+            assertThat(notice.get("matchId").asString()).isEqualTo(matchId);
+            assertThat(notice.get("payload").get("code").asString()).isEqualTo(code);
+            assertThat(notice.get("payload").get("hostDisplayName").asString()).isEqualTo("Rajeev");
+            assertThat(notice.get("payload").get("questionCount").asInt()).isEqualTo(5);
+            assertThat(notice.get("payload").get("source").get("topicId").asString()).isEqualTo(TOPIC);
+        }
+
+        // A second tap gives the same lobby and no second room.
+        room.host().send("/app/room/" + room.roomId() + "/playAgain");
+        assertThat(room.host().next("ROOM_JOINED").get("payload").get("code").asString()).isEqualTo(code);
+        assertThat(rooms.liveCount()).isEqualTo(1);
+
+        // One tap for a player: the Story 5.3 join with that code.
+        room.players().get(1).send("/app/room/join", "{\"code\":\"" + code + "\"}");
+        assertThat(room.players().get(1).next("ROOM_JOINED").get("payload").get("role").asString()).isEqualTo("MEMBER");
+        assertThat(rooms.liveCount()).isEqualTo(1);
+        room.host().send("/app/room/" + lobby.get("payload").get("roomId").asString() + "/leave");
+        await().atMost(WAIT).until(() -> rooms.liveCount() == 0);
+    }
+
+    @Test
+    void playAgainAfterTheWindowOrForAnUnknownRoomIsRefusedAndCreatesNothing() {
+        Lobby room = lobby(2);
+        playToEnd(room);
+
+        room.host().send("/app/room/" + UUID.randomUUID() + "/playAgain");
+        room.host().error("ROOM_NOT_FOUND");
+        clock.advance(Duration.ofSeconds(61));
+        room.host().send("/app/room/" + room.roomId() + "/playAgain");
+        room.host().error("ROOM_NOT_FOUND");
+        assertThat(rooms.liveCount()).isZero();
+    }
+
+    @Test
+    void aHostAlreadyInAnotherRoomGetsTheBusyErrorAndNothingIsCreated() {
+        Lobby room = lobby(2);
+        playToEnd(room);
+        room.host().send("/app/room/create", CREATE);
+        String other = room.host().next("ROOM_JOINED").get("payload").get("roomId").asString();
+
+        room.host().send("/app/room/" + room.roomId() + "/playAgain");
+        room.host().error("ALREADY_IN_MATCH");
+        assertThat(rooms.liveCount()).isEqualTo(1);
+        room.host().send("/app/room/" + other + "/leave");
+        await().atMost(WAIT).until(() -> rooms.liveCount() == 0);
+    }
+
+    /** As {@link #playToEnd}, but {@code forfeiter} leaves the match after Q1 opened; the others let it run out. */
+    String playWithForfeit(Lobby room, int forfeiter) {
+        room.host().send("/app/room/" + room.roomId() + "/start");
+        String matchId = broadcast(room.host(), "ROOM_MATCH_STARTED").get("payload").get("matchId").asString();
+        for (StompTestClient each : room.players()) {
+            each.subscribe(Destinations.matchTopic(UUID.fromString(matchId)));
+        }
+        clock.advance(Duration.ofMillis(3500));
+        broadcast(room.players().get(forfeiter), "QUESTION_STARTED");
+        room.players().get(forfeiter).send("/app/match/" + matchId + "/leave");
+        for (StompTestClient each : room.players()) {
+            each.next("MATCH_ENDED");
+        }
+        for (int i = 0; i < room.players().size(); i++) {
+            String sub = subs.get(subs.size() - room.players().size() + i);
+            await().atMost(WAIT).until(() -> participation.activityOf(sub).isEmpty());
+        }
+        await().atMost(WAIT).until(() -> rooms.liveCount() == 0);
+        return matchId;
+    }
+
+    @Test
+    void aHostWhoForfeitedMidMatchCanStillPlayAgainAndMembersAreToldTheHostsOwnName() {
+        Lobby room = lobby(3);
+        playWithForfeit(room, 0);
+
+        room.host().send("/app/room/" + room.roomId() + "/playAgain");
+        JsonNode lobby = room.host().next("ROOM_JOINED");
+        assertThat(lobby.get("payload").get("role").asString()).isEqualTo("HOST");
+        String code = lobby.get("payload").get("code").asString();
+        assertThat(code).isNotEqualTo(room.code());
+        for (StompTestClient member : room.players().subList(1, 3)) {
+            JsonNode notice = member.next("ROOM_SUCCEEDED");
+            assertThat(notice.get("payload").get("code").asString()).isEqualTo(code);
+            assertThat(notice.get("payload").get("hostDisplayName").asString()).isEqualTo("Rajeev");
+        }
+        assertThat(rooms.liveCount()).isEqualTo(1);
+        room.host().send("/app/room/" + lobby.get("payload").get("roomId").asString() + "/leave");
+        await().atMost(WAIT).until(() -> rooms.liveCount() == 0);
+    }
+
+    @Test
+    void aMemberWhoForfeitedStillGetsTheNoticeAndTheHostsNameIsTheHostsNotHers() {
+        Lobby room = lobby(3);
+        playWithForfeit(room, 2);
+
+        room.host().send("/app/room/" + room.roomId() + "/playAgain");
+        JsonNode lobby = room.host().next("ROOM_JOINED");
+        String code = lobby.get("payload").get("code").asString();
+        // Today every participant of the match is told, a forfeiter included (her session is still open on results).
+        for (StompTestClient member : room.players().subList(1, 3)) {
+            JsonNode notice = member.next("ROOM_SUCCEEDED");
+            assertThat(notice.get("payload").get("code").asString()).isEqualTo(code);
+            assertThat(notice.get("payload").get("hostDisplayName").asString()).isEqualTo("Rajeev");
+        }
+        room.host().send("/app/room/" + lobby.get("payload").get("roomId").asString() + "/leave");
+        await().atMost(WAIT).until(() -> rooms.liveCount() == 0);
+    }
 }

@@ -61,7 +61,7 @@ sealed interface RoomEvent {
     record StartFetched(QuestionSetResponse set, Throwable failure) implements RoomEvent {
     }
 
-    /** The room's match ended: finished, aborted or failed (Story 5.4). */
-    record MatchEnded() implements RoomEvent {
+    /** The room's match {@code matchId} ended: finished, aborted or failed (Story 5.4). */
+    record MatchEnded(java.util.UUID matchId) implements RoomEvent {
     }
 }

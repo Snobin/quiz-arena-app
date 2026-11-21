@@ -12,7 +12,7 @@ import { useDocumentTitle } from '../../i18n/useDocumentTitle.ts';
 import { useReducedEffects } from '../../motion/reduceEffects.ts';
 import * as lastResult from '../../realtime/lastResult.ts';
 import { cancelRematch, requestRematch, useLiveGame, type LiveMatch } from '../../realtime/liveGameStore.ts';
-import type { MatchEndedPayload } from '../../realtime/protocol.ts';
+import type { MatchEndedPayload, RoomSucceededPayload } from '../../realtime/protocol.ts';
 import { announce } from '../../shell/announce.ts';
 import { Link } from '../../shell/Link.tsx';
 import { navigate } from '../../shell/router.ts';
@@ -26,6 +26,11 @@ import { RematchCard } from './RematchCard.tsx';
 import { ResultsBand } from './ResultsBand.tsx';
 import { RoomStandings } from './RoomStandings.tsx';
 import { WinTakeover } from './WinTakeover.tsx';
+import { createPath } from '../rooms/pickerReturn.ts';
+import { saveRecentRoom } from '../rooms/recentRooms.ts';
+import { JoinError, RoomError } from '../rooms/RoomError.tsx';
+import { formatCode } from '../rooms/roomCode.ts';
+import { roomClient, type RoomError as RoomErrorValue } from '../rooms/roomClient.ts';
 import '../rooms/roomCatalogue.ts';
 
 /** Matches whose takeover has played in this page session: it never replays (Back, re-render). */
@@ -165,6 +170,11 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
   const heading = topicLabel ? `${named}, ${topicLabel}` : named;
   // Questions she marked during the live reveals open expanded with the note ready (Story 3.5).
   const [marks] = useState(() => new Set(lastResult.loadMarks(matchId)));
+  // A room's play-again window counts from the stored MATCH_ENDED; its successor, if one came before a reload, is kept with it.
+  const [kept] = useState(() => {
+    const entry = lastResult.load();
+    return entry?.matchId === matchId ? entry : null;
+  });
   const answers = full.payload.breakdown.find((b) => b.participantId === full.selfId)?.answers ?? [];
 
   return (
@@ -231,7 +241,7 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
             </ol>
           </main>
           {room ? (
-            <HomeActions />
+            <RoomActions payload={full.payload} selfId={full.selfId} endedAt={kept?.endedAt ?? null} stored={kept?.succeeded ?? null} />
           ) : signedInAfterGuest ? (
             <PlayAgainActions />
           ) : (
@@ -252,14 +262,166 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
   );
 }
 
-/** A Battle Room's results bar (Story 5.5): Home only. Play again is the host's, in Story 5.6; Share is Epic 7. */
-function HomeActions() {
+/**
+ * A Battle Room's results bar (Stories 5.5 and 5.6). The host sees "Play again" (primary) while the 60 s window lasts,
+ * then "New room"; a player sees Home alone until the host's successor room arrives, then "Join <host>'s new room"
+ * beside it. Home is always there. Share is Epic 7.
+ */
+function RoomActions({
+  payload,
+  selfId,
+  endedAt,
+  stored,
+}: {
+  payload: MatchEndedPayload;
+  selfId: string;
+  endedAt: number | null;
+  stored: RoomSucceededPayload | null;
+}) {
   const { t } = useTranslation();
+  const isHost = payload.room?.hostParticipantId === selfId;
+  const home = (
+    <Button variant="secondary" data-testid="home-button" onClick={() => navigate('/')}>
+      {t('common.home')}
+    </Button>
+  );
+  if (isHost && payload.room && payload.topic) {
+    return (
+      <HostActions roomId={payload.room.roomId} topic={payload.topic} count={payload.questions.length} endedAt={endedAt}>
+        {home}
+      </HostActions>
+    );
+  }
   return (
-    <ActionBar>
-      <Button variant="secondary" data-testid="home-button" onClick={() => navigate('/')}>
-        {t('common.home')}
-      </Button>
+    <PlayerActions matchId={payload.matchId} stored={stored}>
+      {home}
+    </PlayerActions>
+  );
+}
+
+/** The host's bar: Play again inside the window (a refusal as late turns it into New room), else New room. */
+function HostActions({
+  roomId,
+  topic,
+  count,
+  endedAt,
+  children,
+}: {
+  roomId: string;
+  topic: { topicId: string; name: string; subjectName: string };
+  count: number;
+  endedAt: number | null;
+  children: ReactNode;
+}) {
+  const { t } = useTranslation();
+  const deadline = endedAt === null ? 0 : endedAt + lastResult.PLAY_AGAIN_WINDOW_MS;
+  const [open, setOpen] = useState(() => Date.now() < deadline);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<RoomErrorValue | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  // The window closing swaps the button: Play again becomes New room, and nobody is told.
+  useEffect(() => {
+    if (!open) return undefined;
+    const timer = setTimeout(() => setOpen(false), Math.max(0, deadline - Date.now()));
+    return () => clearTimeout(timer);
+  }, [open, deadline]);
+
+  const playAgain = () => {
+    if (sending) return;
+    setSending(true);
+    setError(null);
+    void roomClient()
+      .playAgain(roomId, { source: { type: 'BANK', topicId: topic.topicId }, questionCount: count })
+      .then((result) => {
+        if (!mounted.current) return;
+        setSending(false);
+        if (!result.ok) {
+          // Too late (or an unknown match): the window is over, so New room takes its place.
+          if (result.error.code === 'ROOM_NOT_FOUND' || result.error.code === 'ROOM_EXPIRED') setOpen(false);
+          else setError(result.error);
+          return;
+        }
+        const userId = session.userId();
+        if (userId) {
+          saveRecentRoom(userId, {
+            source: { type: 'BANK', topicId: topic.topicId },
+            topicName: topic.name,
+            subjectName: topic.subjectName,
+            questionCount: count,
+            hostedAt: new Date().toISOString(),
+          });
+        }
+        navigate(`/r/${formatCode(result.session.code)}`, { replace: true });
+      });
+  };
+
+  return (
+    <ActionBar note={error ? <RoomError error={error} scope="create" returnTo="/results" /> : null}>
+      {open ? (
+        <Button data-testid="room-play-again" aria-busy={sending ? true : undefined} onClick={playAgain}>
+          {t('results.playAgain')}
+        </Button>
+      ) : (
+        <Button data-testid="room-new-room" onClick={() => navigate(createPath(topic.topicId, count))}>
+          {t('room.playAgain.newRoom')}
+        </Button>
+      )}
+      {children}
+    </ActionBar>
+  );
+}
+
+/** A player's bar: Home, plus "Join <host>'s new room" once ROOM_SUCCEEDED has come (or was stored before a reload). */
+function PlayerActions({ matchId, stored, children }: { matchId: string; stored: RoomSucceededPayload | null; children: ReactNode }) {
+  const { t } = useTranslation();
+  const live = useLiveGame((s) => s.succeeded);
+  const succeeded = (live?.matchId === matchId ? live.payload : null) ?? stored;
+  const [joining, setJoining] = useState(false);
+  const [error, setError] = useState<RoomErrorValue | null>(null);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  // Said once, politely, when the successor first shows (the private message and the topic's copy are one).
+  const code = succeeded?.code ?? null;
+  const host = succeeded?.hostDisplayName ?? '';
+  useEffect(() => {
+    if (code !== null) announce(t('room.playAgain.announce', { host }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code]);
+
+  const join = () => {
+    if (!succeeded || joining) return;
+    setJoining(true);
+    setError(null);
+    void roomClient()
+      .join(succeeded.code)
+      .then((result) => {
+        if (!mounted.current) return;
+        setJoining(false);
+        if (result.ok) navigate(`/r/${formatCode(result.session.code)}`, { replace: true });
+        else setError(result.error);
+      });
+  };
+
+  return (
+    <ActionBar note={error && succeeded ? <JoinError id="room-join-error" error={error} typed={succeeded.code} /> : null}>
+      {succeeded ? (
+        <Button data-testid="room-join-new" aria-busy={joining ? true : undefined} onClick={join}>
+          {t('room.playAgain.join', { host: succeeded.hostDisplayName })}
+        </Button>
+      ) : null}
+      {children}
     </ActionBar>
   );
 }

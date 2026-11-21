@@ -31,6 +31,7 @@ export const ROOM_JOIN = '/app/room/join';
 export const roomStart = (roomId: string) => `/app/room/${roomId}/start`;
 export const roomResync = (roomId: string) => `/app/room/${roomId}/resync`;
 export const roomConfigure = (roomId: string) => `/app/room/${roomId}/configure`;
+export const roomPlayAgain = (roomId: string) => `/app/room/${roomId}/playAgain`;
 export const roomLeave = (roomId: string) => `/app/room/${roomId}/leave`;
 export const roomTopic = (roomId: string) => `/topic/room/${roomId}`;
 

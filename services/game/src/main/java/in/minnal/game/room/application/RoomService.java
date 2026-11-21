@@ -32,7 +32,7 @@ import org.springframework.stereotype.Service;
  * lookups → {@code RATE_LIMITED}, the lookup → {@code ROOM_NOT_FOUND} or {@code ROOM_EXPIRED}; the room itself answers
  * {@code ROOM_FULL}, {@code ROOM_STARTED} or {@code ROOM_JOINED}. The code is never logged. Start (Story 5.4) is the room's
  * own step: it checks the host, the player count and draining, then fetches the set and starts the match; play again
- * waits for Story 5.6.
+ * (Story 5.6) is answered from the registry's 60 s link, since the finished room's actor is gone.
  */
 @Service
 public class RoomService {
@@ -172,9 +172,30 @@ public class RoomService {
         rooms.find(roomId).ifPresent(room -> room.tell(new RoomEvent.Leave(player.sub(), sessionId)));
     }
 
-    /** Story 5.6 builds play again. */
+    /**
+     * Play again (Story 5.6): the old room is gone by now, so the registry answers from its 60 s link: not host →
+     * {@code NOT_HOST}; unknown or late → {@code ROOM_NOT_FOUND}; a successor that closed again → {@code ROOM_EXPIRED};
+     * the host busy elsewhere → {@code ALREADY_IN_MATCH}; else the successor lobby (a repeat gets the same one).
+     */
     public void playAgain(MinnalPrincipal player, String sessionId, String roomIdText) {
-        reject(player, sessionId, ErrorCode.NOT_AVAILABLE_YET, null, parse(roomIdText));
+        UUID roomId = parse(roomIdText);
+        if (roomId == null) {
+            reject(player, sessionId, ErrorCode.BAD_REQUEST, null, null);
+            return;
+        }
+        switch (rooms.playAgain(player, sessionId, roomId)) {
+            case RoomRegistry.Succeeding.Opened opened ->
+                // In a room now: a pending rematch with her can no longer happen (Story 1.10).
+                rematches.joinedMatchmaking(player.sub());
+            case RoomRegistry.Succeeding.NotHost notHost -> reject(player, sessionId, ErrorCode.NOT_HOST, null, roomId);
+            case RoomRegistry.Succeeding.NotFound notFound -> reject(player, sessionId, ErrorCode.ROOM_NOT_FOUND, null, null);
+            case RoomRegistry.Succeeding.Expired expired -> reject(player, sessionId, ErrorCode.ROOM_EXPIRED, null, null);
+            case RoomRegistry.Succeeding.Busy busy -> reject(player, sessionId, ErrorCode.ALREADY_IN_MATCH,
+                    busy.held() instanceof Activity.InMatch(var matchId) ? matchId : null,
+                    busy.held() instanceof Activity.InRoom(var heldRoom) ? heldRoom : null);
+            case RoomRegistry.Succeeding.Full full -> reject(player, sessionId, ErrorCode.MODE_UNAVAILABLE, null, null);
+            case RoomRegistry.Succeeding.Draining draining -> reject(player, sessionId, ErrorCode.SERVER_DRAINING, null, null);
+        }
     }
 
     private void reject(MinnalPrincipal player, String sessionId, ErrorCode code, UUID matchId, UUID roomId) {

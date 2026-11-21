@@ -28,6 +28,7 @@ import {
   parseRoomIncoming,
   roomConfigure,
   roomLeave,
+  roomPlayAgain,
   roomResync,
   roomStart,
   roomTopic,
@@ -136,6 +137,11 @@ export type JoinResult = CreateResult;
 export type RoomClient = {
   /** Opens a room with `config`. Resolves with the lobby, or with the error to show inline. */
   create(config: Required<RoomConfigRequest>): Promise<CreateResult>;
+  /**
+   * The host of the finished room match `oldRoomId` plays again (Story 5.6): the successor lobby with `config` (the old
+   * room's source and count). Resolves with the new lobby, or with the error (`ROOM_NOT_FOUND` once the window passed).
+   */
+  playAgain(oldRoomId: string, config: Required<RoomConfigRequest>): Promise<CreateResult>;
   /** Joins the room with `code` (canonical). A second call while one is in flight returns the same promise. */
   join(code: string): Promise<JoinResult>;
   /** Re-reads a room she is already in. Resolves false when there is none. */
@@ -600,15 +606,23 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
     set(INITIAL_ROOM_STATE);
   }
 
+  /** A create, or a play again: both end in the host's own `ROOM_JOINED` for a lobby with `config`. */
+  function openLobby(config: Required<RoomConfigRequest>, destination: string, body: string): Promise<CreateResult> {
+    if (creating) return Promise.resolve({ ok: false, error: { code: 'BAD_REQUEST' } });
+    return new Promise<CreateResult>((resolve) => {
+      creating = { request: config, resolve };
+      set({ phase: 'creating', error: null, notice: null });
+      createTimer = setTimeout(() => settleCreate({ ok: false, error: { code: 'TIMEOUT' } }), CREATE_TIMEOUT_MS);
+      send((c) => c.publish({ destination, body }));
+    });
+  }
+
   return {
     create(config) {
-      if (creating) return Promise.resolve({ ok: false, error: { code: 'BAD_REQUEST' } });
-      return new Promise<CreateResult>((resolve) => {
-        creating = { request: config, resolve };
-        set({ phase: 'creating', error: null, notice: null });
-        createTimer = setTimeout(() => settleCreate({ ok: false, error: { code: 'TIMEOUT' } }), CREATE_TIMEOUT_MS);
-        send((c) => c.publish({ destination: ROOM_CREATE, body: configBody(config) }));
-      });
+      return openLobby(config, ROOM_CREATE, configBody(config));
+    },
+    playAgain(oldRoomId, config) {
+      return openLobby(config, roomPlayAgain(oldRoomId), '{}');
     },
     join(code) {
       if (joining) {

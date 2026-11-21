@@ -58,6 +58,7 @@ describe('contracts/samples', () => {
       'room-lobby-updated.json',
       'room-match-started.json',
       'room-start-failed.json',
+      'room-succeeded.json',
     ]);
     for (const file of ROOM_MESSAGES) {
       const json = read(file);
@@ -77,6 +78,23 @@ describe('contracts/samples', () => {
     expect(broadcast.seq).toBe(2);
     expect(broadcast.refSeq).toBeUndefined();
     expect((parseServerMessage(read('room-closed.json'))!.payload as RoomClosedPayload).reason).toBe('EXPIRED');
+  });
+
+  it('the ROOM_SUCCEEDED sample parses to the successor notice for the finished match (Story 5.6)', () => {
+    const json = read('room-succeeded.json');
+    const incoming = parseIncoming(JSON.stringify(json));
+    expect(incoming?.type).toBe('ROOM_SUCCEEDED');
+    expect(incoming?.type === 'ROOM_SUCCEEDED' && incoming.payload).toEqual({
+      code: 'K7M2QX',
+      hostDisplayName: 'Anju',
+      source: { type: 'BANK', topicId: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d' },
+      questionCount: 10,
+    });
+    expect(incoming?.message.matchId).toBe('6f1c2a3e-8a4b-4c1d-9e2f-0a1b2c3d4e5f');
+    expect(incoming?.message.seq).toBeUndefined();
+    // No match id, or a payload that is not one: nothing to act on.
+    expect(parseIncoming(JSON.stringify({ ...(json as object), matchId: undefined }))).toBeNull();
+    expect(parseIncoming(JSON.stringify({ ...(json as object), payload: { code: '' } }))).toBeNull();
   });
 
   it('the room error samples parse with their roomId and codes', () => {

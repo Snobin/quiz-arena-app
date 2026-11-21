@@ -1,4 +1,4 @@
-import { parseMatchEnded, type MatchEndedPayload } from './protocol.ts';
+import { parseMatchEnded, parseRoomSucceeded, type MatchEndedPayload, type RoomSucceededPayload } from './protocol.ts';
 
 /**
  * The last MATCH_ENDED, kept in `sessionStorage` so `/results` survives a reload (UX-DR47).
@@ -12,7 +12,19 @@ export const LAST_RESULT_KEY = 'minnal.lastResult';
  * `guest`: she was not signed in when the match ended (Story 2.4). An entry written before this existed has
  * none, which reads as null (unknown): the results then decide from her session, never silently as registered.
  */
-export type LastResult = { matchId: string; selfId: string; payload: MatchEndedPayload; guest: boolean | null };
+export type LastResult = {
+  matchId: string;
+  selfId: string;
+  payload: MatchEndedPayload;
+  guest: boolean | null;
+  /** Device time (ms) the MATCH_ENDED was stored: a room's 60 s play-again window counts from it. Null on an older entry. */
+  endedAt: number | null;
+  /** The room's successor (ROOM_SUCCEEDED, Story 5.6), while its window lasts; null otherwise. */
+  succeeded: RoomSucceededPayload | null;
+};
+
+/** How long after MATCH_ENDED a room match can be played again (game-service's post-match window). */
+export const PLAY_AGAIN_WINDOW_MS = 60_000;
 
 function storage(): Storage | null {
   try {
@@ -34,7 +46,7 @@ export function load(): LastResult | null {
   try {
     const value: unknown = JSON.parse(text);
     if (typeof value === 'object' && value !== null) {
-      const { matchId, selfId, payload, guest } = value as Record<string, unknown>;
+      const { matchId, selfId, payload, guest, endedAt, succeeded } = value as Record<string, unknown>;
       const parsed = parseMatchEnded(payload);
       if (
         typeof matchId === 'string' &&
@@ -43,7 +55,10 @@ export function load(): LastResult | null {
         parsed.matchId === matchId &&
         parsed.participants.some((p) => p.participantId === selfId)
       ) {
-        return { matchId, selfId, payload: parsed, guest: typeof guest === 'boolean' ? guest : null };
+        const at = typeof endedAt === 'number' && Number.isFinite(endedAt) ? endedAt : null;
+        // The successor is dropped once the window has passed.
+        const next = at !== null && Date.now() < at + PLAY_AGAIN_WINDOW_MS ? parseRoomSucceeded(succeeded) : null;
+        return { matchId, selfId, payload: parsed, guest: typeof guest === 'boolean' ? guest : null, endedAt: at, succeeded: next };
       }
     }
   } catch {
@@ -53,12 +68,36 @@ export function load(): LastResult | null {
   return null;
 }
 
-export function save(result: Omit<LastResult, 'guest'> & { guest: boolean }): void {
+export function save(result: Omit<LastResult, 'guest' | 'endedAt' | 'succeeded'> & { guest: boolean }): void {
   try {
+    // A MATCH_ENDED seen again keeps its first time and any successor already stored with it.
+    let kept: Record<string, unknown> = {};
+    try {
+      const previous: unknown = JSON.parse(storage()?.getItem(LAST_RESULT_KEY) ?? 'null');
+      if (typeof previous === 'object' && previous !== null && (previous as Record<string, unknown>).matchId === result.matchId) {
+        kept = { endedAt: (previous as Record<string, unknown>).endedAt, succeeded: (previous as Record<string, unknown>).succeeded };
+      }
+    } catch {
+      // Unreadable: written fresh.
+    }
+    const entry = { ...result, endedAt: Date.now(), ...(typeof kept.endedAt === 'number' && { endedAt: kept.endedAt }), ...(kept.succeeded !== undefined && { succeeded: kept.succeeded }) };
     // Stored in its wire shape: absent optional fields are left out, as the server sends them.
-    storage()?.setItem(LAST_RESULT_KEY, JSON.stringify(result, (_, value: unknown) => (value === null ? undefined : value)));
+    storage()?.setItem(LAST_RESULT_KEY, JSON.stringify(entry, (_, value: unknown) => (value === null ? undefined : value)));
   } catch {
     // Full or blocked storage: the results just won't survive a reload.
+  }
+}
+
+/** Keeps the ROOM_SUCCEEDED of the stored match `matchId` with its MATCH_ENDED, so a reload within the window restores the Join button. */
+export function saveSucceeded(matchId: string, succeeded: RoomSucceededPayload): void {
+  try {
+    const text = storage()?.getItem(LAST_RESULT_KEY) ?? null;
+    if (text === null) return;
+    const value: unknown = JSON.parse(text);
+    if (typeof value !== 'object' || value === null || (value as Record<string, unknown>).matchId !== matchId) return;
+    storage()?.setItem(LAST_RESULT_KEY, JSON.stringify({ ...value, succeeded }));
+  } catch {
+    // Blocked or corrupt storage: the Join button just won't survive a reload.
   }
 }
 
