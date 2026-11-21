@@ -63,11 +63,11 @@ describe('tab bar', () => {
     const user = userEvent.setup();
     renderApp('/');
     await user.click(tab('റൂമുകൾ'));
-    expect(screen.getByRole('heading', { level: 1, name: 'റൂമുകൾ' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'റൂമുകൾ' })).toBeInTheDocument();
     expect(document.title).toBe('റൂമുകൾ · മിന്നൽ');
     expect(window.location.pathname).toBe('/rooms');
     await user.click(tab('ഞാൻ'));
-    expect(screen.getByRole('heading', { level: 1, name: 'ഞാൻ' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'ഞാൻ' })).toBeInTheDocument();
     expect(tab('ഞാൻ')).toHaveAttribute('aria-current', 'page');
   });
 

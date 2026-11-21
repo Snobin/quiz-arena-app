@@ -95,7 +95,7 @@ describe('Ranks: the board', () => {
     await boot();
     renderApp('/ranks');
 
-    const modes = screen.getByRole('radiogroup');
+    const modes = await screen.findByRole('radiogroup');
     expect(within(modes).getAllByRole('radio').map((r) => r.textContent)).toEqual(['Quick Match', 'Topic Duel', 'Battle Room']);
     expect(within(modes).getByRole('radio', { name: 'Quick Match' })).toBeChecked();
     expect(within(modes).getAllByRole('radio').filter((r) => r.getAttribute('aria-checked') === 'true')).toHaveLength(1);

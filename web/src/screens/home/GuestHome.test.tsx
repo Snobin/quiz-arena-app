@@ -124,7 +124,7 @@ describe('Quick Match', () => {
     await homeReady();
     await user.click(quickMatch());
     expect(window.location.pathname).toBe('/matchmaking');
-    expect(screen.getByRole('heading', { level: 1, name: 'Finding an opponent…' })).toHaveFocus();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Finding an opponent…' })).toHaveFocus();
     expect(document.title).toBe('Matchmaking · Minnal');
     expect(screen.queryByRole('navigation')).toBeNull();
     await waitFor(() => expect(sockets).toHaveLength(1));
@@ -227,7 +227,7 @@ describe('Sign-in prompt', () => {
     expect(window.location.pathname).toBe('/sign-in');
     expect(new URLSearchParams(window.location.search).get('returnTo')).toBe('/');
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(screen.getByRole('heading', { level: 1, name: 'Sign in to Minnal' })).toHaveFocus();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sign in to Minnal' })).toHaveFocus();
     expect(document.title).toBe('Sign in · Minnal');
     expect(screen.getByText(/need a free account/)).toBeInTheDocument();
     const google = screen.getByRole('button', { name: 'Continue with Google' });

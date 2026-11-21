@@ -65,6 +65,7 @@ async function inMatch(opponent: { name: string; kind: 'BOT' | 'GUEST' } = { nam
   const { matchId, selfParticipantId, participants } = message.payload;
   const other = participants.find((p) => p.participantId !== selfParticipantId)!.participantId;
   renderApp('/match');
+  await screen.findByTestId('score-strip');
   return { matchId, self: selfParticipantId, opponent: other, seq: 0, participants };
 }
 
@@ -182,11 +183,11 @@ describe('reconnect banner', () => {
       await act(() => vi.advanceTimersByTimeAsync(500));
       if (!socket().connected && screen.queryByTestId('reconnect-banner')) act(() => socket().drop());
     }
-    expect(screen.getByTestId('notice-forfeited')).toHaveTextContent('You left · Vishnu R wins');
+    await vi.waitFor(() => expect(screen.getByTestId('notice-forfeited')).toHaveTextContent('You left · Vishnu R wins'));
     expect(screen.queryByTestId('reconnect-banner')).toBeNull();
     await act(() => vi.advanceTimersByTimeAsync(FORFEIT_NOTICE_MS));
     expect(window.location.pathname).toBe('/results');
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Results');
+    await vi.waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Results'));
     expect(screen.getByTestId('result-self')).toHaveTextContent('You');
     expect(screen.getByTestId('result-self')).toHaveTextContent('900');
     expect(screen.getByTestId('notice-forfeited')).toBeInTheDocument();

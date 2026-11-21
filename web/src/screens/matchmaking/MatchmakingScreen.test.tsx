@@ -25,6 +25,9 @@ import {
   type FakeStomp,
 } from '../../test-utils/realtime.ts';
 
+const preload = vi.hoisted(() => ({ preloadLiveMatch: vi.fn(), preloadResults: vi.fn() }));
+vi.mock('../preload.ts', () => preload);
+
 // fontsReady() is controlled per test: by default it is already settled.
 let releaseFonts: () => void = () => {};
 let fontsPromise: Promise<void> = Promise.resolve();
@@ -79,6 +82,12 @@ afterEach(async () => {
 });
 
 describe('searching', () => {
+  it('starts fetching the live match chunk on mount, ahead of match start', async () => {
+    preload.preloadLiveMatch.mockClear();
+    await searching();
+    expect(preload.preloadLiveMatch).toHaveBeenCalledTimes(1);
+  });
+
   it('joins on mount and shows the heading, an animated indicator and a 48px Cancel; no tab bar', async () => {
     await searching();
     expect(heading()).toHaveTextContent('Finding an opponent…');
@@ -129,6 +138,7 @@ describe('found', () => {
 
     await waitFor(() => expect(window.location.pathname).toBe('/match'), { timeout: 2500 });
     expect(useAnnouncements.getState().polite.seq).toBe(1);
+    await screen.findByTestId('score-strip');
     expect(heading()).toHaveTextContent('Get ready…');
     const strip = screen.getByTestId('score-strip');
     expect(strip).toHaveTextContent('Minnal Bot');
