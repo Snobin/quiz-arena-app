@@ -5,14 +5,14 @@ import { useSession } from '../../auth/session.ts';
 import { PageColumn } from '../../design/PageColumn.tsx';
 import { liveGameStore, useLiveGame } from '../../realtime/liveGameStore.ts';
 import { MatchmakingScreen } from '../matchmaking/MatchmakingScreen.tsx';
-import { useDocumentTitle } from '../../i18n/useDocumentTitle.ts';
-import { Link } from '../../shell/Link.tsx';
 import { navigate, usePathname } from '../../shell/router.ts';
 import { signInPath } from '../home/signInPath.ts';
 import { TOPICS_QUERY_KEY, TopicPicker, type TopicPurpose } from './TopicPicker.tsx';
 import { fetchTopics } from './topicsApi.ts';
+import PracticeScreen from '../practice/PracticeScreen.tsx';
+import { PRACTICE_PICKER } from '../practice/PracticeSummary.tsx';
 
-/** Where the picker sends a selection: the Topic Duel matchmaking view (Story 4.2); Solo Practice is still a stub (Story 4.3). */
+/** Where the picker sends a selection: the Topic Duel matchmaking view (Story 4.2); Solo Practice opens the practice screen (Story 4.3). */
 export const DUEL_PATH = '/play/duel/';
 export const PRACTICE_PATH = '/practice/';
 
@@ -65,28 +65,17 @@ function Duel({ topicId }: { topicId: string }) {
   return <MatchmakingScreen key={topicId} topicId={topicId} topicName={name} exitTo={DUEL_PICKER} />;
 }
 
-function Stub({ topicId, purpose }: { topicId: string; purpose: TopicPurpose }) {
-  const { t } = useTranslation();
-  const name = useTopicName(topicId);
-  const mode = t(purpose === 'TOPIC_DUEL' ? 'mode.topicDuel.title' : 'mode.solo.title');
-  useDocumentTitle(mode);
-  return (
-    <PageColumn className="py-4">
-      <main className="flex flex-col gap-3">
-        <h1 tabIndex={-1} className="font-title text-title">
-          {name ?? mode}
-        </h1>
-        <p className="text-body">{t('topics.stub.unavailable')}</p>
-        <Link to={`/play/topics?for=${purpose === 'TOPIC_DUEL' ? 'duel' : 'solo'}`} className="hit-target inline-flex min-h-target-min items-center text-body font-semibold underline">
-          {t('common.back')}
-        </Link>
-      </main>
-    </PageColumn>
-  );
+/** An empty, trailing-slash, extra-segment or non-UUID id never starts a session: back to the picker. */
+function PracticeRoute({ id }: { id: string }) {
+  const valid = UUID.test(id);
+  useEffect(() => {
+    if (!valid) navigate(PRACTICE_PICKER, { replace: true });
+  }, [valid]);
+  return valid ? <PracticeScreen key={id} topicId={id} /> : <Pending />;
 }
 
 /**
- * The lazy chunk behind /play/topics and the Duel and Solo stubs. A guest is sent to the Sign-in prompt
+ * The lazy chunk behind /play/topics, Topic Duel and Solo Practice. A guest is sent to the Sign-in prompt
  * with this route as `returnTo`; the picker code is never requested for a guest.
  */
 export default function TopicsRoutes() {
@@ -99,7 +88,7 @@ export default function TopicsRoutes() {
   if (status !== 'registered') return <Pending />;
 
   if (pathname.startsWith(DUEL_PATH)) return <DuelRoute id={pathname.slice(DUEL_PATH.length)} />;
-  if (pathname.startsWith(PRACTICE_PATH)) return <Stub topicId={pathname.slice(PRACTICE_PATH.length)} purpose="SOLO_PRACTICE" />;
+  if (pathname.startsWith(PRACTICE_PATH)) return <PracticeRoute id={pathname.slice(PRACTICE_PATH.length)} />;
   const params = new URLSearchParams(window.location.search);
   const purpose: TopicPurpose = params.get('for') === 'solo' ? 'SOLO_PRACTICE' : 'TOPIC_DUEL';
   return (

@@ -267,3 +267,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-2-topic-duel.md`
   summary: A cancel sent while a Topic Duel rematch set is being fetched returns NOT_IN_QUEUE.
   evidence: `RematchCoordinator` claims `Queued(TOPIC_DUEL, topicId)` with no `MatchmakingActor` behind it, so cancel finds no actor.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-3-solo-practice.md`
+  summary: Make `ValkeySoloSessionStore.create` atomic and replace the re-serialized-JSON compare-and-set with a revision counter.
+  evidence: concurrent starts can orphan a session until its 2 h TTL, and any change to the `SoloSession` record makes live sessions fail CAS with 409.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-3-solo-practice.md`
+  summary: Add a service-level test for the CAS retry and conflict path, and filter the practice pool query by topic before `DISTINCT ON`.
+  evidence: only the store primitive is tested; `publishedQuestionIds` scans every published question per start and reshuffle.

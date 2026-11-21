@@ -304,6 +304,37 @@ public class JdbcQuestionRepository {
                 .list();
     }
 
+    /** Ids of every live question whose latest {@code PUBLISHED} version is in this topic and category (Solo Practice pool). */
+    public List<UUID> publishedQuestionIds(UUID topicId, in.minnal.core.question.domain.ContentCategory category) {
+        return jdbc.sql("""
+                WITH latest AS (
+                    SELECT DISTINCT ON (qv.question_id) qv.question_id, qv.topic_id, qv.content_category
+                    FROM question_version qv
+                    JOIN question q ON q.id = qv.question_id
+                    WHERE q.deleted_at IS NULL AND qv.status = 'PUBLISHED'
+                    ORDER BY qv.question_id, qv.version DESC
+                )
+                SELECT question_id FROM latest WHERE topic_id = :topicId AND content_category = :category
+                """)
+                .param("topicId", topicId)
+                .param("category", category.name())
+                .query(UUID.class)
+                .list();
+    }
+
+    /** The latest {@code PUBLISHED} version of a live question; empty when it is deleted or has none. */
+    public Optional<QuestionVersion> latestPublished(UUID questionId) {
+        return jdbc.sql("""
+                SELECT %s FROM question_version qv
+                JOIN question q ON q.id = qv.question_id
+                WHERE qv.question_id = :id AND q.deleted_at IS NULL AND qv.status = 'PUBLISHED'
+                ORDER BY qv.version DESC LIMIT 1
+                """.formatted(VERSION_COLUMNS.replace("\n", " ").replaceAll("(\\w+)", "qv.$1")))
+                .param("id", questionId)
+                .query((rs, n) -> mapVersion(rs))
+                .optional();
+    }
+
     /**
      * A random draw in one query: each live question's latest {@code PUBLISHED} version, then the
      * filters, then {@code ORDER BY random() LIMIT count}. Returns at most {@code count} versions.
