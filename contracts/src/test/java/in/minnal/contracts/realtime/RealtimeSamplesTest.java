@@ -153,6 +153,13 @@ class RealtimeSamplesTest {
                                         new ResultParticipant(BOT, "Minnal Bot", ParticipantKind.BOT, 642, 1, false, 2)),
                                 List.of(), List.of(), TOPIC)),
                         new TypeReference<ServerMessage<MatchEndedPayload>>() { }),
+                new Sample("match-ended-room.json",
+                        ServerMessage.aboutMatch(MessageType.MATCH_ENDED, MATCH_ID, SERVER_TIME, new MatchEndedPayload(
+                                MATCH_ID, MatchMode.BATTLE_ROOM, QuestionSource.BANK, List.of(
+                                        new ResultParticipant(ANJU, "Anju", ParticipantKind.USER, 1500, 2, false, 1),
+                                        new ResultParticipant(BOT, "Fathima S", ParticipantKind.USER, 1500, 2, true, 1)),
+                                List.of(), List.of(), TOPIC, new MatchEndedRoom(ROOM_ID, ANJU))),
+                        new TypeReference<ServerMessage<MatchEndedPayload>>() { }),
                 new Sample("matchmaking-failed-topic-unavailable.json",
                         ServerMessage.direct(MessageType.MATCHMAKING_FAILED, SERVER_TIME,
                                 new MatchmakingFailedPayload(MatchmakingFailedPayload.TOPIC_UNAVAILABLE)),

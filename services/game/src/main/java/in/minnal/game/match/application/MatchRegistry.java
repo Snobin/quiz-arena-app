@@ -58,6 +58,9 @@ public class MatchRegistry implements MatchAccess, DisposableBean {
 
     static final Duration TOMBSTONE_TTL = Duration.ofSeconds(30);
 
+    /** A completed Battle Room match stays resolvable for its 60 s post-match window (Story 5.5; Play again is Story 5.6). */
+    static final Duration POST_MATCH_TTL = Duration.ofSeconds(60);
+
     /** An ended match: who played it, its last broadcast seq, and when to forget it. */
     private record Tombstone(Set<String> humans, long lastSeq, long expiresAtNanos) {
     }
@@ -65,6 +68,8 @@ public class MatchRegistry implements MatchAccess, DisposableBean {
     private final ConcurrentHashMap<UUID, MatchActor> live = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<UUID, Tombstone> tombstones = new ConcurrentHashMap<>();
     private final Object idle = new Object();
+    /** The monotonic clock tombstones expire on; a test replaces it. */
+    java.util.function.LongSupplier nanos = System::nanoTime;
     private final DrainState drain;
     private final ParticipationRegistry participation;
     private final PlayerSessions sessions;
@@ -215,7 +220,7 @@ public class MatchRegistry implements MatchAccess, DisposableBean {
     }
 
     private void pruneTombstones() {
-        long now = System.nanoTime();
+        long now = nanos.getAsLong();
         tombstones.values().removeIf(t -> now - t.expiresAtNanos() >= 0);
     }
 
@@ -250,8 +255,10 @@ public class MatchRegistry implements MatchAccess, DisposableBean {
         } else {
             metrics.failed();
         }
+        Duration ttl = match.setup().mode() == MatchMode.BATTLE_ROOM && match.isCompleted() && !match.isFailed()
+                ? POST_MATCH_TTL : TOMBSTONE_TTL;
         tombstones.put(matchId, new Tombstone(Set.copyOf(match.setup().humans().keySet()), match.lastSeq(),
-                System.nanoTime() + TOMBSTONE_TTL.toNanos()));
+                nanos.getAsLong() + ttl.toNanos()));
         synchronized (idle) {
             live.remove(matchId, match);
             idle.notifyAll();

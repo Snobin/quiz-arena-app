@@ -130,6 +130,7 @@ describe('contracts/samples', () => {
         'match-found-topic-duel.json',
         'snapshot-topic-duel.json',
         'match-ended-topic-duel.json',
+        'match-ended-room.json',
         'matchmaking-failed-topic-unavailable.json',
         'error-invalid-topic.json',
       ]),
@@ -176,6 +177,17 @@ describe('contracts/samples', () => {
       expect(JSON.stringify(read(quick))).not.toContain('"topic"');
     }
     expect(parseMatchFound(parseServerMessage(read('match-found.json'))!.payload)).not.toHaveProperty('topic');
+  });
+
+  it('the Battle Room MATCH_ENDED carries the room block, and a malformed one is refused', () => {
+    const payload = parseServerMessage(read('match-ended-room.json'))!.payload as Record<string, unknown>;
+    expect(parseMatchEnded(payload)).toMatchObject({
+      mode: 'BATTLE_ROOM',
+      room: { roomId: '8e9f0a1b-2c3d-4e5f-a6b7-c8d9e0f1a2b3', hostParticipantId: '0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d' },
+    });
+    expect(parseMatchEnded({ ...payload, room: { roomId: 7 } })).toBeNull();
+    expect(JSON.stringify(read('match-ended.json'))).not.toContain('"room"');
+    expect(parseMatchEnded(parseServerMessage(read('match-ended.json'))!.payload)).not.toHaveProperty('room');
   });
 
   it('a malformed topic block is refused', () => {

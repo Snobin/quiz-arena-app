@@ -245,4 +245,52 @@ class MatchCompletedHandlerIntegrationTest extends PostgresIntegrationTest {
         assertThat(jdbc.sql("SELECT DISTINCT payload->>'mode' FROM event_outbox WHERE stream = 'minnal.rating.updated'").query(String.class).list())
                 .containsExactly("TOPIC_DUEL");
     }
+
+    /** Story 5.5: a 4-player Battle Room with a tie for first and a forfeiter, rated pairwise in BATTLE_ROOM only. */
+    @Test
+    void aFourPlayerBattleRoomWithATieAndAForfeiterMovesOnlyTheBattleRoomRating() {
+        UUID a = UUID.randomUUID();
+        UUID b = UUID.randomUUID();
+        UUID c = UUID.randomUUID();
+        UUID leaver = UUID.randomUUID();
+        for (UUID id : List.of(a, b, c, leaver)) {
+            jdbc.sql("INSERT INTO rating (user_id, mode, rating, matches_rated, updated_at) VALUES (:u, 'QUICK', 1500, 4, now())").param("u", id).update();
+            jdbc.sql("INSERT INTO rating (user_id, mode, rating, matches_rated, updated_at) VALUES (:u, 'TOPIC_DUEL', 1300, 2, now())").param("u", id).update();
+        }
+        CompletedParticipant forfeiter = new CompletedParticipant(UUID.randomUUID(), leaver.toString(),
+                in.minnal.contracts.realtime.ParticipantKind.USER, "Leaver", 500, 1, true, 4);
+        java.time.Instant end = java.time.Instant.parse("2026-11-19T10:00:00Z");
+        UUID matchId = UUID.randomUUID();
+        MatchCompletedEvent room = MatchCompletedEvent.of(matchId, in.minnal.contracts.realtime.MatchMode.BATTLE_ROOM, UUID.randomUUID(),
+                QuestionSource.BANK, end.minusSeconds(300), end, null,
+                List.of(user(a, 4000, 1), user(b, 4000, 1), user(c, 2000, 3), forfeiter));
+
+        assertThat(handler.handle(room)).isEqualTo(MatchCompletedHandler.Outcome.APPLIED);
+
+        java.util.function.Function<UUID, Integer> battle = id -> jdbc.sql("SELECT rating FROM rating WHERE user_id = :u AND mode = 'BATTLE_ROOM'")
+                .param("u", id).query(Integer.class).single();
+        // All four start at 1200 (E = 0.5 against everyone), K = 32 / 3, one rounding (HALF_UP) per player:
+        // the tied pair: (0.5 + 0 + 0.5) * 32/3 = +10.67 -> +11; third: (-0.5 - 0.5 + 0.5) * 32/3 = -5.33 -> -5;
+        // the forfeiter, ranked last: -1.5 * 32/3 = -16.
+        assertThat(battle.apply(a)).isEqualTo(1211);
+        assertThat(battle.apply(b)).isEqualTo(1211);
+        assertThat(battle.apply(c)).isEqualTo(1195);
+        assertThat(battle.apply(leaver)).isEqualTo(1184);
+        for (UUID id : List.of(a, b, c, leaver)) {
+            assertThat(ratingOf(id)).as("Quick untouched").isEqualTo(1500);
+            assertThat(jdbc.sql("SELECT rating FROM rating WHERE user_id = :u AND mode = 'TOPIC_DUEL'").param("u", id).query(Integer.class).single())
+                    .as("Topic Duel untouched").isEqualTo(1300);
+        }
+        assertThat(count("match_record")).isEqualTo(4);
+        assertThat(jdbc.sql("SELECT DISTINCT mode FROM match_record").query(String.class).list()).containsExactly("BATTLE_ROOM");
+        assertThat(jdbc.sql("SELECT result FROM match_record WHERE user_id = :u").param("u", a).query(String.class).single()).isEqualTo("DRAW");
+        assertThat(jdbc.sql("SELECT result FROM match_record WHERE user_id = :u").param("u", b).query(String.class).single()).isEqualTo("DRAW");
+        assertThat(jdbc.sql("SELECT result FROM match_record WHERE user_id = :u").param("u", c).query(String.class).single()).isEqualTo("LOSS");
+        assertThat(jdbc.sql("SELECT forfeited || ':' || result FROM match_record WHERE user_id = :u").param("u", leaver).query(String.class).single())
+                .isEqualTo("true:LOSS");
+        assertThat(jdbc.sql("SELECT DISTINCT mode FROM rating_event").query(String.class).list()).containsExactly("BATTLE_ROOM");
+        assertThat(jdbc.sql("SELECT DISTINCT payload->>'mode' FROM event_outbox WHERE stream = 'minnal.rating.updated'").query(String.class).list())
+                .containsExactly("BATTLE_ROOM");
+        assertThat(count("event_outbox")).isEqualTo(4);
+    }
 }

@@ -19,7 +19,7 @@ import { LeaveDialog } from './LeaveDialog.tsx';
 import { OptionList, type OptionReveal } from './OptionList.tsx';
 import { QuestionCard } from './QuestionCard.tsx';
 import { ReconnectBanner } from './ReconnectBanner.tsx';
-import { Countdown, RoomFinal, RoomHeader, RoomStandings } from './RoomMatchParts.tsx';
+import { Countdown, RoomHeader, RoomStandings } from './RoomMatchParts.tsx';
 import { ReportQuestion } from '../../report/ReportQuestion.tsx';
 import { RevealDetails } from './RevealDetails.tsx';
 import { opponentsOf } from './opponents.tsx';
@@ -294,7 +294,7 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
       return undefined;
     }
     if (room) {
-      // A room has no 1v1 results: she stays on the standings (Story 5.5 replaces them with the podium).
+      // A room's results open on `/results` once her MATCH_ENDED is in (below). Until then she stays on the standings.
       // One who confirmed Leave has nothing left to watch: Home.
       if (outcome.kind === 'left') navigate('/', { replace: true });
       else if (outcome.kind === 'forfeited') announce(forfeitedNotice);
@@ -316,7 +316,7 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
   // MATCH_ENDED are in (in either order), after the reveal hold. With no MATCH_ENDED by
   // `MATCH_ENDED_WAIT_MS` after the hold (a match settled from NOT_IN_MATCH, say), the results
   // open anyway on the minimal view, which upgrades in place if MATCH_ENDED still comes.
-  const completedHere = !room && outcome?.kind === 'completed' && outcome !== initialOutcome.current;
+  const completedHere = outcome?.kind === 'completed' && outcome !== initialOutcome.current;
   const [held, setHeld] = useState(false);
   useEffect(() => {
     if (!completedHere) return undefined;
@@ -324,6 +324,11 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
     return () => clearTimeout(timer);
   }, [completedHere]);
   const hasEnded = live.ended !== null;
+  // A room player who forfeited still gets MATCH_ENDED when the match ends: her results open straight away.
+  const forfeitedRoomEnded = room && hasEnded && outcome?.kind === 'forfeited';
+  useEffect(() => {
+    if (forfeitedRoomEnded) navigate('/results', { replace: true });
+  }, [forfeitedRoomEnded]);
   useEffect(() => {
     if (!held) return undefined;
     if (hasEnded) {
@@ -377,8 +382,6 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
       {t('match.leave')}
     </Button>
   ) : null;
-  // The interim final list (Story 5.5 replaces it): once the room's match has run its course for her.
-  const showFinal = room && (live.ended !== null || outcome?.kind === 'completed');
 
   const answerable =
     live.phase === 'open' && live.myAnswer === null && reveal === null && !reconnecting && outcome === null;
@@ -514,7 +517,7 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
               </p>
             )}
 
-            {room ? showFinal ? <RoomFinal live={live} /> : <RoomStandings live={live} /> : null}
+            {room ? <RoomStandings live={live} /> : null}
 
           </>
         )}

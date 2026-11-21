@@ -6,6 +6,7 @@ import in.minnal.contracts.internal.QuestionSetResponse;
 import in.minnal.contracts.internal.QuestionSetTopic;
 import in.minnal.contracts.internal.QuestionSource;
 import in.minnal.contracts.realtime.ErrorCode;
+import in.minnal.contracts.realtime.MatchEndedRoom;
 import in.minnal.contracts.realtime.MatchMode;
 import in.minnal.contracts.realtime.MessageType;
 import in.minnal.contracts.realtime.RoomLobbyPhase;
@@ -337,11 +338,10 @@ final class RoomActor {
         QuestionSetTopic topic = set.topic();
         TopicInfo topicInfo = new TopicInfo(topic.topicId(), topic.name(), topic.subjectName());
         List<in.minnal.contracts.realtime.Participant> participants = state.participants();
-        Map<String, Long> waits = new HashMap<>();
-        state.memberSubs().forEach(sub -> waits.put(sub, 0L));
         Instant firstQuestionAt = now.plus(FIRST_QUESTION_DELAY);
         MatchSetup setup = new MatchSetup(matchId, MatchMode.BATTLE_ROOM, participants, state.humans(), set.questions(),
-                waits, Map.of(), now, QuestionSource.BANK, topicInfo);
+                Map.of(), Map.of(), now, QuestionSource.BANK, topicInfo,
+                new MatchEndedRoom(roomId(), state.humans().get(state.hostSub())));
         if (matches.start(setup, firstQuestionAt, match -> actor.tell(new RoomEvent.MatchEnded())).isEmpty()) {
             log.atWarn().addKeyValue("roomId", roomId()).log("match not started: draining");
             finish(RoomClosedReason.SERVER_DRAINING);

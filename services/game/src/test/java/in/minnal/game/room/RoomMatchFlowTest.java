@@ -26,7 +26,7 @@ import tools.jackson.databind.JsonNode;
 
 /**
  * Story 5.4 between real STOMP clients: the host's start (STARTING, the fetch, the failure and abandon paths), the match
- * (3.5 s to Q1, receipt-only acks, the scoreboard, forfeits), its end (room ENDED, code expired, nothing published) and
+ * (3.5 s to Q1, receipt-only acks, the scoreboard, forfeits), its end (room ENDED, code expired, one completed event) and
  * the abort. Room timers are manual; match timers run (the test profile shortens them), so the one real wait is the
  * 3.5 s countdown, and the test clock is advanced to it.
  */
@@ -138,7 +138,7 @@ class RoomMatchFlowTest extends GameIntegrationTest {
     }
 
     @Test
-    void aStartFetchesTheSetStartsOneMatchForEveryHumanAndEndsTheRoomWithNothingPublished() {
+    void aStartFetchesTheSetStartsOneMatchForEveryHumanAndEndsTheRoomWithOneCompletedEvent() {
         int liveBefore = rooms.liveCount();
         double startedBefore = started();
         long humansBefore = meters.get(RoomMetrics.HUMANS).tag("mode", "BATTLE_ROOM").summary().count();
@@ -218,7 +218,7 @@ class RoomMatchFlowTest extends GameIntegrationTest {
             assertThat(ended.get("payload").get("mode").asString()).isEqualTo("BATTLE_ROOM");
             assertThat(ended.get("payload").get("participants")).hasSize(3);
         }
-        // The room ended with its match: the code expired (a tombstone), the players are free, no completed event.
+        // The room ended with its match: the code expired (a tombstone), the players are free, one completed event.
         for (String sub : subs.subList(0, 3)) {
             await().atMost(WAIT).until(() -> participation.activityOf(sub).isEmpty());
         }
@@ -226,7 +226,12 @@ class RoomMatchFlowTest extends GameIntegrationTest {
         StompTestClient after = player(newSub(), "After");
         after.send("/app/room/join", "{\"code\":\"" + room.code() + "\"}");
         after.error("ROOM_EXPIRED");
-        assertThat(published.of(UUID.fromString(matchId))).isEmpty();
+        List<in.minnal.contracts.events.MatchCompletedEvent> events = published.of(UUID.fromString(matchId));
+        assertThat(events).hasSize(1);
+        assertThat(events.getFirst().roomId()).isNotNull();
+        assertThat(events.getFirst().rated()).isTrue();
+        assertThat(events.getFirst().queueWaitMs()).isNull();
+        assertThat(events.getFirst().participants()).allSatisfy(p -> assertThat(p.kind().name()).isEqualTo("USER"));
     }
 
     @Test

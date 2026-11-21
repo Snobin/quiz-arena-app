@@ -199,7 +199,7 @@ describe('the Battle Room live screen (Story 5.4)', () => {
     expect(useAnnouncements.getState().polite.text).toBe("The match was called off and won't count");
   });
 
-  it('the final reveal shows the interim standings (rank, name, score) with Home, and does not open /results', async () => {
+  it('the final reveal with MATCH_ENDED hands off to /results for a room (the podium), not the interim list', async () => {
     await roomMatch(Date.now() - 1_000);
     renderApp('/match');
     open(4);
@@ -216,20 +216,10 @@ describe('the Battle Room live screen (Story 5.4)', () => {
       }),
       }),
     );
-    const list = await screen.findByTestId('room-final');
-    expect(screen.getByRole('heading', { level: 1, name: 'Final standings' })).toBeInTheDocument();
-    const rows = within(list).getAllByTestId('room-final-row');
-    expect(rows.map((row) => row.getAttribute('aria-label'))).toEqual([
-      'Place 1, You, 900 points',
-      'Place 2, Biju, 500 points',
-      'Place 3, Rajeev, 300 points',
-      'Place 4, Chitra, 100 points',
-      'Place 5, Devan, 0 points',
-    ]);
-    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/');
-    // Well past the 1v1 hold: the room never navigates to the 1v1 results.
-    await new Promise((resolve) => setTimeout(resolve, 2_600));
-    expect(window.location.pathname).toBe('/match');
+    await waitFor(() => expect(window.location.pathname).toBe('/results'), { timeout: 4_000 });
+    expect(await screen.findByTestId('podium')).toBeInTheDocument();
+    expect(screen.getAllByTestId('results-standings-row')).toHaveLength(5);
+    expect(screen.queryByTestId('room-final')).toBeNull();
     expect(liveGameStore.getState().live?.outcome?.kind).toBe('completed');
   });
 
@@ -250,6 +240,28 @@ describe('the Battle Room live screen (Story 5.4)', () => {
     expect(await screen.findByTestId('notice-opponent-left')).toHaveTextContent('Chitra');
     expect(screen.getByTestId('notice-opponent-left')).not.toHaveTextContent('win');
   });
+  it('her own forfeit, then MATCH_ENDED, opens /results with the podium', async () => {
+    await roomMatch(Date.now() - 1_000);
+    renderApp('/match');
+    open(0);
+    await screen.findByTestId('progress');
+    seq += 1;
+    topic(participantForfeited(MATCH, seq, SELF));
+    expect(await screen.findByTestId('notice-forfeited')).toBeInTheDocument();
+    act(() =>
+      socket().deliver({
+        ...matchEnded(MATCH, {
+          mode: 'BATTLE_ROOM',
+          count: 5,
+          participants: ids.map((participantId, i) => ({ participantId, displayName: names[i]!, kind: 'USER', score: [300, 900, 500, 100, 0][i]!, correctCount: 3, placement: [3, 1, 2, 4, 5][i]!, forfeited: participantId === SELF })),
+          breakdown: Object.fromEntries(ids.map((id) => [id, Array.from({ length: 5 }, () => ({ pickedIndex: 0, correct: true, points: 100 }))])),
+        }),
+      }),
+    );
+    await waitFor(() => expect(window.location.pathname).toBe('/results'));
+    expect(await screen.findByTestId('podium')).toBeInTheDocument();
+  });
+
   it('a player who confirms Leave goes Home: no 1v1 results and no frozen screen', async () => {
     await roomMatch(Date.now() - 1_000);
     renderApp('/match');

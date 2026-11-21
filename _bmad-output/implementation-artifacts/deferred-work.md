@@ -344,3 +344,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-4-play-a-room-match.md`
   summary: Unverified (would be medium): `MatchActorRoomTest` relies on sleeps and wall-clock bounds and checks "p95 under 200 ms" as a single-run max.
   evidence: Settle by running the class repeatedly on CI hardware; consider a manual-clock variant.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-5-battle-room-results-and-podium.md`
+  summary: Battle Room results polish: the win and joint-win takeovers, the "Show my place" link, history rows showing placement "#3", the Ranks Battle Room empty-board button opening the Rooms tab, and the 50-player 320 px / 200% text audit.
+  evidence: Split from Story 5.5 as separate shippable UI deliverables; the spec above ships server completion, ratings and the podium, standings and band.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-5-5-battle-room-results-and-podium.md`
+  summary: `POST_MATCH` is only a 60 s tombstone TTL in `MatchRegistry`: no actor state, and Home does not end it; Story 5.6 (Play again) needs a real post-match window and `PLAY_AGAIN` handling.
+  evidence: Review finding (medium); the implementer and two reviewers confirmed no state or step was added.

@@ -5,6 +5,7 @@ import { formatNumber } from '../../i18n/format.ts';
 import { Lang } from '../../i18n/Lang.tsx';
 import type { DeltaState } from '../../ratings/useMatchDelta.ts';
 import type { ResultView } from './outcome.ts';
+import '../rooms/roomCatalogue.ts';
 import { RatingDelta } from './RatingDelta.tsx';
 
 /**
@@ -13,11 +14,24 @@ import { RatingDelta } from './RatingDelta.tsx';
  * line naming the winner unchanged. Draw: "Draw", both scores in white, no volt. A registered player's own
  * rated match adds the rating-change slot (Story 2.6). A Topic Duel names its topic under the line. A forfeited opponent carries the "left" tag; a bot always carries the BOT badge.
  */
-export function ResultsBand({ view, delta, topicLabel }: { view: ResultView; delta?: DeltaState; topicLabel?: string }) {
+export function ResultsBand({
+  view,
+  delta,
+  topicLabel,
+  room,
+}: {
+  view: ResultView;
+  delta?: DeltaState;
+  topicLabel?: string;
+  /** A Battle Room's compact band (Story 5.5): "#3 of 23", her score and the delta; volt only at placement 1. */
+  room?: { total: number };
+}) {
   const { t } = useTranslation();
   const { kind, self, rival, winner } = view;
-  const line =
-    kind === 'win'
+  const first = room !== undefined && self.placement === 1;
+  const line = room
+    ? t('room.result.band', { place: self.placement, total: room.total })
+    : kind === 'win'
       ? t('result.winTitle')
       : kind === 'draw'
         ? t('result.draw')
@@ -25,9 +39,10 @@ export function ResultsBand({ view, delta, topicLabel }: { view: ResultView; del
   const selfScore = formatNumber(self.score);
   // A draw shows both scores in white; otherwise the opponent is muted.
   const bothWhite = kind === 'draw';
+  const showVolt = room ? first : kind === 'win';
   const rivalTone = bothWhite ? 'text-on-band' : 'text-on-band-muted';
   return (
-    <PeakBandSurface volt={kind === 'win'} testId="results-band" result={kind}>
+    <PeakBandSurface volt={showVolt} testId="results-band" result={room ? (first ? 'win' : 'loss') : kind}>
       <p data-testid="results-line" className="font-peak-word text-peak-word text-on-band">
         {line}
       </p>
@@ -37,7 +52,7 @@ export function ResultsBand({ view, delta, topicLabel }: { view: ResultView; del
         </p>
       ) : null}
       <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        {kind === 'win' ? (
+        {showVolt ? (
           <VoltText testId="results-self-score" className="font-peak-points text-peak-points tabular-nums">
             {selfScore}
           </VoltText>
@@ -46,7 +61,7 @@ export function ResultsBand({ view, delta, topicLabel }: { view: ResultView; del
             {selfScore}
           </span>
         )}
-        {rival ? (
+        {rival && !room ? (
           <span
             data-testid="results-rival"
             className={`inline-flex flex-wrap items-center gap-2 text-body tabular-nums ${rivalTone}`}
@@ -62,7 +77,7 @@ export function ResultsBand({ view, delta, topicLabel }: { view: ResultView; del
           </span>
         ) : null}
       </div>
-      {delta ? <RatingDelta state={delta} kind={kind} /> : null}
+      {delta ? <RatingDelta state={delta} kind={room ? (first ? 'win' : 'loss') : kind} /> : null}
     </PeakBandSurface>
   );
 }

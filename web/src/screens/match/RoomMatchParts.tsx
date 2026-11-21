@@ -3,12 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { formatNumber } from '../../i18n/format.ts';
 import { Lang } from '../../i18n/Lang.tsx';
 import type { LiveMatch } from '../../realtime/liveGameStore.ts';
-import { Link } from '../../shell/Link.tsx';
 import '../rooms/roomCatalogue.ts';
 
 /**
- * The Battle Room's parts of the live screen (Story 5.4): the start countdown, a compact header, the plain standings and
- * the interim final list. They sit in the match chunk with the screen; the room strings they use come from the rooms
+ * The Battle Room's parts of the live screen (Story 5.4): the start countdown, a compact header, the plain standings. They sit in the match chunk with the screen; the room strings they use come from the rooms
  * catalogue, so the entry chunk carries none of them. The richer scoreboard (top 8, answered meter, rank arrows, overtake)
  * is a later deliverable: here every participant is one plain row.
  */
@@ -148,54 +146,6 @@ export function RoomStandings({ live }: { live: LiveMatch }) {
           );
         })}
       </ol>
-    </section>
-  );
-}
-
-/**
- * The interim final standings (rank, name, score) with Home, until Story 5.5's podium replaces them. Ranks and scores are
- * the server's (MATCH_ENDED) when it arrived, else the last running totals.
- */
-export function RoomFinal({ live }: { live: LiveMatch }) {
-  const { t } = useTranslation();
-  const ended = live.ended;
-  const rows: Row[] = ended
-    ? [...ended.participants]
-        .sort((a, b) => a.placement - b.placement)
-        .map((p) => ({ participantId: p.participantId, name: p.displayName, score: p.score, rank: p.placement }))
-    : rankRows(live.participants, live.totals);
-  return (
-    <section aria-labelledby="room-final-heading" className="mt-6 flex flex-col gap-2">
-      <h1 id="room-final-heading" tabIndex={-1} className="font-title text-title">
-        {t('room.final.heading')}
-      </h1>
-      <ol data-testid="room-final" className="flex flex-col gap-1">
-        {rows.map((row) => {
-          const self = row.participantId === live.selfParticipantId;
-          const name = self ? t('match.you') : row.name;
-          return (
-            <li
-              key={row.participantId}
-              data-testid="room-final-row"
-              aria-label={t('room.final.row', { rank: row.rank, name, score: row.score })}
-              className="flex min-h-[47px] items-center gap-3 rounded-md border border-hairline bg-card px-3 py-2 text-ink"
-            >
-              <span aria-hidden="true" className="w-8 text-label tabular-nums">
-                {formatNumber(row.rank)}
-              </span>
-              <span aria-hidden="true" className={`min-w-[0] flex-1 break-words text-body ${self ? 'font-bold' : ''}`}>
-                {self ? name : <Lang>{name}</Lang>}
-              </span>
-              <span aria-hidden="true" className="font-score text-score tabular-nums">
-                {formatNumber(row.score)}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-      <Link to="/" className="hit-target inline-flex min-h-target-min items-center self-start text-body underline">
-        {t('common.home')}
-      </Link>
     </section>
   );
 }

@@ -125,6 +125,8 @@ final class MatchTestKit {
     /** The same setup as a Battle Room (a forfeit there never ends the match). */
     static MatchSetup room(MatchSetup base) {
         return new MatchSetup(base.matchId(), MatchMode.BATTLE_ROOM, base.participants(), base.humans(),
-                base.questions(), base.queueWaitMs(), base.ratings(), base.createdAt(), base.questionSource());
+                base.questions(), Map.of(), base.ratings(), base.createdAt(), base.questionSource(), null,
+                new in.minnal.contracts.realtime.MatchEndedRoom(UUID.randomUUID(),
+                        base.participants().getFirst().participantId()));
     }
 }

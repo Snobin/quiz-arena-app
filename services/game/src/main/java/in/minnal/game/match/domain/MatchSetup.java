@@ -2,6 +2,7 @@ package in.minnal.game.match.domain;
 
 import in.minnal.contracts.internal.InternalQuestion;
 import in.minnal.contracts.internal.QuestionSource;
+import in.minnal.contracts.realtime.MatchEndedRoom;
 import in.minnal.contracts.realtime.MatchMode;
 import in.minnal.contracts.realtime.Participant;
 import in.minnal.contracts.realtime.TopicInfo;
@@ -19,7 +20,8 @@ import java.util.UUID;
  * @param queueWaitMs  each human's {@code sub} → her wait in the queue
  * @param ratings      every participant's id → the rating she plays at (a bot plays at its human's)
  * @param questionSource where the questions came from (always {@code BANK} until Epic 6)
- * @param topic        the Topic Duel topic, null in every other mode
+ * @param topic        the Topic Duel or Battle Room topic, null in Quick Match
+ * @param room         a Battle Room's id and host participant, null in every other mode
  */
 public record MatchSetup(
         UUID matchId,
@@ -31,7 +33,15 @@ public record MatchSetup(
         Map<UUID, Integer> ratings,
         Instant createdAt,
         QuestionSource questionSource,
-        TopicInfo topic) {
+        TopicInfo topic,
+        MatchEndedRoom room) {
+
+    /** A setup outside a Battle Room. */
+    public MatchSetup(UUID matchId, MatchMode mode, List<Participant> participants, Map<String, UUID> humans,
+            List<InternalQuestion> questions, Map<String, Long> queueWaitMs, Map<UUID, Integer> ratings,
+            Instant createdAt, QuestionSource questionSource, TopicInfo topic) {
+        this(matchId, mode, participants, humans, questions, queueWaitMs, ratings, createdAt, questionSource, topic, null);
+    }
 
     /** A bank setup with no topic (Quick Match, Battle Room). */
     public MatchSetup(UUID matchId, MatchMode mode, List<Participant> participants, Map<String, UUID> humans,
