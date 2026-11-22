@@ -9,6 +9,7 @@ import in.minnal.contracts.internal.QuestionSource;
 import in.minnal.core.question.domain.ContentCategory;
 import in.minnal.core.question.domain.DrawCriteria;
 import in.minnal.core.question.domain.ExamLevel;
+import in.minnal.core.question.domain.OptionOrder;
 import in.minnal.core.question.domain.QuestionContent;
 import in.minnal.core.question.domain.QuestionVersion;
 import in.minnal.core.question.domain.Text;
@@ -81,7 +82,9 @@ public class QuestionSetService {
 
     private static InternalQuestion toInternal(QuestionVersion version) {
         QuestionContent c = version.content();
-        return new InternalQuestion(version.questionId(), version.version(), c.textMl(), c.textEn(), c.options(),
-                c.answerIndex(), c.explanation(), c.attribution(), c.topicId());
+        // A fresh option order for every drawn set, so the same question is not always laid out the same way.
+        OptionOrder order = OptionOrder.random(java.util.concurrent.ThreadLocalRandom.current());
+        return new InternalQuestion(version.questionId(), version.version(), c.textMl(), c.textEn(),
+                order.apply(c.options()), order.shownIndexOf(c.answerIndex()), c.explanation(), c.attribution(), c.topicId());
     }
 }

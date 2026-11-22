@@ -5,6 +5,7 @@ import in.minnal.contracts.internal.InternalQuestion;
 import in.minnal.contracts.realtime.QuestionView;
 import in.minnal.core.question.application.TopicThreshold;
 import in.minnal.core.question.domain.ContentCategory;
+import in.minnal.core.question.domain.OptionOrder;
 import in.minnal.core.question.domain.QuestionContent;
 import in.minnal.core.question.domain.QuestionVersion;
 import in.minnal.core.question.infrastructure.JdbcQuestionRepository;
@@ -127,10 +128,12 @@ public class SoloPracticeService {
             QuestionContent content = questions.findVersion(questionId, version)
                     .orElseThrow(() -> new SoloException(Kind.CONFLICT, "That question is not the one being practised."))
                     .content();
-            boolean correct = optionIndex == content.answerIndex();
+            OptionOrder order = orderFor(session, questionId, version);
+            int shownAnswer = order.shownIndexOf(content.answerIndex());
+            boolean correct = optionIndex == shownAnswer;
             SoloSession next = session.withAnswer(correct);
             if (store.replace(session, next)) {
-                return new AnswerResult(correct, content.answerIndex(), content.explanation(), content.attribution(),
+                return new AnswerResult(correct, shownAnswer, content.explanation(), content.attribution(),
                         next.answeredCount(), next.correctCount());
             }
         }
@@ -207,9 +210,15 @@ public class SoloPracticeService {
     private static Next next(SoloSession session, JdbcSubjectTopicRepository.TopicWithSubject topic, QuestionVersion served,
                              boolean reshuffled) {
         QuestionContent c = served.content();
+        OptionOrder order = orderFor(session, served.questionId(), served.version());
         InternalQuestion internal = new InternalQuestion(served.questionId(), served.version(), c.textMl(), c.textEn(),
-                c.options(), c.answerIndex(), c.explanation(), c.attribution());
+                order.apply(c.options()), order.shownIndexOf(c.answerIndex()), c.explanation(), c.attribution());
         return new Next(session.answeredCount() + 1, view(session.source(), topic), reshuffled,
                 QuestionBody.of(QuestionView.of(internal)));
+    }
+
+    /** Stable for a session, question and version, so a reload and the answer check see the order that was shown. */
+    private static OptionOrder orderFor(SoloSession session, UUID questionId, int version) {
+        return OptionOrder.seeded(java.util.Objects.hash(session.sessionId(), questionId, version));
     }
 }
