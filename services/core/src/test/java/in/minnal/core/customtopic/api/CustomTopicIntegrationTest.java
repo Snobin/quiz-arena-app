@@ -290,4 +290,146 @@ class CustomTopicIntegrationTest extends PostgresIntegrationTest {
         String mine = player();
         mvc.perform(get(URL + "/usage").header("Authorization", mine)).andExpect(jsonPath("$.topics").value(0)).andExpect(jsonPath("$.questions").value(0));
     }
+
+    // ---- Story 6.3: list, read, replace, delete ----
+
+    String created(String auth, String name, int questions) throws Exception {
+        var result = send(auth, name, topic("ignored", questions)).andExpect(status().isCreated()).andReturn();
+        return mapper.readTree(result.getResponse().getContentAsString()).get("customTopicId").asString();
+    }
+
+    ResultActions put(String auth, String id, String name, String json) throws Exception {
+        var request = org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(URL + "/" + id).contentType(MediaType.APPLICATION_JSON)
+                .content(mapper.writeValueAsString(java.util.Map.of("name", name, "json", json)));
+        if (auth != null) {
+            request.header("Authorization", auth);
+        }
+        return mvc.perform(request);
+    }
+
+    ResultActions request(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder builder, String auth) throws Exception {
+        if (auth != null) {
+            builder.header("Authorization", auth);
+        }
+        return mvc.perform(builder);
+    }
+
+    @Test
+    void theListHasOnlyMyTopicsNewestFirstWithUsage() throws Exception {
+        String mine = player();
+        UUID me = userId;
+        created(mine, "Older", 2);
+        Thread.sleep(15);
+        created(mine, "Newer", 3);
+        created(player(), "Someone else's", 4);
+        request(get(URL), mine).andExpect(status().isOk())
+                .andExpect(jsonPath("$.topics.length()").value(2)).andExpect(jsonPath("$.topics[0].name").value("Newer"))
+                .andExpect(jsonPath("$.topics[0].questionCount").value(3)).andExpect(jsonPath("$.topics[0].updatedAt").exists())
+                .andExpect(jsonPath("$.topics[1].name").value("Older"))
+                .andExpect(jsonPath("$.usage.topics").value(2)).andExpect(jsonPath("$.usage.questions").value(5));
+        assertThat(me).isNotNull();
+    }
+
+    @Test
+    void readingATopicReturnsItsQuestionsInOrder() throws Exception {
+        String p = player();
+        String id = created(p, "Read me", 3);
+        request(get(URL + "/" + id), p).andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Read me")).andExpect(jsonPath("$.questionCount").value(3)).andExpect(jsonPath("$.revision").value(1))
+                .andExpect(jsonPath("$.questions.length()").value(3)).andExpect(jsonPath("$.questions[0].position").value(1))
+                .andExpect(jsonPath("$.questions[0].options.length()").value(4)).andExpect(jsonPath("$.questions[1].answerIndex").value(1))
+                .andExpect(jsonPath("$.questions[2].explanation").value("Because.")).andExpect(jsonPath("$.questions[0].lang").value("en"));
+    }
+
+    @Test
+    void anotherPlayersTopicAnAnUnknownAndAMalformedIdAllGetTheSame404() throws Exception {
+        String theirs = player();
+        String id = created(theirs, "Theirs", 2);
+        String me = player();
+        String missing = UUID.randomUUID().toString();
+        for (String target : new String[] {id, missing, "not-a-uuid"}) {
+            request(get(URL + "/" + target), me).andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.type").value("urn:minnal:problem:not-found")).andExpect(jsonPath("$.detail").value("Topic not found."));
+            put(me, target, "X", topic("x", 1)).andExpect(status().isNotFound()).andExpect(jsonPath("$.detail").value("Topic not found."));
+            request(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(URL + "/" + target), me)
+                    .andExpect(status().isNotFound()).andExpect(jsonPath("$.detail").value("Topic not found."));
+        }
+        assertThat(count("custom_topic")).isEqualTo(1);
+        assertThat(jdbc.sql("SELECT name FROM custom_topic").query(String.class).single()).isEqualTo("Theirs");
+        assertThat(count("custom_question")).isEqualTo(2);
+    }
+
+    @Test
+    void everyNewEndpointRefusesAGuestAndNoToken() throws Exception {
+        String guest = "Bearer " + guestTokens.issue("en").accessToken();
+        String id = UUID.randomUUID().toString();
+        for (String auth : new String[] {guest, null}) {
+            int expected = auth == null ? 401 : 403;
+            request(get(URL), auth).andExpect(status().is(expected));
+            request(get(URL + "/" + id), auth).andExpect(status().is(expected));
+            put(auth, id, "X", topic("x", 1)).andExpect(status().is(expected));
+            request(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(URL + "/" + id), auth).andExpect(status().is(expected));
+        }
+    }
+
+    @Test
+    void replacingSwapsTheQuestionsBumpsTheRevisionAndFreesTheOldOnesAgainstTheCap() throws Exception {
+        String p = player();
+        UUID me = userId;
+        seedTopic(me, "Elsewhere", 440);
+        String id = created(p, "Mine", 5);
+        // 440 + 5 used; replacing with 60 would be 500: allowed because the old 5 are freed
+        put(p, id, "Mine renamed", topic("x", 60)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Mine renamed")).andExpect(jsonPath("$.questionCount").value(60))
+                .andExpect(jsonPath("$.revision").value(2)).andExpect(jsonPath("$.usage.questions").value(500)).andExpect(jsonPath("$.usage.topics").value(2));
+        assertThat(jdbc.sql("SELECT count(*) FROM custom_question WHERE custom_topic_id = :t").param("t", UUID.fromString(id)).query(Integer.class).single()).isEqualTo(60);
+        request(get(URL + "/" + id), p).andExpect(jsonPath("$.name").value("Mine renamed")).andExpect(jsonPath("$.revision").value(2));
+        // the same name is not a clash with itself
+        put(p, id, "Mine renamed", topic("x", 2)).andExpect(status().isOk()).andExpect(jsonPath("$.revision").value(3));
+    }
+
+    @Test
+    void aReplacementOverTheCapIs422AndChangesNothing() throws Exception {
+        String p = player();
+        UUID me = userId;
+        seedTopic(me, "Elsewhere", 440);
+        String id = created(p, "Mine", 5);
+        put(p, id, "Mine", topic("x", 61)).andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.type").value("urn:minnal:problem:custom-topic-cap"));
+        request(get(URL + "/" + id), p).andExpect(jsonPath("$.questionCount").value(5)).andExpect(jsonPath("$.revision").value(1));
+    }
+
+    @Test
+    void aFailedReplacementKeepsTheOldNameQuestionsAndRevision() throws Exception {
+        String p = player();
+        String id = created(p, "Keep me", 3);
+        created(p, "Other topic", 1);
+        // name clash with another of my topics
+        put(p, id, "other TOPIC", topic("x", 2)).andExpect(status().isBadRequest()).andExpect(jsonPath("$.errors[0].field").value("name"));
+        // field errors and a syntax error
+        put(p, id, "Keep me", "{\"questions\":[{\"question\":\"Q?\",\"options\":[\"a\"],\"answer\":9,\"explanation\":\"E\"}]}").andExpect(status().isBadRequest());
+        put(p, id, "Keep me", "{ not json").andExpect(status().isBadRequest());
+        // a database failure on the last of many questions
+        List<String> qs = new ArrayList<>();
+        for (int i = 0; i < 49; i++) {
+            qs.add(question("Question " + i + "?", 0));
+        }
+        qs.add(question("Bad\\u0000nul?", 0));
+        put(p, id, "Keep me", "{\"questions\":[" + String.join(",", qs) + "]}").andExpect(status().isInternalServerError());
+        request(get(URL + "/" + id), p).andExpect(jsonPath("$.name").value("Keep me")).andExpect(jsonPath("$.questionCount").value(3))
+                .andExpect(jsonPath("$.revision").value(1)).andExpect(jsonPath("$.questions.length()").value(3));
+    }
+
+    @Test
+    void deletingRemovesTheTopicAndItsQuestionsThenItIsGone() throws Exception {
+        String p = player();
+        String id = created(p, "Delete me", 4);
+        String other = created(player(), "Keep", 2);
+        request(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(URL + "/" + id), p).andExpect(status().isNoContent());
+        assertThat(count("custom_topic")).isEqualTo(1);
+        assertThat(count("custom_question")).isEqualTo(2);
+        request(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(URL + "/" + id), p).andExpect(status().isNotFound());
+        request(get(URL), p).andExpect(jsonPath("$.topics.length()").value(0)).andExpect(jsonPath("$.usage.questions").value(0));
+        assertThat(other).isNotBlank();
+    }
 }

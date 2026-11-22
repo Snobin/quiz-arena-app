@@ -2,6 +2,7 @@ package in.minnal.core.customtopic.application;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /** Storage for a player's private custom topics. Every method runs inside the caller's transaction. */
@@ -12,6 +13,29 @@ public interface CustomTopicRepository {
 
     record Row(int position, String text, String lang, List<String> options, int answerIndex, String explanation) {
     }
+
+    record Summary(UUID id, String name, int questionCount, Instant updatedAt) {
+    }
+
+    record Detail(UUID id, String name, int questionCount, int revision, Instant updatedAt, List<Row> rows) {
+    }
+
+    /** The owner's topics, newest {@code updated_at} first. */
+    List<Summary> list(UUID ownerId);
+
+    /** One topic with its questions in order; empty when it does not exist or belongs to someone else (the same answer for both). */
+    Optional<Detail> find(UUID ownerId, UUID topicId);
+
+    /** True when another of the owner's topics (not {@code excludeId}) already has this name key. */
+    boolean nameExistsOther(UUID ownerId, String nameKey, UUID excludeId);
+
+    /** Renames the topic, bumps its revision and sets {@code updated_at}; false when it is not the owner's. */
+    boolean updateTopic(UUID ownerId, UUID topicId, String name, String nameKey, int questionCount, Instant now);
+
+    void deleteQuestions(UUID topicId);
+
+    /** Deletes the owner's topic (its questions go with it); false when it is not theirs or already gone. */
+    boolean delete(UUID ownerId, UUID topicId);
 
     /** Removes every custom topic the player owns (their questions go with them); used when the account is deleted. */
     void deleteAllForOwner(UUID ownerId);

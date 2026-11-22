@@ -11,7 +11,7 @@ export type Imported = { customTopicId: string; name: string; questionCount: num
 export type ImportOutcome =
   | { ok: true; data: Imported }
   | { ok: false; kind: 'invalid'; problems: Problem[] }
-  | { ok: false; kind: 'cap' | 'tooLarge' | 'rateLimited' | 'unavailable' | 'network' | 'server'; detail: string | null; retryAfter?: number };
+  | { ok: false; kind: 'cap' | 'tooLarge' | 'notFound' | 'rateLimited' | 'unavailable' | 'network' | 'server'; detail: string | null; retryAfter?: number };
 
 type ProblemBody = { detail?: unknown; errors?: unknown };
 
@@ -29,12 +29,20 @@ function problemsOf(body: ProblemBody | null): Problem[] {
     }));
 }
 
-/** Sends the raw pasted text and the topic name. Never throws: a failed fetch is `network`. */
-export async function importTopic(name: string, json: string): Promise<ImportOutcome> {
+/** Sends the raw pasted text and the topic name; a re-import is a PUT to the topic. Never throws: a failed fetch is `network`. */
+export function importTopic(name: string, json: string): Promise<ImportOutcome> {
+  return submit('POST', PATH, name, json);
+}
+
+export function replaceTopic(topicId: string, name: string, json: string): Promise<ImportOutcome> {
+  return submit('PUT', `${PATH}/${topicId}`, name, json);
+}
+
+async function submit(method: 'POST' | 'PUT', path: string, name: string, json: string): Promise<ImportOutcome> {
   let response: Response;
   try {
-    response = await apiFetch(apiUrl(PATH), {
-      method: 'POST',
+    response = await apiFetch(apiUrl(path), {
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, json }),
     });
@@ -43,13 +51,14 @@ export async function importTopic(name: string, json: string): Promise<ImportOut
   }
   const body = (await response.json().catch(() => null)) as (ProblemBody & Partial<Imported>) | null;
   const detail = typeof body?.detail === 'string' ? body.detail : null;
-  if (response.status === 201 && body && typeof body.customTopicId === 'string') return { ok: true, data: body as Imported };
+  if ((response.status === 201 || response.status === 200) && body && typeof body.customTopicId === 'string') return { ok: true, data: body as Imported };
   if (response.status === 400) {
     const problems = problemsOf(body);
     return problems.length > 0 ? { ok: false, kind: 'invalid', problems } : { ok: false, kind: 'server', detail };
   }
   if (response.status === 422) return { ok: false, kind: 'cap', detail };
   if (response.status === 413) return { ok: false, kind: 'tooLarge', detail };
+  if (response.status === 404) return { ok: false, kind: 'notFound', detail };
   if (response.status === 429) {
     const retry = Number.parseInt(response.headers.get('Retry-After') ?? '', 10);
     return { ok: false, kind: 'rateLimited', detail, retryAfter: Number.isFinite(retry) ? retry : undefined };

@@ -19,6 +19,7 @@ vi.mock('../../realtime/connection.ts', async (importOriginal) => ({
 
 const URL_IMPORT = '/api/core/v1/me/custom-topics';
 const URL_USAGE = '/api/core/v1/me/custom-topics/usage';
+const URL_TOPIC = '/api/core/v1/me/custom-topics/6f1b2c3d-1111-4222-8333-444455556666';
 const USAGE = { topics: 1, topicCap: 50, questions: 410, questionCap: 500, warn: false };
 const PROFILE = { displayName: 'Rajeev', district: 'thrissur', examLevel: 'DEGREE', language: 'en', profileComplete: true };
 
@@ -41,9 +42,14 @@ function stub({ registered = true, usage = USAGE, post }: { registered?: boolean
       if (url === PROFILE_PATH) return jsonResponse(PROFILE);
       if (url === GUEST_TOKEN_PATH) return jsonResponse(guestTokenBody('en'));
       if (url === URL_USAGE) return jsonResponse(usage);
+      if (url === URL_TOPIC) {
+        return jsonResponse({ customTopicId: '6f1b2c3d-1111-4222-8333-444455556666', name: 'Renaissance', questionCount: 3, revision: 1, updatedAt: '2026-11-11T10:00:00Z',
+          questions: [1, 2, 3].map((n) => ({ position: n, text: `Q${n}?`, lang: 'en', options: ['a', 'b', 'c', 'd'], answerIndex: 1, explanation: 'E' })) });
+      }
+      if (url === URL_IMPORT && init?.method !== 'POST') return jsonResponse({ usage: USAGE, topics: [] });
       if (url === URL_IMPORT && init?.method === 'POST') {
         seen.posts.push(JSON.parse(String(init.body)));
-        return post ? post() : jsonResponse({ customTopicId: 'c1', name: 'Renaissance', questionCount: 3, revision: 1, usage: USAGE }, 201);
+        return post ? post() : jsonResponse({ customTopicId: '6f1b2c3d-1111-4222-8333-444455556666', name: 'Renaissance', questionCount: 3, revision: 1, usage: USAGE }, 201);
       }
       return jsonResponse({ status: 404 }, 404, 'application/problem+json');
     }),
@@ -100,7 +106,7 @@ describe('entry points', () => {
     await session.ready();
     renderApp('/me');
     const row = await screen.findByRole('link', { name: /Custom Topics/ });
-    expect(row.getAttribute('href')).toContain('/me/custom-topics/import');
+    expect(row.getAttribute('href')).toMatch(/\/me\/custom-topics$/);
   });
 
   it('a guest sees the row locked, and it leads to Sign-in with the Import route as returnTo', async () => {
@@ -109,7 +115,7 @@ describe('entry points', () => {
     await session.ready();
     renderApp('/me');
     const row = await screen.findByRole('link', { name: 'Custom Topics, locked, sign in to use' });
-    expect(row.getAttribute('href')).toContain('returnTo=/me/custom-topics/import');
+    expect(row.getAttribute('href')).toContain('returnTo=/me/custom-topics');
   });
 
   it('a guest opening the route directly lands on the Sign-in prompt', async () => {
@@ -239,7 +245,7 @@ describe('the screen', () => {
 });
 
 describe('importing', () => {
-  it('sends the name and the raw pasted text, then shows the success card with the Practice and Battle Room actions disabled', async () => {
+  it('sends the name and the raw pasted text, then lands on the topic view with the success card above the actions', async () => {
     const seen = stub();
     const area = await openImport();
     const text = topic([q(), q(), q()]);
@@ -248,8 +254,10 @@ describe('importing', () => {
     fireEvent.click(importButton());
     const heading = await screen.findByRole('heading', { level: 1, name: 'Renaissance · 3 questions imported' });
     expect(seen.posts).toEqual([{ name: 'Renaissance', json: text }]);
+    expect(window.location.pathname + window.location.search).toBe('/me/custom-topics/6f1b2c3d-1111-4222-8333-444455556666?imported=1');
     expect(heading).toHaveFocus();
     expect(screen.getByText('Private to you · never rated')).toBeInTheDocument();
+    expect(screen.queryByTestId('usage-meter')).toBeNull();
     expect(screen.getByRole('button', { name: 'Use in Battle Room' })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByRole('button', { name: 'Practice' })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByText('Practice and Battle Room arrive soon')).toBeInTheDocument();

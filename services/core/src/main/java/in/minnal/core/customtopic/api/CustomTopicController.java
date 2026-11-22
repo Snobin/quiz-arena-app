@@ -10,6 +10,7 @@ import in.minnal.core.profile.application.ProfileRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.net.URI;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.CacheControl;
@@ -19,8 +20,11 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -76,6 +80,61 @@ public class CustomTopicController {
                 refund(caller);
             }
             throw e;
+        }
+    }
+
+    @GetMapping
+    public ResponseEntity<CustomTopicService.TopicList> list(
+            @RequestHeader(name = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
+        BearerAuthenticator.Caller caller = caller(authorization);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.list(caller.userId()));
+    }
+
+    @GetMapping("/{customTopicId}")
+    public ResponseEntity<CustomTopicService.TopicView> get(
+            @RequestHeader(name = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            @PathVariable String customTopicId) {
+        BearerAuthenticator.Caller caller = caller(authorization);
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.get(caller.userId(), topicId(customTopicId)));
+    }
+
+    @PutMapping("/{customTopicId}")
+    public ResponseEntity<CustomTopicService.ImportResult> replace(
+            @RequestHeader(name = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            @PathVariable String customTopicId, HttpServletRequest request) {
+        BearerAuthenticator.Caller caller = caller(authorization);
+        UUID id = topicId(customTopicId);
+        acquire(caller);
+        try {
+            ImportRequest body = read(request);
+            CustomTopicService.ImportResult result = service.replaceTopic(caller.userId(), id, body.name(), body.json());
+            LOG.atInfo().addKeyValue("userId", caller.userId()).addKeyValue("route", "custom-topics.replace")
+                    .addKeyValue("questions", result.questionCount()).log("custom topic replaced");
+            return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result);
+        } catch (CustomTopicException e) {
+            if (e.callerMistake()) {
+                refund(caller);
+            }
+            throw e;
+        }
+    }
+
+    @DeleteMapping("/{customTopicId}")
+    public ResponseEntity<Void> delete(
+            @RequestHeader(name = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+            @PathVariable String customTopicId) {
+        BearerAuthenticator.Caller caller = caller(authorization);
+        service.delete(caller.userId(), topicId(customTopicId));
+        LOG.atInfo().addKeyValue("userId", caller.userId()).addKeyValue("route", "custom-topics.delete").log("custom topic deleted");
+        return ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build();
+    }
+
+    /** A malformed id gets the same 404 as an unknown one. */
+    private static UUID topicId(String raw) {
+        try {
+            return UUID.fromString(raw);
+        } catch (IllegalArgumentException e) {
+            throw CustomTopicException.notFound();
         }
     }
 
