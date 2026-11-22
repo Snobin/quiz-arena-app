@@ -371,3 +371,10 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-6-1-custom-topic-import-api.md`
   summary: A database error while checking the profile (`CustomTopicController.caller`) has no handler and returns an unshaped 500.
   evidence: only `CustomTopicService` maps `DataAccessException`; same gap exists on the other core endpoints.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-2-import-screen.md`
+  summary: Add a Playwright check of the Import screen at 320 px and 360 px with 200% text, with the Malayalam shaping fixture pasted.
+  evidence: the screen needs a signed-in session, which the backend-free e2e suite lacks; do it with the full-stack e2e (Quick Match two-browser work).
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-2-import-screen.md`
+  summary: The Malayalam strings for the import screen, the error wording and the schema rules are the implementer's translation, and the Malayalam GPT prompt is still English.
+  evidence: all keys in `web/src/screens/customTopics/importCatalogue.ts` carry `signoff: both`; they appear in `pendingSignoff()`.

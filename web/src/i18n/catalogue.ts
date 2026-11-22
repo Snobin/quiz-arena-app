@@ -17,6 +17,7 @@
  */
 
 import type { PracticeKey } from '../screens/practice/practiceCatalogue.ts';
+import type { ImportKey } from '../screens/customTopics/importCatalogue.ts';
 import type { PractiseKey } from '../screens/results/practiseCatalogue.ts';
 import type { RoomKey } from '../screens/rooms/roomCatalogue.ts';
 import { LANGUAGES, type Language } from './language.ts';
@@ -200,6 +201,9 @@ export const catalogue = {
   'profile.error.load': { ml: 'പ്രൊഫൈൽ ലോഡ് ചെയ്യാനായില്ല.', en: "Couldn't load your profile.", signoff: ['ml', 'en'] },
   'home.quickMatch.needsProfile': { ml: 'കളിക്കാൻ പ്രൊഫൈൽ പൂർത്തിയാക്കൂ', en: 'Finish your profile to play', signoff: ['ml', 'en'] },
   'home.registeredHello': { ml: 'ഹായ്,', en: 'Hi,', signoff: ['ml', 'en'] },
+  'me.customTopics': { ml: 'സ്വന്തം ടോപ്പിക്കുകൾ', en: 'Custom Topics', signoff: ['ml', 'en'] },
+  'me.customTopics.sub': { ml: 'സ്വന്തം ചോദ്യങ്ങൾ ഇംപോർട്ട് ചെയ്യാം', en: 'Import your own questions', signoff: ['ml', 'en'] },
+  'me.customTopics.locked.a11y': { ml: 'സ്വന്തം ടോപ്പിക്കുകൾ, ലോക്ക് ചെയ്തു, ഉപയോഗിക്കാൻ സൈൻ ഇൻ ചെയ്യൂ', en: 'Custom Topics, locked, sign in to use', signoff: ['ml', 'en'] },
   'me.signedOutLine': { ml: 'റേറ്റിംഗും പ്രൊഫൈലും കാണാൻ സൈൻ ഇൻ ചെയ്യൂ', en: 'Sign in to see your profile and ratings', signoff: ['ml', 'en'] },
   // Matchmaking and the live-match stub (Story 1.6)
   'title.match': { ml: 'മാച്ച്', en: 'Match', signoff: ['ml', 'en'] },
@@ -925,6 +929,6 @@ declare module 'i18next' {
   interface CustomTypeOptions {
     keySeparator: false;
     nsSeparator: false;
-    resources: { translation: Record<CatalogueKey | PracticeKey | PractiseKey | RoomKey, string> };
+    resources: { translation: Record<CatalogueKey | ImportKey | PracticeKey | PractiseKey | RoomKey, string> };
   }
 }
