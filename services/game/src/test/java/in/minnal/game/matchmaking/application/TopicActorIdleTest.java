@@ -26,6 +26,9 @@ class TopicActorIdleTest extends GameIntegrationTest {
             await().until(() -> service.hasTopicActor(topic));
             anju.send("/app/matchmaking/TOPIC_DUEL/cancel");
             anju.next("MATCHMAKING_CANCELLED");
+            // The reply goes out while the actor is still handling the cancel; it stamps its idle start from the clock
+            // when it finishes. Let it finish before moving the manual clock, or the 60 s would count from the jump.
+            settle(topic);
 
             clock.advance(Duration.ofSeconds(59));
             await().pollDelay(Duration.ofMillis(600)).until(() -> service.hasTopicActor(topic));
@@ -34,6 +37,7 @@ class TopicActorIdleTest extends GameIntegrationTest {
 
             anju.send("/app/matchmaking/TOPIC_DUEL/join", "{\"topicId\":\"" + topic + "\"}");
             await().until(() -> service.hasTopicActor(topic));
+            settle(topic); // the join must be queued at the current time before the clock jumps
             clock.advance(Duration.ofSeconds(8));
             JsonNode found = anju.next("MATCH_FOUND");
             assertThat(found.get("payload").get("participants").get(1).get("kind").asString()).isEqualTo("BOT");
@@ -55,5 +59,10 @@ class TopicActorIdleTest extends GameIntegrationTest {
             anju.next("MATCHMAKING_CANCELLED");
         }
         awaitIdle(a);
+    }
+
+    /** Gives the topic actor a moment to finish the event it is handling, without moving the manual clock. */
+    private void settle(UUID topic) {
+        await().pollDelay(Duration.ofMillis(600)).until(() -> service.hasTopicActor(topic));
     }
 }
