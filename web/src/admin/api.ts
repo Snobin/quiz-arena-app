@@ -51,6 +51,8 @@ export class AdminApiError extends Error {
     readonly existingId: string | null = null,
     /** Seconds from a 429's Retry-After header. */
     readonly retryAfterSeconds: number | null = null,
+    /** Stable machine reason on a 409: `deleted` or `stale`. Branch on this, never on `detail` text. */
+    readonly reason: string | null = null,
   ) {
     super(detail ?? `Request failed (${status})`);
   }
@@ -62,7 +64,7 @@ function retryAfter(response: Response): number | null {
 }
 
 async function failure(response: Response): Promise<AdminApiError> {
-  const problem = (await response.json().catch(() => null)) as { detail?: unknown; errors?: unknown; id?: unknown } | null;
+  const problem = (await response.json().catch(() => null)) as { detail?: unknown; errors?: unknown; id?: unknown; reason?: unknown } | null;
   const errors = Array.isArray(problem?.errors)
     ? (problem.errors as FieldProblem[]).filter((e) => typeof e?.field === 'string' && typeof e?.problem === 'string')
     : [];
@@ -72,6 +74,7 @@ async function failure(response: Response): Promise<AdminApiError> {
     errors,
     typeof problem?.id === 'string' ? problem.id : null,
     retryAfter(response),
+    typeof problem?.reason === 'string' ? problem.reason : null,
   );
 }
 

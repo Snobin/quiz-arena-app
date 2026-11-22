@@ -138,6 +138,7 @@ export const adminStrings = {
   'editor.fields': 'Question fields',
   'editor.save': 'Save as draft',
   'editor.saving': 'Saving…',
+  'editor.refreshFailed': 'Saved, but the page could not refresh. Reload to see the new version history.',
   'editor.saved': 'Saved as draft v{{version}} · not live until published',
   'editor.dirty': 'Unsaved changes',
   'editor.stale': 'This draft changed since you opened it.',

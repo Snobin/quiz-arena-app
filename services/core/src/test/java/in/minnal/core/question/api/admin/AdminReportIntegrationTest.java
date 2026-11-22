@@ -1,6 +1,10 @@
 package in.minnal.core.question.api.admin;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -13,6 +17,7 @@ import in.minnal.core.identity.application.UserTokenService;
 import in.minnal.core.question.domain.ContentCategory;
 import in.minnal.core.question.domain.ExamLevel;
 import in.minnal.core.question.domain.QuestionVersion;
+import in.minnal.core.question.infrastructure.JdbcQuestionReportRepository;
 import in.minnal.core.support.PostgresIntegrationTest;
 import in.minnal.core.support.QuestionFixtures;
 import java.sql.Timestamp;
@@ -23,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -37,6 +43,7 @@ class AdminReportIntegrationTest extends PostgresIntegrationTest {
     @Autowired UserTokenService userTokens;
     @Autowired GuestTokenService guestTokens;
     @Autowired QuestionFixtures fixtures;
+    @MockitoSpyBean JdbcQuestionReportRepository reportsSpy;
 
     UUID adminId;
 
@@ -188,6 +195,25 @@ class AdminReportIntegrationTest extends PostgresIntegrationTest {
         QuestionVersion v2 = fix(v1, p, "Bad");
         jdbc.sql("UPDATE question_version SET text_en = :t WHERE id = :id").param("t", "x".repeat(1001)).param("id", v2.id()).update();
         send(post(publishUrl(v2)), a, null).andExpect(status().isBadRequest());
+        assertThat(statusOfReports(v1.questionId())).isEqualTo("OPEN");
+    }
+
+    /** Pins the same-transaction rule in AdminDraftService.publishInTransaction: a failure after publishDraft rolls the publish back. */
+    @Test
+    void aFailureWhileResolvingReportsRollsTheWholePublishBack() throws Exception {
+        var p = fixtures.placement("History", "Kerala");
+        String a = admin();
+        QuestionVersion v1 = fixtures.published(p, "Old");
+        report(v1, newUser("ACTIVE", null, "Anju"), "n", Instant.now());
+        QuestionVersion v2 = fix(v1, p, "Fixed");
+        doThrow(new IllegalStateException("injected")).when(reportsSpy).resolveOlderOpen(any(), anyInt(), any(), any());
+        try {
+            // MockMvc rethrows an unhandled exception instead of rendering a 500.
+            assertThatThrownBy(() -> send(post(publishUrl(v2)), a, null)).hasMessageContaining("injected");
+        } finally {
+            org.mockito.Mockito.reset(reportsSpy);
+        }
+        assertThat(jdbc.sql("SELECT status FROM question_version WHERE id = :id").param("id", v2.id()).query(String.class).single()).isEqualTo("DRAFT");
         assertThat(statusOfReports(v1.questionId())).isEqualTo("OPEN");
     }
 

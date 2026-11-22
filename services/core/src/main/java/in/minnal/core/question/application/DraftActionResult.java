@@ -27,6 +27,7 @@ public record DraftActionResult(UUID questionId, Integer version, boolean ok, St
             case CONFLICT -> 409;
             case RATE_LIMITED -> 429;
             case INTERNAL -> 500;
+            case UNAVAILABLE -> 503;
         };
         List<Error> errors = e.errors().isEmpty() ? null : e.errors().stream().map(DraftActionResult::error).toList();
         return new DraftActionResult(questionId, version, false, null, code, e.getMessage(), errors);

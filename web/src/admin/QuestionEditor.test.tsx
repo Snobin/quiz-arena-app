@@ -168,6 +168,36 @@ describe('QuestionEditor', () => {
     expect(put?.body).toMatchObject({ rowVersion: 3, explanation: 'Changed.', answerIndex: 0 });
   });
 
+  it('a save that succeeds but whose refresh fails says so, not "Could not save"', async () => {
+    let gets = 0;
+    serve(
+      (call) => {
+        if (call.method === 'GET' && call.path.endsWith('/q1') && ++gets > 1) return jsonResponse({ status: 500 }, 500, 'application/problem+json');
+        return undefined;
+      },
+      detail({}, 'DRAFT'),
+    );
+    renderEditor('q1');
+    await ready();
+    fireEvent.change(field('Explanation'), { target: { value: 'Changed.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save as draft' }));
+    expect((await screen.findAllByText(/Saved, but the page could not refresh/)).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Could not save/)).toBeNull();
+  });
+
+  it('a 409 with reason "deleted" is not shown as a stale draft', async () => {
+    serve(
+      (call) => (call.method === 'PUT' ? jsonResponse({ status: 409, detail: 'Gone.', reason: 'deleted' }, 409, 'application/problem+json') : undefined),
+      detail({}, 'DRAFT'),
+    );
+    renderEditor('q1');
+    await ready();
+    fireEvent.change(field('Explanation'), { target: { value: 'Changed.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save as draft' }));
+    await screen.findAllByText(/Could not save/);
+    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull();
+  });
+
   it('omits the row version when editing a published question (a new draft is created)', async () => {
     serve(() => undefined);
     renderEditor('q1');
