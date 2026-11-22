@@ -18,8 +18,14 @@ concurrency:
 
 jobs:
   backend:
-    name: backend
-    # ubuntu-latest has Docker, which core's Testcontainers integration tests need.
+    # One job per service so the slow game tests run beside core and ratings, not after them.
+    # -am also builds the contracts module (and runs its tests) for each service.
+    name: backend (${{ matrix.module }})
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [core, game, ratings]
+    # ubuntu-latest has Docker, which the Testcontainers integration tests need.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -30,12 +36,12 @@ jobs:
           java-version: '25'
           cache: maven
       - name: Build and test (mvnw verify)
-        run: ./mvnw -B verify
+        run: ./mvnw -B verify -pl services/${{ matrix.module }} -am
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: jacoco-report
-          path: services/*/target/site/jacoco/
+          name: jacoco-report-${{ matrix.module }}
+          path: services/${{ matrix.module }}/target/site/jacoco/
           retention-days: 7
 
   web:
