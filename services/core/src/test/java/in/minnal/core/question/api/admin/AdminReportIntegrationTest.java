@@ -1,6 +1,7 @@
 package in.minnal.core.question.api.admin;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doThrow;
@@ -207,7 +208,8 @@ class AdminReportIntegrationTest extends PostgresIntegrationTest {
         QuestionVersion v2 = fix(v1, p, "Fixed");
         doThrow(new IllegalStateException("injected")).when(reportsSpy).resolveOlderOpen(any(), anyInt(), any(), any());
         try {
-            send(post(publishUrl(v2)), a, null).andExpect(status().is5xxServerError());
+            // MockMvc rethrows an unhandled exception instead of rendering a 500.
+            assertThatThrownBy(() -> send(post(publishUrl(v2)), a, null)).hasMessageContaining("injected");
         } finally {
             org.mockito.Mockito.reset(reportsSpy);
         }
