@@ -64,6 +64,11 @@ public class AdminWriteException extends RuntimeException {
         return new AdminWriteException(Kind.CONFLICT, detail, List.of(), properties);
     }
 
+    /** True when the caller caused the failure (400, 404 or 409), as opposed to a limit or a server problem. */
+    public boolean isCallerMistake() {
+        return kind == Kind.INVALID || kind == Kind.NOT_FOUND || kind == Kind.CONFLICT;
+    }
+
     public Kind kind() {
         return kind;
     }
