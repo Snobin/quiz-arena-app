@@ -11,6 +11,7 @@ import { ensureProfileLoaded, useProfile } from '../profile/profileStore.ts';
 import { MatchHistory } from '../ratings/MatchHistory.tsx';
 import { RatingTrio } from '../ratings/RatingTrio.tsx';
 import { navigate } from '../shell/router.ts';
+import { CustomTopicsRow } from './home/CustomTopicsRow.tsx';
 import { SignInNudge } from './home/SignInNudge.tsx';
 import { ProfileForm } from './profile/ProfileForm.tsx';
 
@@ -37,7 +38,10 @@ export function MeScreen() {
           {t('settings.link')}
         </Button>
         {status !== 'registered' ? (
-          <SignInNudge />
+          <>
+            <SignInNudge />
+            <CustomTopicsRow locked />
+          </>
         ) : profileStatus === 'error' ? (
           <div role="alert" className="flex flex-col items-start gap-2 rounded-lg border border-brick bg-card p-4">
             <p className="text-body">{t('profile.error.load')}</p>
@@ -77,6 +81,7 @@ export function MeScreen() {
               {t('profile.edit')}
             </Button>
           </section>
+          <CustomTopicsRow locked={false} />
           <MatchHistory />
           </>
         )}

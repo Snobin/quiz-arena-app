@@ -37,7 +37,7 @@ import { queueAction, refKey, undoBatch, useDraftActions } from './draftActions.
 import { shortcutFrom } from './shortcuts.ts';
 import { UndoLine } from './UndoLine.tsx';
 import { ReportBanner } from './ReportBanner.tsx';
-import { useLeaveGuard } from './useLeaveGuard.ts';
+import { useLeaveGuard } from '../shell/useLeaveGuard.ts';
 
 const CONTROL = 'min-h-target-min w-full rounded-md border-[1.5px] border-control-edge bg-card px-3 py-2 text-body text-ink aria-[invalid=true]:border-brick';
 const BUTTON = 'hit-target inline-flex min-h-target-min items-center rounded-md border-[1.5px] border-ink bg-card px-4 text-body';

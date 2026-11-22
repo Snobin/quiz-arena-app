@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { setNavigationGuard } from '../shell/router.ts';
+import { setNavigationGuard } from './router.ts';
 
 /**
  * Guards leaving a page with unsaved changes: `beforeunload` for a tab close or reload, and the router's leave guard
