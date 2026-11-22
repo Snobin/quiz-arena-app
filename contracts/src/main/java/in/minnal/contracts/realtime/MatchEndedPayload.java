@@ -9,7 +9,7 @@ import java.util.UUID;
  * every human with a live session once the last question is revealed, forfeited ones included
  * (Story 1.10). Correctness and points come from the server only.
  *
- * @param questionSource always {@code BANK} until Epic 6
+ * @param questionSource {@code BANK}, or {@code CUSTOM} for a Battle Room on a host's own topic
  * @param participants   every participant with her score, correct count and placement, in participant order
  * @param questions      the questions that were asked, in order (never one that did not open)
  * @param topic          the Topic Duel topic, null in Quick Match

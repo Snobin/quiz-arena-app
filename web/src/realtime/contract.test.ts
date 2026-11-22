@@ -54,9 +54,12 @@ describe('contracts/samples', () => {
       'room-closed.json',
       'room-joined-member.json',
       'room-joined.json',
+      'room-lobby-updated-custom.json',
       'room-lobby-updated-starting.json',
       'room-lobby-updated.json',
+      'room-match-started-custom.json',
       'room-match-started.json',
+      'room-start-failed-source-unavailable.json',
       'room-start-failed.json',
       'room-succeeded.json',
     ]);

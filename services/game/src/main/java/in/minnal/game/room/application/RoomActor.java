@@ -291,9 +291,13 @@ final class RoomActor {
     /** Asks core for the set, off this thread; the answer comes back as an event (a failure to ask is one too). */
     private void fetchSet() {
         RoomConfigRules.Config config = state.config();
-        QuestionSetRequest request = new QuestionSetRequest(QuestionSource.BANK,
-                new QuestionSetFilters(CATEGORY, null, config.source().topicId(), null), null, config.questionCount(),
-                state.hostSub());
+        // A custom topic is the host's own: core checks she owns it and that it still has enough questions (Story 6.5a).
+        QuestionSetRequest request = config.source().type() == QuestionSource.CUSTOM
+                ? new QuestionSetRequest(QuestionSource.CUSTOM, null, config.source().customTopicId(), config.questionCount(),
+                        state.hostSub())
+                : new QuestionSetRequest(QuestionSource.BANK,
+                        new QuestionSetFilters(CATEGORY, null, config.source().topicId(), null), null, config.questionCount(),
+                        state.hostSub());
         CompletableFuture<QuestionSetResponse> fetch;
         try {
             fetch = questions.fetch(request);
@@ -310,10 +314,13 @@ final class RoomActor {
         }
         QuestionSetResponse set = fetched.set();
         int count = state.config().questionCount();
-        if (fetched.failure() != null || set == null || set.questions().size() != count || set.topic() == null) {
+        boolean custom = state.config().source().type() == QuestionSource.CUSTOM;
+        if (fetched.failure() != null || set == null || set.questions().size() != count
+                || (custom ? set.customTopic() == null : set.topic() == null)) {
             Throwable cause = fetched.failure() instanceof CompletionException && fetched.failure().getCause() != null
                     ? fetched.failure().getCause() : fetched.failure();
             // A short set is a topic with too few questions, like core's own 422.
+            boolean sourceGone = cause instanceof QuestionSetClient.SourceUnavailableException;
             boolean topicGone = cause instanceof QuestionSetClient.TopicUnavailableException
                     || (cause == null && set != null && set.questions().size() < count);
             log.atWarn().addKeyValue("roomId", roomId())
@@ -321,7 +328,8 @@ final class RoomActor {
                             : cause.getClass().getSimpleName());
             state.backToLobby();
             broadcaster.broadcast(roomId(), ServerMessage.roomBroadcast(MessageType.ROOM_START_FAILED, roomId(),
-                    state.nextSeq(), clock.instant(), new RoomStartFailedPayload(topicGone
+                    state.nextSeq(), clock.instant(), new RoomStartFailedPayload(sourceGone
+                            ? RoomStartFailedReason.SOURCE_UNAVAILABLE : topicGone
                             ? RoomStartFailedReason.TOPIC_UNAVAILABLE : RoomStartFailedReason.UNAVAILABLE)));
             return;
         }
@@ -336,12 +344,16 @@ final class RoomActor {
     private void startMatch(QuestionSetResponse set) {
         Instant now = clock.instant();
         UUID matchId = UUID.randomUUID();
+        boolean custom = state.config().source().type() == QuestionSource.CUSTOM;
+        QuestionSource questionSource = custom ? QuestionSource.CUSTOM : QuestionSource.BANK;
         QuestionSetTopic topic = set.topic();
-        TopicInfo topicInfo = new TopicInfo(topic.topicId(), topic.name(), topic.subjectName());
+        // A custom topic has a name only: core's current one, not the one the host's client sent to the lobby.
+        TopicInfo topicInfo = custom ? new TopicInfo(null, set.customTopic().name(), null)
+                : new TopicInfo(topic.topicId(), topic.name(), topic.subjectName());
         List<in.minnal.contracts.realtime.Participant> participants = state.participants();
         Instant firstQuestionAt = now.plus(FIRST_QUESTION_DELAY);
         MatchSetup setup = new MatchSetup(matchId, MatchMode.BATTLE_ROOM, participants, state.humans(), set.questions(),
-                Map.of(), Map.of(), now, QuestionSource.BANK, topicInfo,
+                Map.of(), Map.of(), now, questionSource, topicInfo,
                 new MatchEndedRoom(roomId(), state.humans().get(state.hostSub())));
         if (matches.start(setup, firstQuestionAt, match -> actor.tell(new RoomEvent.MatchEnded(matchId))).isEmpty()) {
             log.atWarn().addKeyValue("roomId", roomId()).log("match not started: draining");
@@ -363,7 +375,7 @@ final class RoomActor {
                 .addKeyValue("userId", state.hostSub()).log("room match started with {} humans", participants.size());
         broadcaster.broadcast(roomId(), ServerMessage.roomBroadcast(MessageType.ROOM_MATCH_STARTED, roomId(),
                 state.nextSeq(), now, new RoomMatchStartedPayload(roomId(), matchId, MatchMode.BATTLE_ROOM,
-                        participants, state.config().questionCount(), topicInfo, firstQuestionAt)));
+                        participants, state.config().questionCount(), topicInfo, firstQuestionAt, questionSource)));
     }
 
     private void onMatchEnded(RoomEvent.MatchEnded ended) {

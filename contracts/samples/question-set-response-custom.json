@@ -1,0 +1,14 @@
+{
+  "questions" : [ {
+    "questionId" : "3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f",
+    "version" : 3,
+    "textMl" : "എന്റെ ചോദ്യം?",
+    "options" : [ "a", "b", "c", "d" ],
+    "answerIndex" : 1,
+    "explanation" : "x"
+  } ],
+  "customTopic" : {
+    "customTopicId" : "6f1b2c3d-1111-4222-8333-444455556666",
+    "name" : "Renaissance"
+  }
+}

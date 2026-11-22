@@ -46,11 +46,39 @@ class RoomConfigRulesTest {
     }
 
     @Test
-    void aSourceOtherThanBankIsNotAvailableYet() {
-        var custom = new RoomConfigInput(true, "CUSTOM", null, true, 10);
-        assertThat(RoomConfigRules.forCreate(custom).error()).isEqualTo(ErrorCode.SOURCE_NOT_AVAILABLE);
+    void aSourceOtherThanBankOrCustomIsNotAvailable() {
+        var weird = new RoomConfigInput(true, "WEIRD", TOPIC.toString(), true, 10);
+        assertThat(RoomConfigRules.forCreate(weird).error()).isEqualTo(ErrorCode.SOURCE_NOT_AVAILABLE);
         var untyped = new RoomConfigInput(true, null, TOPIC.toString(), true, 10);
         assertThat(RoomConfigRules.forCreate(untyped).error()).isEqualTo(ErrorCode.SOURCE_NOT_AVAILABLE);
+    }
+
+    @Test
+    void aCustomSourceNeedsACustomTopicIdAndKeepsTheHostsTopicName() {
+        UUID id = UUID.randomUUID();
+        var ok = RoomConfigRules.forCreate(new RoomConfigInput(true, "CUSTOM", null, id.toString(), "  Renaissance  ", true, 10));
+        assertThat(ok.valid()).isTrue();
+        assertThat(ok.config().source().type().name()).isEqualTo("CUSTOM");
+        assertThat(ok.config().source().customTopicId()).isEqualTo(id);
+        assertThat(ok.config().source().topicName()).isEqualTo("Renaissance");
+        assertThat(ok.config().source().topicId()).isNull();
+        assertThat(ok.config().source().rated()).isFalse();
+        // A bank topicId does not make a custom source; a missing or non-UUID customTopicId is INVALID_TOPIC.
+        assertThat(RoomConfigRules.forCreate(new RoomConfigInput(true, "CUSTOM", TOPIC.toString(), null, "x", true, 10)).error())
+                .isEqualTo(ErrorCode.INVALID_TOPIC);
+        assertThat(RoomConfigRules.forCreate(new RoomConfigInput(true, "CUSTOM", null, "nope", "x", true, 10)).error())
+                .isEqualTo(ErrorCode.INVALID_TOPIC);
+        // The count rule is the same: 5 to 30.
+        assertThat(RoomConfigRules.forCreate(new RoomConfigInput(true, "CUSTOM", null, id.toString(), "x", true, 4)).error())
+                .isEqualTo(ErrorCode.INVALID_ROOM_CONFIG);
+        assertThat(RoomConfigRules.forCreate(new RoomConfigInput(true, "CUSTOM", null, id.toString(), "x", true, 31)).error())
+                .isEqualTo(ErrorCode.INVALID_ROOM_CONFIG);
+        // A very long name is capped; a missing name is empty (core's name replaces it at start).
+        String longName = "x".repeat(200);
+        assertThat(RoomConfigRules.forCreate(new RoomConfigInput(true, "CUSTOM", null, id.toString(), longName, true, 10))
+                .config().source().topicName()).hasSize(80);
+        assertThat(RoomConfigRules.forCreate(new RoomConfigInput(true, "CUSTOM", null, id.toString(), null, true, 10))
+                .config().source().topicName()).isEmpty();
     }
 
     @Test

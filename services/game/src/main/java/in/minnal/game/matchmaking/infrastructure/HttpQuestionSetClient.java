@@ -3,6 +3,7 @@ package in.minnal.game.matchmaking.infrastructure;
 import in.minnal.contracts.internal.QuestionSetRequest;
 import in.minnal.contracts.internal.QuestionSetResponse;
 import in.minnal.game.matchmaking.application.QuestionSetClient;
+import in.minnal.game.matchmaking.application.QuestionSetClient.SourceUnavailableException;
 import in.minnal.game.matchmaking.application.QuestionSetClient.TopicUnavailableException;
 import java.net.http.HttpClient;
 import java.time.Duration;
@@ -75,6 +76,9 @@ class HttpQuestionSetClient implements QuestionSetClient, DisposableBean {
         } catch (HttpClientErrorException e) {
             if (e.getStatusCode().value() == 422) {
                 throw new TopicUnavailableException("core answered 422: not enough published questions");
+            }
+            if (e.getStatusCode().value() == 404 && request.source() == in.minnal.contracts.internal.QuestionSource.CUSTOM) {
+                throw new SourceUnavailableException("core answered 404: the custom topic is gone or not the host's");
             }
             throw e;
         }

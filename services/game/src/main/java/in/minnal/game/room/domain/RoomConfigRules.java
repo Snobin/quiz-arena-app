@@ -9,8 +9,9 @@ import java.util.UUID;
  * Validation of a room's source and question count, the same on create and on configure (Story 5.1). The topic is never
  * checked against core here: AD-2 allows that call only when a match starts.
  *
- * <p>Order: a missing source is {@code INVALID_ROOM_CONFIG}; a {@code type} other than {@code BANK} (absent or not text
- * included) is {@code SOURCE_NOT_AVAILABLE} until Epic 6; a missing or non-UUID {@code topicId} is {@code INVALID_TOPIC}; then the
+ * <p>Order: a missing source is {@code INVALID_ROOM_CONFIG}; a {@code type} other than {@code BANK} or {@code CUSTOM} (absent or
+ * not text included) is {@code SOURCE_NOT_AVAILABLE}; a missing or non-UUID {@code topicId} (or, for {@code CUSTOM},
+ * {@code customTopicId}) is {@code INVALID_TOPIC}; then the
  * count, which must be a whole number from 5 to 30 ({@code INVALID_ROOM_CONFIG}).
  */
 public final class RoomConfigRules {
@@ -52,14 +53,17 @@ public final class RoomConfigRules {
     private static Result validate(RoomConfigInput input, Config current) {
         RoomSource source;
         if (input.sourcePresent()) {
-            if (input.sourceType() == null || !QuestionSource.BANK.name().equals(input.sourceType())) {
+            boolean custom = QuestionSource.CUSTOM.name().equals(input.sourceType());
+            if (input.sourceType() == null || (!custom && !QuestionSource.BANK.name().equals(input.sourceType()))) {
                 return new Result(null, ErrorCode.SOURCE_NOT_AVAILABLE);
             }
-            UUID topicId = parseUuid(input.topicId());
+            UUID topicId = parseUuid(custom ? input.customTopicId() : input.topicId());
             if (topicId == null) {
                 return new Result(null, ErrorCode.INVALID_TOPIC);
             }
-            source = new RoomSource(QuestionSource.BANK, topicId);
+            // The lobby shows the name the host's client sent; core's name replaces it at start. It is shown to the other
+            // players, so it is capped like any display text.
+            source = custom ? RoomSource.custom(topicId, cleanName(input.topicName())) : new RoomSource(QuestionSource.BANK, topicId);
         } else if (current != null) {
             source = current.source();
         } else {
@@ -76,6 +80,16 @@ public final class RoomConfigRules {
             count = current.questionCount();
         }
         return new Result(new Config(source, count), null);
+    }
+
+    private static final int MAX_NAME = 80;
+
+    private static String cleanName(String name) {
+        if (name == null) {
+            return "";
+        }
+        String trimmed = name.strip();
+        return trimmed.length() > MAX_NAME ? trimmed.substring(0, MAX_NAME) : trimmed;
     }
 
     private static UUID parseUuid(String text) {

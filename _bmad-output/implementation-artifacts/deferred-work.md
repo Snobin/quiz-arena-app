@@ -378,3 +378,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-6-2-import-screen.md`
   summary: The Malayalam strings for the import screen, the error wording and the schema rules are the implementer's translation, and the Malayalam GPT prompt is still English.
   evidence: all keys in `web/src/screens/customTopics/importCatalogue.ts` carry `signoff: both`; they appear in `pendingSignoff()`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-5a-room-custom-source-backend.md`
+  summary: Story 6.5b, the web half of Battle Room with a custom topic: "My topics" in the room picker (5 or more questions only), enabled "Use in Battle Room" on the topic view, Create and lobby source row with the "സ്വന്തം" tag and unrated note, live-match header and language handling, results ("സ്വന്തം · unrated", no delta, no report or practise link), history "unrated", recently hosted list with custom sources, the `SOURCE_UNAVAILABLE` and shrunk-topic host messages, and the web `RoomSource` and `TopicInfo` parsing.
+  evidence: split from Story 6.5 at the Step 2 size gate (about 2,400 tokens, four services plus about 15 web files); the server half lands first so the web half builds on real contracts.

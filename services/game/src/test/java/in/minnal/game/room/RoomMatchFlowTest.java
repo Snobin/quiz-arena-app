@@ -80,9 +80,13 @@ class RoomMatchFlowTest extends GameIntegrationTest {
 
     /** A room of {@code size} humans (host first), each subscribed to the room topic; lobby updates drained. */
     Lobby lobby(int size) {
+        return lobby(size, CREATE);
+    }
+
+    Lobby lobby(int size, String create) {
         String hostSub = newSub();
         StompTestClient host = player(hostSub, "Rajeev");
-        host.send("/app/room/create", CREATE);
+        host.send("/app/room/create", create);
         JsonNode created = host.next("ROOM_JOINED");
         String roomId = created.get("payload").get("roomId").asString();
         String code = created.get("payload").get("code").asString();
@@ -455,6 +459,110 @@ class RoomMatchFlowTest extends GameIntegrationTest {
             assertThat(notice.get("payload").get("hostDisplayName").asString()).isEqualTo("Rajeev");
         }
         room.host().send("/app/room/" + lobby.get("payload").get("roomId").asString() + "/leave");
+        await().atMost(WAIT).until(() -> rooms.liveCount() == 0);
+    }
+
+    // Story 6.5a: a room on the host's own custom topic.
+
+    static final String CUSTOM_TOPIC = "6f1b2c3d-1111-4222-8333-444455556666";
+    static final String CUSTOM_CREATE = "{\"source\":{\"type\":\"CUSTOM\",\"customTopicId\":\"" + CUSTOM_TOPIC
+            + "\",\"topicName\":\"Renaissance\"},\"questionCount\":5}";
+
+    @Test
+    void aCustomRoomStartsAsTheHostThroughCoreAndEndsUnratedWithTheCustomSourceEverywhere() {
+        Lobby room = lobby(2, CUSTOM_CREATE);
+        room.host().send("/app/room/" + room.roomId() + "/start");
+        JsonNode started = broadcast(room.players().get(1), "ROOM_MATCH_STARTED").get("payload");
+        assertThat(started.get("questionSource").asString()).isEqualTo("CUSTOM");
+        assertThat(started.get("topic").get("name").asString()).isEqualTo("Renaissance (core)");
+        assertThat(started.get("topic").has("topicId")).isFalse();
+        assertThat(started.get("topic").has("subjectName")).isFalse();
+        assertThat(CORE.calls()).singleElement().satisfies(call -> {
+            assertThat(call.body().get("source").asString()).isEqualTo("CUSTOM");
+            assertThat(call.body().get("customTopicId").asString()).isEqualTo(CUSTOM_TOPIC);
+            assertThat(call.body().path("filters").isMissingNode() || call.body().get("filters").isNull()).isTrue();
+            assertThat(call.body().get("count").asInt()).isEqualTo(5);
+            assertThat(call.body().get("requesterId").asString()).isEqualTo(room.hostSub());
+        });
+        String matchId = started.get("matchId").asString();
+        for (StompTestClient each : room.players()) {
+            each.subscribe(Destinations.matchTopic(UUID.fromString(matchId)));
+        }
+        clock.advance(Duration.ofMillis(3500));
+        for (StompTestClient each : room.players()) {
+            JsonNode ended = each.next("MATCH_ENDED").get("payload");
+            assertThat(ended.get("questionSource").asString()).isEqualTo("CUSTOM");
+            assertThat(ended.get("topic").get("name").asString()).isEqualTo("Renaissance (core)");
+        }
+        for (int i = 0; i < 2; i++) {
+            String sub = subs.get(subs.size() - 2 + i);
+            await().atMost(WAIT).until(() -> participation.activityOf(sub).isEmpty());
+        }
+        var events = published.of(UUID.fromString(matchId));
+        assertThat(events).hasSize(1);
+        assertThat(events.getFirst().questionSource().name()).isEqualTo("CUSTOM");
+        assertThat(events.getFirst().rated()).isFalse();
+        assertThat(events.getFirst().mode().name()).isEqualTo("BATTLE_ROOM");
+    }
+
+    @Test
+    void aCustomLobbyIsUnratedAndShowsTheHostsTopicNameWithoutAskingCore() {
+        String hostSub = newSub();
+        StompTestClient host = player(hostSub, "Rajeev");
+        host.send("/app/room/create", CUSTOM_CREATE);
+        JsonNode room = host.next("ROOM_JOINED").get("payload").get("room");
+        assertThat(room.get("rated").asBoolean()).isFalse();
+        assertThat(room.get("source").get("type").asString()).isEqualTo("CUSTOM");
+        assertThat(room.get("source").get("customTopicId").asString()).isEqualTo(CUSTOM_TOPIC);
+        assertThat(room.get("source").get("topicName").asString()).isEqualTo("Renaissance");
+        assertThat(room.get("source").has("topicId")).isFalse();
+        assertThat(CORE.calls()).isEmpty();
+    }
+
+    @Test
+    void aGoneCustomTopicIsSourceUnavailableAndAShrunkOneIsTopicUnavailableAndNobodySeesARawError() {
+        Lobby room = lobby(2, CUSTOM_CREATE);
+
+        CORE.status = 404;
+        room.host().send("/app/room/" + room.roomId() + "/start");
+        JsonNode gone = broadcast(room.players().get(1), "ROOM_START_FAILED");
+        assertThat(gone.get("payload").get("reason").asString()).isEqualTo("SOURCE_UNAVAILABLE");
+        assertThat(gone.toString()).doesNotContain("404");
+        assertThat(broadcast(room.host(), "ROOM_START_FAILED").get("payload").get("reason").asString()).isEqualTo("SOURCE_UNAVAILABLE");
+
+        CORE.status = 422;
+        room.host().send("/app/room/" + room.roomId() + "/start");
+        assertThat(broadcast(room.host(), "ROOM_START_FAILED").get("payload").get("reason").asString()).isEqualTo("TOPIC_UNAVAILABLE");
+
+        // The room is still a lobby, with its custom source.
+        assertThat(participation.activityOf(subs.get(0))).isPresent();
+        room.players().get(1).send("/app/room/" + room.roomId() + "/leave");
+        room.host().send("/app/room/" + room.roomId() + "/leave");
+        await().atMost(WAIT).until(() -> rooms.liveCount() == 0);
+    }
+
+    @Test
+    void playAgainKeepsTheCustomSourceAndTheNextStartChecksCoreAgain() {
+        Lobby room = lobby(2, CUSTOM_CREATE);
+        String matchId = playToEnd(room);
+        assertThat(CORE.calls()).hasSize(1);
+
+        room.host().send("/app/room/" + room.roomId() + "/playAgain");
+        JsonNode lobby = room.host().next("ROOM_JOINED");
+        JsonNode source = lobby.get("payload").get("room").get("source");
+        assertThat(source.get("type").asString()).isEqualTo("CUSTOM");
+        assertThat(source.get("customTopicId").asString()).isEqualTo(CUSTOM_TOPIC);
+        assertThat(lobby.get("payload").get("room").get("rated").asBoolean()).isFalse();
+        assertThat(lobby.get("payload").get("room").get("questionCount").asInt()).isEqualTo(5);
+        JsonNode notice = room.players().get(1).next("ROOM_SUCCEEDED");
+        assertThat(notice.get("matchId").asString()).isEqualTo(matchId);
+        assertThat(notice.get("payload").get("source").get("type").asString()).isEqualTo("CUSTOM");
+        assertThat(notice.get("payload").get("source").get("customTopicId").asString()).isEqualTo(CUSTOM_TOPIC);
+
+        // Nothing was asked of core by play again itself; the start does.
+        assertThat(CORE.calls()).hasSize(1);
+        String successor = lobby.get("payload").get("roomId").asString();
+        room.host().send("/app/room/" + successor + "/leave");
         await().atMost(WAIT).until(() -> rooms.liveCount() == 0);
     }
 }
