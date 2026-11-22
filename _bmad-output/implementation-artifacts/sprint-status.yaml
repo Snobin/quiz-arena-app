@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-11-2026 09:40
-last_updated: '11-21-2026 23:25'
+last_updated: '11-21-2026 23:40'
 project: quiz-arena
 project_key: NOKEY
 tracking_system: file-system
@@ -84,7 +84,7 @@ development_status:
   5-4-play-a-room-match: done
   5-5-battle-room-results-and-podium: done
   5-6-play-again: done
-  epic-5-retrospective: optional
+  epic-5-retrospective: done
 
   epic-6: backlog
   6-1-custom-topic-import-api: backlog
@@ -217,3 +217,55 @@ action_items:
     owner: "dev"
     status: open
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-11-21.md"
+  - id: "epic-5-retro-item-18-fix-snapshot-resync-so-a-reload-or-misse"
+    epic: 5
+    action: "Fix SNAPSHOT/resync so a reload or missed message mid room match returns
+      the player to the room"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-21.md"
+  - id: "epic-5-retro-item-19-verify-playagain-sends-under-the-roomreg"
+    epic: 5
+    action: "Verify playAgain sends under the RoomRegistry lock cannot block; move
+      outside the lock if they can"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-21.md"
+  - id: "epic-5-retro-item-20-decide-and-schedule-the-battle-room-poli"
+    epic: 5
+    action: "Decide and schedule the Battle Room polish story: joint-win/win takeovers,
+      Show my place, history placement, a11y, 320px audit"
+    owner: "owner"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-21.md"
+  - id: "epic-5-retro-item-21-split-roomclient-ts-before-epic-6-adds-t"
+    epic: 5
+    action: "Split roomClient.ts before Epic 6 adds the custom source"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-21.md"
+  - id: "epic-5-retro-item-22-reconcile-epic-text-on-hostparticipantid"
+    epic: 5
+    action: "Reconcile epic text on hostParticipantId and the Story 5.5 scope split"
+    owner: "owner"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-21.md"
+  - id: "epic-5-retro-item-23-manual-clock-variant-for-matchactorroomt"
+    epic: 5
+    action: "Manual-clock variant for MatchActorRoomTest"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-21.md"
+  - id: "epic-5-retro-item-24-settle-deferred-unverified-would-be-medi"
+    epic: 5
+    action: "Settle deferred unverified (would be medium) items in the next story
+      acceptance checks"
+    owner: "owner and dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-21.md"
+  - id: "epic-5-retro-item-25-document-maven_skip_rc-jdk-25-requiremen"
+    epic: 5
+    action: "Document MAVEN_SKIP_RC / JDK 25 requirement or fix ~/.mavenrc"
+    owner: "owner"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-21.md"
