@@ -8,5 +8,13 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
     setupFiles: ['src/test-setup.ts'],
+    // Report only, no thresholds: run `npm run coverage`, open coverage/index.html.
+    coverage: {
+      provider: 'v8',
+      reportOnFailure: true,
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: ['src/**/*.test.{ts,tsx}', 'src/test-setup.ts', 'src/test-utils/**'],
+      reporter: ['text-summary', 'html'],
+    },
   },
 });
