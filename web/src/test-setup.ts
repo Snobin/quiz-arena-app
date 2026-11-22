@@ -1,10 +1,15 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterEach } from 'vitest';
 
 afterEach(() => {
   cleanup();
 });
+
+// Screens are React.lazy chunks: the first visit in a worker loads and transforms them on demand,
+// which can pass Testing Library's 1 s default when ~70 files run in parallel (or with coverage on).
+// findBy*/waitFor still return as soon as the element appears; this only raises the ceiling.
+configure({ asyncUtilTimeout: 5000 });
 
 // jsdom does not implement scrolling; the shell restores scroll offsets with window.scrollTo.
 window.scrollTo = (() => {}) as typeof window.scrollTo;
