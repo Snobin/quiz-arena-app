@@ -15,7 +15,8 @@
     "check:i18n": "node scripts/check-i18n.mjs",
     "check:dist": "node scripts/check-dist.mjs",
     "test": "vitest run",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@stomp/stompjs": "7.3.0",
@@ -27,6 +28,7 @@
     "zustand": "5.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.1",
     "@tailwindcss/vite": "4.3.5",
     "@testing-library/dom": "10.4.2",
     "@testing-library/jest-dom": "6.9.1",
