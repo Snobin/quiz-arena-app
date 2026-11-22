@@ -43,6 +43,15 @@ public class InMemoryRateLimiter implements RateLimiter {
         return Decision.refuse((long) Math.ceil(Math.ceil((1 - tokens) / rate) / 1000.0));
     }
 
+    @Override
+    public synchronized void refund(RateLimitPolicy policy, String userId) {
+        String key = policy.action() + ":" + userId;
+        Bucket bucket = buckets.get(key);
+        if (bucket != null) {
+            buckets.put(key, new Bucket(Math.min(policy.capacity(), bucket.tokens() + 1), bucket.at()));
+        }
+    }
+
     /** Test helper: forget every bucket. */
     public synchronized void reset() {
         buckets.clear();

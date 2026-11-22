@@ -67,9 +67,26 @@ public class QuestionReportController {
             LOG.atInfo().addKeyValue("userId", caller.userId()).addKeyValue("route", "questions.reports.create").log("report rate limited");
             throw AdminWriteException.rateLimited(decision.retryAfterSeconds());
         }
-        UUID id = service.report(caller.userId(), questionId, version, body);
+        UUID id;
+        try {
+            id = service.report(caller.userId(), questionId, version, body);
+        } catch (AdminWriteException e) {
+            if (e.isCallerMistake()) {
+                refund(caller);
+            }
+            throw e;
+        }
         LOG.atInfo().addKeyValue("userId", caller.userId()).addKeyValue("route", "questions.reports.create").log("question reported");
         return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore()).body(new Created(id));
+    }
+
+    /** An invalid, unknown or duplicate report is not a use of the allowance. A failed refund must not mask the 4xx. */
+    private void refund(BearerAuthenticator.Caller caller) {
+        try {
+            limiter.refund(RateLimitPolicy.QUESTION_REPORT, caller.userId().toString());
+        } catch (RuntimeException e) {
+            LOG.atWarn().setCause(e).addKeyValue("route", "questions.reports.create").log("rate limit refund failed");
+        }
     }
 
     /** Fails closed: if the limiter store is down the report is refused with a 503, not an unshaped 500. */

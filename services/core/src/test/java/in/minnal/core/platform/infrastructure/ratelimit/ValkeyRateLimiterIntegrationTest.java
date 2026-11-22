@@ -47,6 +47,23 @@ class ValkeyRateLimiterIntegrationTest {
     }
 
     @Test
+    void aRefundGivesBackOneTokenButNeverPastCapacity() {
+        RateLimitPolicy policy = new RateLimitPolicy("refund", 2, 2, Duration.ofHours(1));
+        assertThat(limiter.tryAcquire(policy, "anju").allowed()).isTrue();
+        assertThat(limiter.tryAcquire(policy, "anju").allowed()).isTrue();
+        assertThat(limiter.tryAcquire(policy, "anju").allowed()).isFalse();
+        limiter.refund(policy, "anju");
+        assertThat(limiter.tryAcquire(policy, "anju").allowed()).isTrue();
+        assertThat(limiter.tryAcquire(policy, "anju").allowed()).isFalse();
+        limiter.refund(policy, "anju");
+        limiter.refund(policy, "anju");
+        limiter.refund(policy, "anju");
+        assertThat(limiter.tryAcquire(policy, "anju").allowed()).isTrue();
+        assertThat(limiter.tryAcquire(policy, "anju").allowed()).isTrue();
+        assertThat(limiter.tryAcquire(policy, "anju").allowed()).isFalse();
+    }
+
+    @Test
     void refillsAtTheConfiguredRate() throws InterruptedException {
         RateLimitPolicy policy = new RateLimitPolicy("refill", 2, 1, Duration.ofSeconds(1));
         assertThat(limiter.tryAcquire(policy, "anju").allowed()).isTrue();

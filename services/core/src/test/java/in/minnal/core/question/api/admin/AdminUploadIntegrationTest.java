@@ -311,6 +311,17 @@ class AdminUploadIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void rejectedUploadsGiveTheirTokenBackSoMistakesDoNotUseTheHour() throws Exception {
+        String a = admin();
+        for (int i = 0; i < 12; i++) {
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(UPLOADS).header("Authorization", a)
+                    .contentType("application/json").content("{}")).andExpect(status().isBadRequest());
+        }
+        // twelve rejected uploads would have emptied a bucket of ten
+        upload(a, csv(row("History", "Kerala", "After the slips?", "0", "R-1"))).andExpect(status().isOk());
+    }
+
+    @Test
     void aMalformedMultipartBodyIs400ProblemDetails() throws Exception {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(UPLOADS).header("Authorization", admin())
                 .contentType("multipart/form-data; boundary=xyz").content("--xyz\r\nbroken"))

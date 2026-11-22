@@ -140,6 +140,17 @@ class QuestionReportIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void rejectedReportsGiveTheirTokenBackSoMistakesDoNotUseTheBudget() throws Exception {
+        String p = player();
+        QuestionVersion v = published();
+        for (int i = 0; i < 7; i++) {
+            send(p, v.questionId(), v.version(), "{\"surface\":\"RESULTS\",\"matchId\":\"" + "m".repeat(65) + "\"}").andExpect(status().isBadRequest());
+        }
+        // seven rejected reports would have emptied a bucket of five
+        send(p, v.questionId(), v.version(), OK).andExpect(status().isCreated());
+    }
+
+    @Test
     void anOverlongMatchIdIs400WithAFieldError() throws Exception {
         QuestionVersion v = published();
         send(player(), v.questionId(), v.version(), "{\"surface\":\"RESULTS\",\"matchId\":\"" + "m".repeat(65) + "\"}")

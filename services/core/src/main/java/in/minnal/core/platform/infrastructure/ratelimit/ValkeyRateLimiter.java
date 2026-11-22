@@ -46,6 +46,18 @@ public class ValkeyRateLimiter implements RateLimiter {
             return {allowed, retry}
             """;
 
+    /** KEYS[1] bucket; ARGV: capacity. Adds one token, never past capacity; a missing bucket is already full. */
+    static final String REFUND_SCRIPT = """
+            local tokens = tonumber(redis.call('HGET', KEYS[1], 'tokens'))
+            if tokens == nil then
+              return 0
+            end
+            redis.call('HSET', KEYS[1], 'tokens', tostring(math.min(tonumber(ARGV[1]), tokens + 1)))
+            return 1
+            """;
+
+    private static final DefaultRedisScript<Long> REFUND = new DefaultRedisScript<>(REFUND_SCRIPT, Long.class);
+
     private static final DefaultRedisScript<List> LUA = new DefaultRedisScript<>(SCRIPT, List.class);
 
     private final StringRedisTemplate redis;
@@ -69,5 +81,10 @@ public class ValkeyRateLimiter implements RateLimiter {
             throw new IllegalStateException("rate limiter script returned nothing");
         }
         return result.get(0) == 1L ? Decision.allow() : Decision.refuse((long) Math.ceil(result.get(1) / 1000.0));
+    }
+
+    @Override
+    public void refund(RateLimitPolicy policy, String userId) {
+        redis.execute(REFUND, List.of(key(keyPrefix, policy, userId)), Integer.toString(policy.capacity()));
     }
 }

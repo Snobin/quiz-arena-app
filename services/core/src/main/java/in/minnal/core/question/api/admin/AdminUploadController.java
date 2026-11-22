@@ -55,9 +55,25 @@ public class AdminUploadController {
             throw AdminWriteException.rateLimited(decision.retryAfterSeconds());
         }
         LOG.atInfo().addKeyValue("userId", caller.userId()).addKeyValue("route", "admin.uploads.create").log("admin request");
-        byte[] bytes = read(request);
-        CsvUploadResult result = service.upload(caller.userId(), bytes);
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result);
+        try {
+            byte[] bytes = read(request);
+            CsvUploadResult result = service.upload(caller.userId(), bytes);
+            return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result);
+        } catch (AdminWriteException e) {
+            if (e.isCallerMistake()) {
+                refund(caller);
+            }
+            throw e;
+        }
+    }
+
+    /** A rejected file is the admin's slip, not a use of the hourly allowance. A failed refund must not mask the 4xx. */
+    private void refund(BearerAuthenticator.Caller caller) {
+        try {
+            limiter.refund(RateLimitPolicy.ADMIN_UPLOAD, caller.userId().toString());
+        } catch (RuntimeException e) {
+            LOG.atWarn().setCause(e).addKeyValue("route", "admin.uploads.create").log("rate limit refund failed");
+        }
     }
 
     /** Fails closed: if the limiter store is down the upload is refused with a 503, not an unshaped 500. */

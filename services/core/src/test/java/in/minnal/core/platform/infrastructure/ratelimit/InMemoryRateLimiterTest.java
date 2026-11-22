@@ -24,6 +24,33 @@ class InMemoryRateLimiterTest {
     }
 
     @Test
+    void aRefundGivesBackOneTokenButNeverPastCapacity() {
+        for (int i = 0; i < 3; i++) {
+            limiter.tryAcquire(POLICY, "anju");
+        }
+        assertThat(limiter.tryAcquire(POLICY, "anju").allowed()).isFalse();
+        limiter.refund(POLICY, "anju");
+        assertThat(limiter.tryAcquire(POLICY, "anju").allowed()).isTrue();
+        assertThat(limiter.tryAcquire(POLICY, "anju").allowed()).isFalse();
+        for (int i = 0; i < 5; i++) {
+            limiter.refund(POLICY, "anju");
+        }
+        for (int i = 0; i < 3; i++) {
+            assertThat(limiter.tryAcquire(POLICY, "anju").allowed()).isTrue();
+        }
+        assertThat(limiter.tryAcquire(POLICY, "anju").allowed()).isFalse();
+    }
+
+    @Test
+    void aRefundWithNoBucketIsANoOp() {
+        limiter.refund(POLICY, "nobody");
+        for (int i = 0; i < 3; i++) {
+            assertThat(limiter.tryAcquire(POLICY, "nobody").allowed()).isTrue();
+        }
+        assertThat(limiter.tryAcquire(POLICY, "nobody").allowed()).isFalse();
+    }
+
+    @Test
     void refillsOverTime() {
         for (int i = 0; i < 3; i++) {
             limiter.tryAcquire(POLICY, "anju");
