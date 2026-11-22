@@ -71,6 +71,16 @@ class SoloPracticeIntegrationTest extends PostgresIntegrationTest {
     }
 
     /** Serves and answers one question; returns its id. */
+    /** Options are shuffled per session; the fixtures store the answer as the option starting with "C ". */
+    static int shownCorrect(JsonNode next) {
+        for (int i = 0; i < 4; i++) {
+            if (next.get("question").get("options").get(i).asString().startsWith("C ")) {
+                return i;
+            }
+        }
+        throw new AssertionError("no option starting with \"C \"");
+    }
+
     String serveAndAnswer(String auth, UUID session, int option) throws Exception {
         JsonNode n = next(auth, session);
         String id = n.get("question").get("questionId").asString();
@@ -127,14 +137,7 @@ class SoloPracticeIntegrationTest extends PostgresIntegrationTest {
         JsonNode n = next(p, session);
         String id = n.get("question").get("questionId").asString();
         int version = n.get("question").get("version").asInt();
-        // Options are shuffled per session, so find the stored answer ("C ...") where it is shown.
-        int correct = -1;
-        for (int i = 0; i < 4; i++) {
-            if (n.get("question").get("options").get(i).asString().startsWith("C ")) {
-                correct = i;
-            }
-        }
-        assertThat(correct).isGreaterThanOrEqualTo(0);
+        int correct = shownCorrect(n);
         answer(p, session, id, version, correct).andExpect(status().isOk()).andExpect(jsonPath("$.correct").value(true))
                 .andExpect(jsonPath("$.answerIndex").value(correct)).andExpect(jsonPath("$.explanation").exists())
                 .andExpect(jsonPath("$.attribution").value("Kerala PSC test"))
@@ -185,7 +188,7 @@ class SoloPracticeIntegrationTest extends PostgresIntegrationTest {
         // Publish v2 of the served question after serving it: v1 stays answerable.
         QuestionVersion served = versions.stream().filter(v -> v.questionId().toString().equals(servedId)).findFirst().orElseThrow();
         fixtures.insertVersion(served.nextDraft(served.content(), Instant.now()).publish("Snobin", Instant.now()));
-        answer(p, session, servedId, servedVersion, 2).andExpect(status().isOk()).andExpect(jsonPath("$.correct").value(true));
+        answer(p, session, servedId, servedVersion, shownCorrect(n)).andExpect(status().isOk()).andExpect(jsonPath("$.correct").value(true));
         // Delete every other question but one: the rest are skipped, never served.
         List<String> remaining = new ArrayList<>(versions.stream().map(v -> v.questionId().toString()).filter(id -> !id.equals(servedId)).toList());
         String keep = remaining.remove(0);
