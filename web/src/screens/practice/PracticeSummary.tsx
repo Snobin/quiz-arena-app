@@ -9,8 +9,8 @@ import type { Tally } from './practiceApi.ts';
 export const PRACTICE_PICKER = '/play/topics?for=solo';
 
 type PracticeEndProps = {
-  /** `summary`: she stopped. `expired`: the session timed out; the tally is the last one she saw. */
-  kind: 'summary' | 'expired';
+  /** `summary`: she stopped. `expired`: the session timed out. `deleted`: her custom topic was deleted. The tally is the last one she saw. */
+  kind: 'summary' | 'expired' | 'deleted';
   tally: Tally;
   onAgain: () => void;
 };
@@ -26,16 +26,16 @@ export function PracticeEnd({ kind, tally, onAgain }: PracticeEndProps) {
   }, []);
   return (
     <PageColumn className="py-6">
-      <main data-testid={kind === 'summary' ? 'practice-summary' : 'practice-expired'} className="flex flex-col gap-4">
+      <main data-testid={`practice-${kind}`} className="flex flex-col gap-4">
         <h1 ref={headingRef} tabIndex={-1} className="font-title text-title">
-          {kind === 'summary' ? t('practice.summary.heading') : t('practice.expired')}
+          {kind === 'summary' ? t('practice.summary.heading') : kind === 'deleted' ? t('practice.deleted') : t('practice.expired')}
         </h1>
         <p data-testid="practice-tally" className="text-body tabular-nums">
           {t('practice.tally', { answered: tally.answeredCount, correct: tally.correctCount })}
         </p>
         <div className="flex flex-col gap-3">
-          <Button onClick={onAgain}>{t(kind === 'summary' ? 'practice.again' : 'practice.startAgain')}</Button>
-          <Button variant="secondary" onClick={() => navigate(PRACTICE_PICKER)}>
+          {kind === 'deleted' ? null : <Button onClick={onAgain}>{t(kind === 'summary' ? 'practice.again' : 'practice.startAgain')}</Button>}
+          <Button variant={kind === 'deleted' ? 'primary' : 'secondary'} onClick={() => navigate(PRACTICE_PICKER)}>
             {t('practice.chooseTopic')}
           </Button>
           <Link to="/" className={LINK}>

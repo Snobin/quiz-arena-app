@@ -6,6 +6,8 @@ import { PageColumn } from '../../design/PageColumn.tsx';
 import { detectLanguage } from '../../i18n/Lang.tsx';
 import type { MessageKey } from '../../i18n/index.ts';
 import { useDocumentTitle } from '../../i18n/useDocumentTitle.ts';
+import '../practice/practiceCatalogue.ts';
+import { fetchTopicList, TOPIC_LIST_KEY, type TopicSummary } from '../customTopics/manageApi.ts';
 import { useReducedEffects } from '../../motion/reduceEffects.ts';
 import { announce } from '../../shell/announce.ts';
 import { Link } from '../../shell/Link.tsx';
@@ -21,14 +23,16 @@ import {
 } from './topicsApi.ts';
 
 export type TopicPurpose = 'TOPIC_DUEL' | 'SOLO_PRACTICE' | 'BATTLE_ROOM';
-/** Only the question bank for now; custom topics add a source in Epic 6. */
-export type TopicSource = 'BANK';
+/** The question bank, and (Solo Practice only, Story 6.4) the player's own custom topics. */
+export type TopicSource = 'BANK' | 'CUSTOM';
 
 export type TopicPickerProps = {
   purpose: TopicPurpose;
   /** One ink line above the search field, announced politely once (a requested topic is not available). */
   notice?: string;
   onSelect: (topic: PickedTopic) => void;
+  /** Called for a row of My topics; without `'CUSTOM'` in `sources` that section never loads or shows. */
+  onSelectCustom?: (topic: TopicSummary) => void;
   sources?: readonly TopicSource[];
 };
 
@@ -126,17 +130,47 @@ function TopicRow({ topic, subjectName, disabled, onPick }: RowProps) {
   );
 }
 
+function MineRow({ topic, disabled, onPick }: { topic: TopicSummary; disabled: boolean; onPick: () => void }) {
+  const { t } = useTranslation();
+  const questions = t('topics.mine.row', { count: topic.questionCount });
+  return (
+    <li className="border-b border-hairline last:border-b-0">
+      <button
+        type="button"
+        aria-disabled={disabled ? 'true' : undefined}
+        aria-label={`${topic.name}, ${questions}`}
+        onClick={() => {
+          if (!disabled) onPick();
+        }}
+        className={['hit-target flex min-h-[56px] w-full min-w-[0] items-center gap-3 rounded-lg px-4 py-2 text-left', disabled ? 'cursor-not-allowed' : ''].join(' ')}
+      >
+        <span className="flex min-w-[0] flex-1 flex-col">
+          <span lang={detectLanguage(topic.name)} className={['text-body font-semibold break-words', disabled ? 'text-muted' : 'text-ink'].join(' ')}>
+            {topic.name}
+          </span>
+          <span className="text-caption text-muted">{questions}</span>
+          {disabled ? <span className="text-caption text-muted">{t('offline.playCaption')}</span> : null}
+        </span>
+        <Chevron />
+      </button>
+    </li>
+  );
+}
+
 /**
  * The shared topic chooser (Story 4.1): search, a Recent section and one section per subject, from the
  * question bank. Selecting a topic records it as recent (fire and forget) and calls `onSelect`.
  */
-export function TopicPicker({ purpose, notice, onSelect }: TopicPickerProps) {
+export function TopicPicker({ purpose, notice, onSelect, onSelectCustom, sources = ['BANK'] }: TopicPickerProps) {
   const { t } = useTranslation();
   useDocumentTitle(t('title.topics'));
   const online = useOnline();
   const queryClient = useQueryClient();
   const catalogue = useQuery({ queryKey: TOPICS_QUERY_KEY, queryFn: fetchTopics, staleTime: STALE_MS, retry: false });
   const recent = useQuery({ queryKey: RECENT_TOPICS_QUERY_KEY, queryFn: fetchRecentTopics, staleTime: STALE_MS, retry: false });
+  const withCustom = sources.includes('CUSTOM') && onSelectCustom !== undefined;
+  // A failure here only hides the section: the bank stays usable.
+  const mine = useQuery({ queryKey: TOPIC_LIST_KEY, queryFn: fetchTopicList, staleTime: STALE_MS, retry: false, enabled: withCustom });
   const [input, setInput] = useState('');
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
@@ -153,7 +187,12 @@ export function TopicPicker({ purpose, notice, onSelect }: TopicPickerProps) {
   const data: Catalogue | undefined = catalogue.data;
   const searching = query.trim() !== '';
   const filtered = useMemo(() => (data ? filterCatalogue(data.subjects, query) : []), [data, query]);
-  const matchCount = filtered.reduce((sum, subject) => sum + subject.topics.length, 0);
+  const mineRows = useMemo(() => {
+    const all = withCustom ? (mine.data?.topics ?? []) : [];
+    const needle = fold(query.trim());
+    return needle ? all.filter((topic) => fold(topic.name).includes(needle)) : all;
+  }, [mine.data, query, withCustom]);
+  const matchCount = filtered.reduce((sum, subject) => sum + subject.topics.length, 0) + mineRows.length;
 
   // The count is announced once per settled query, not on every keystroke.
   useEffect(() => {
@@ -220,14 +259,14 @@ export function TopicPicker({ purpose, notice, onSelect }: TopicPickerProps) {
             <p className="sr-only">{t('common.loading')}</p>
             <SkeletonRows />
           </>
-        ) : data.subjects.length === 0 ? (
+        ) : data.subjects.length === 0 && mineRows.length === 0 ? (
           <div className="flex flex-col items-start gap-3">
             <p className="text-body">{t('topics.empty')}</p>
             <Link to="/matchmaking" className="hit-target inline-flex min-h-target-min items-center justify-center rounded-md bg-band px-4 py-2 text-body text-on-band">
               {t('play.quickMatch')}
             </Link>
           </div>
-        ) : searching && filtered.length === 0 ? (
+        ) : searching && filtered.length === 0 && mineRows.length === 0 ? (
           <div className="flex flex-col items-start gap-3">
             <p className="text-body">{t('topics.noMatch', { query: query.trim() })}</p>
             <Button variant="secondary" onClick={clear}>
@@ -236,6 +275,18 @@ export function TopicPicker({ purpose, notice, onSelect }: TopicPickerProps) {
           </div>
         ) : (
           <>
+            {mineRows.length > 0 ? (
+              <section aria-labelledby="topicsMine" className="flex flex-col gap-2">
+                <h2 id="topicsMine" className="text-body font-semibold text-muted">
+                  {t('topics.mine')}
+                </h2>
+                <ul data-testid="my-topics" className="rounded-lg border border-hairline bg-card">
+                  {mineRows.map((topic) => (
+                    <MineRow key={topic.customTopicId} topic={topic} disabled={offlineDisabled} onPick={() => onSelectCustom?.(topic)} />
+                  ))}
+                </ul>
+              </section>
+            ) : null}
             {!searching && recentRows.length > 0 ? (
               <section aria-labelledby="topicsRecent" className="flex flex-col gap-2">
                 <h2 id="topicsRecent" className="text-body font-semibold text-muted">

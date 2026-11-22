@@ -22,15 +22,17 @@ import {
   saveStored,
   sendAnswer,
   startPractice,
+  targetId,
   type AnswerResult,
   type NextQuestion,
+  type PracticeTarget,
   type Tally,
 } from './practiceApi.ts';
 import './practiceCatalogue.ts';
 import { PracticeOptions } from './practiceOptions.tsx';
 import { PRACTICE_PICKER, PracticeEnd } from './PracticeSummary.tsx';
 
-type Phase = 'loading' | 'question' | 'summary' | 'expired';
+type Phase = 'loading' | 'question' | 'summary' | 'expired' | 'deleted';
 type Failure = { message: string; retry: () => void };
 
 /** A bar fixed to the bottom with a spacer as tall as it is, so the last content stays clear of it. */
@@ -61,10 +63,13 @@ function ActionBar({ children }: { children: ReactNode }) {
 }
 
 /**
- * `/practice/:topicId` (Story 4.3): untimed, unrated practice on one bank topic. The server decides correctness and
- * sends the answer only in the answer response; this screen never computes it. No timer, score, opponent or volt.
+ * `/practice/:topicId` (Story 4.3) and `/practice/custom/:customTopicId` (Story 6.4): untimed, unrated practice on one
+ * bank topic or one of the player's own custom topics. The server decides correctness and sends the answer only in the
+ * answer response; this screen never computes it. No timer, score, opponent or volt.
  */
-export default function PracticeScreen({ topicId }: { topicId: string }) {
+export default function PracticeScreen({ target }: { target: PracticeTarget }) {
+  const topicId = targetId(target);
+  const custom = target.kind === 'custom';
   const { t } = useTranslation();
   const online = useOnline();
   const queryClient = useQueryClient();
@@ -86,6 +91,9 @@ export default function PracticeScreen({ topicId }: { topicId: string }) {
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<AnswerResult | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
+  const [notice, setNotice] = useState<'reshuffled' | 'changed' | null>(null);
+  /** Set when an answer got 409 topic-changed: the next question announces the update, not a plain reshuffle. */
+  const changedRef = useRef(false);
   const tallyRef = useRef(tally);
   tallyRef.current = tally;
 
@@ -107,6 +115,14 @@ export default function PracticeScreen({ topicId }: { topicId: string }) {
     setPhase('expired');
   }, [topicId]);
 
+  /** The custom topic was deleted: the last tally stays, with a way to pick another topic. */
+  const gone = useCallback(() => {
+    clearStored(topicId);
+    setBusy(false);
+    setFailure(null);
+    setPhase('deleted');
+  }, [topicId]);
+
   const toPicker = useCallback(
     (suffix = '') => {
       leaving.current = true;
@@ -123,7 +139,7 @@ export default function PracticeScreen({ topicId }: { topicId: string }) {
       try {
         const next = await fetchNext(sessionId);
         if (!alive.current) return;
-        if (next.source.type === 'BANK') setTopicName(next.source.topicName);
+        setTopicName(next.source.topicName);
         setCurrent(next);
         setPick(null);
         setSending(false);
@@ -131,9 +147,20 @@ export default function PracticeScreen({ topicId }: { topicId: string }) {
         setPhase('question');
         setBusy(false);
         remember({ answeredCount: next.position - 1, correctCount: Math.min(tallyRef.current.correctCount, next.position - 1) });
-        if (next.reshuffled) announce(t('practice.reshuffled'));
+        if (changedRef.current) {
+          changedRef.current = false;
+          setNotice('changed');
+          announce(t('practice.changed'));
+        } else {
+          setNotice(next.reshuffled ? 'reshuffled' : null);
+          if (next.reshuffled) announce(t('practice.reshuffled'));
+        }
       } catch (error) {
         if (!alive.current) return;
+        if (error instanceof PracticeError && error.kind === 'deleted') {
+          gone();
+          return;
+        }
         if (error instanceof PracticeError && error.kind === 'expired') {
           onGone();
           return;
@@ -142,7 +169,7 @@ export default function PracticeScreen({ topicId }: { topicId: string }) {
         setFailure({ message: error instanceof PracticeError && error.detail ? error.detail : t('practice.error.generic'), retry: () => void loadNext(sessionId, onGone) });
       }
     },
-    [expire, remember, t],
+    [expire, gone, remember, t],
   );
 
   const startNew = useCallback(async () => {
@@ -150,15 +177,19 @@ export default function PracticeScreen({ topicId }: { topicId: string }) {
     setFailure(null);
     setPhase('loading');
     try {
-      const started = await startPractice(topicId);
+      const started = await startPractice(target);
       if (!alive.current) return;
       sessionRef.current = started.sessionId;
-      if (started.source.type === 'BANK') setTopicName(started.source.topicName);
+      setTopicName(started.source.topicName);
       remember({ answeredCount: 0, correctCount: 0 });
       await loadNext(started.sessionId);
     } catch (error) {
       if (!alive.current) return;
-      if (error instanceof PracticeError && error.kind === 'unavailable') {
+      if (custom && error instanceof PracticeError && (error.kind === 'deleted' || error.kind === 'expired')) {
+        gone();
+        return;
+      }
+      if (!custom && error instanceof PracticeError && error.kind === 'unavailable') {
         void queryClient.invalidateQueries({ queryKey: TOPICS_QUERY_KEY });
         toPicker('&notice=small');
         return;
@@ -166,7 +197,7 @@ export default function PracticeScreen({ topicId }: { topicId: string }) {
       setBusy(false);
       setFailure({ message: error instanceof PracticeError && error.detail ? error.detail : t('practice.error.generic'), retry: () => void startNew() });
     }
-  }, [loadNext, queryClient, remember, t, toPicker, topicId]);
+  }, [custom, gone, loadNext, queryClient, remember, t, target, toPicker]);
 
   // Resume the stored session after a reload, else start one.
   useEffect(() => {
@@ -219,6 +250,12 @@ export default function PracticeScreen({ topicId }: { topicId: string }) {
       setSending(false);
       setPick(null);
       if (error instanceof PracticeError && error.kind === 'expired') return expire();
+      if (error instanceof PracticeError && error.kind === 'deleted') return gone();
+      // The owner re-imported the topic: rebuild from its new questions, keeping the tally.
+      if (error instanceof PracticeError && error.kind === 'changed') {
+        changedRef.current = true;
+        return void loadNext(sessionId);
+      }
       // Not the question being practised (answered elsewhere): move on to the one the server holds.
       if (error instanceof PracticeError && error.kind === 'conflict') return void loadNext(sessionId);
       setFailure({ message: t('practice.error.answer'), retry: () => void answer(optionIndex) });
@@ -283,7 +320,7 @@ export default function PracticeScreen({ topicId }: { topicId: string }) {
     void startNew();
   };
 
-  if (phase === 'summary' || phase === 'expired') return <PracticeEnd kind={phase} tally={tally} onAgain={again} />;
+  if (phase === 'summary' || phase === 'expired' || phase === 'deleted') return <PracticeEnd kind={phase} tally={tally} onAgain={again} />;
 
   const failureBlock = failure ? (
     <div data-testid="practice-error" role="alert" className="mt-4 flex flex-col items-start gap-2">
@@ -318,6 +355,11 @@ export default function PracticeScreen({ topicId }: { topicId: string }) {
           <p lang={topicName ? detectLanguage(topicName) : undefined} data-testid="practice-topic" className="min-w-[0] flex-1 break-words text-body font-semibold">
             {topicName}
           </p>
+          {custom ? (
+            <span data-testid="practice-own-tag" lang="ml" className="rounded-sm border border-ink px-2 py-[2px] text-label font-semibold text-ink">
+              {t('practice.own')}
+            </span>
+          ) : null}
           <Button variant="secondary" onClick={() => void stop()}>
             {t('practice.stop')}
           </Button>
@@ -325,9 +367,9 @@ export default function PracticeScreen({ topicId }: { topicId: string }) {
         <p data-testid="practice-tally" className="mt-2 text-caption tabular-nums text-muted">
           {t('practice.tally', { answered: tally.answeredCount, correct: tally.correctCount })}
         </p>
-        {current.reshuffled ? (
-          <p data-testid="practice-reshuffled" className="mt-3 text-body text-ink">
-            {t('practice.reshuffled')}
+        {notice ? (
+          <p data-testid={notice === 'changed' ? 'practice-changed' : 'practice-reshuffled'} className="mt-3 text-body text-ink">
+            {t(notice === 'changed' ? 'practice.changed' : 'practice.reshuffled')}
           </p>
         ) : null}
         <QuestionCard
@@ -353,7 +395,7 @@ export default function PracticeScreen({ topicId }: { topicId: string }) {
                 {result.correct ? t('practice.result.correct') : t('practice.result.wrong', { answer: answerText })}
               </span>
             </p>
-            <RevealDetails explanation={result.explanation} attribution={result.attribution ?? null} />
+            <RevealDetails explanation={result.explanation} attribution={result.attribution ?? null} hideSource={custom} />
             <ReportQuestion
               key={`${view.questionId}:${view.version}`}
               questionId={view.questionId}

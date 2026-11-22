@@ -20,6 +20,23 @@ public interface CustomTopicRepository {
     record Detail(UUID id, String name, int questionCount, int revision, Instant updatedAt, List<Row> rows) {
     }
 
+    /** A topic's name and current revision, for Solo Practice. */
+    record Header(UUID id, String name, int revision, int questionCount) {
+    }
+
+    /** One stored question with its id (ids change on every re-import). */
+    record Stored(UUID id, Row row) {
+    }
+
+    /** The topic's header; empty when it does not exist or belongs to someone else (the same answer for both). */
+    Optional<Header> header(UUID ownerId, UUID topicId);
+
+    /** The ids of the topic's questions in position order. */
+    List<UUID> questionIds(UUID topicId);
+
+    /** One question of the topic; empty when it is gone (the topic was re-imported or deleted). */
+    Optional<Stored> question(UUID topicId, UUID questionId);
+
     /** The owner's topics, newest {@code updated_at} first. */
     List<Summary> list(UUID ownerId);
 

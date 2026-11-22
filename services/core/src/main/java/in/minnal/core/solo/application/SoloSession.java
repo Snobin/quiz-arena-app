@@ -25,10 +25,26 @@ public record SoloSession(
         order = List.copyOf(order);
     }
 
-    /** Tagged source: {@code type} plus its type-specific id ({@code topicId} for BANK), so CUSTOM can be added later. */
-    public record Source(String type, UUID topicId) {
+    /**
+     * Tagged source: {@code type} plus its id ({@code topicId} is the bank topic for BANK and the custom topic for CUSTOM).
+     * {@code revision} is the custom topic's revision when the pool was built (null for BANK and for sessions written before
+     * Story 6.4).
+     */
+    public record Source(String type, UUID topicId, Integer revision) {
         public static final String BANK = "BANK";
         public static final String CUSTOM = "CUSTOM";
+
+        public Source(String type, UUID topicId) {
+            this(type, topicId, null);
+        }
+
+        public static Source custom(UUID customTopicId, int revision) {
+            return new Source(CUSTOM, customTopicId, revision);
+        }
+
+        public boolean isCustom() {
+            return CUSTOM.equals(type);
+        }
     }
 
     /** The served question, its exact version, whether it has been answered and whether serving it rebuilt the pool. */
@@ -40,6 +56,10 @@ public record SoloSession(
 
     public SoloSession withCurrent(Current next, int newCursor, int newCycle, List<UUID> newOrder) {
         return new SoloSession(sessionId, userId, source, newCycle, newOrder, newCursor, next, answeredCount, correctCount);
+    }
+
+    public SoloSession withSource(Source newSource) {
+        return new SoloSession(sessionId, userId, newSource, cycle, order, cursor, current, answeredCount, correctCount);
     }
 
     public SoloSession withAnswer(boolean correct) {

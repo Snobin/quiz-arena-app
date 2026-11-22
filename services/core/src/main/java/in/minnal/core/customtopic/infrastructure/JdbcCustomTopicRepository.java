@@ -37,6 +37,33 @@ class JdbcCustomTopicRepository implements CustomTopicRepository {
                 .map(d -> new Detail(d.id(), d.name(), d.questionCount(), d.revision(), d.updatedAt(), rows(topicId)));
     }
 
+    @Override
+    public Optional<Header> header(UUID ownerId, UUID topicId) {
+        return jdbc.sql("SELECT id, name, question_count, revision FROM custom_topic WHERE id = :id AND owner_user_id = :o")
+                .param("id", topicId).param("o", ownerId)
+                .query((rs, n) -> new Header(rs.getObject("id", UUID.class), rs.getString("name"), rs.getInt("revision"), rs.getInt("question_count")))
+                .optional();
+    }
+
+    @Override
+    public List<UUID> questionIds(UUID topicId) {
+        return jdbc.sql("SELECT id FROM custom_question WHERE custom_topic_id = :t ORDER BY position")
+                .param("t", topicId).query(UUID.class).list();
+    }
+
+    @Override
+    public Optional<Stored> question(UUID topicId, UUID questionId) {
+        return jdbc.sql("""
+                SELECT id, position, text, lang, option_a, option_b, option_c, option_d, answer_index, explanation
+                FROM custom_question WHERE custom_topic_id = :t AND id = :q
+                """)
+                .param("t", topicId).param("q", questionId)
+                .query((rs, n) -> new Stored(rs.getObject("id", UUID.class), new Row(rs.getInt("position"), rs.getString("text"), rs.getString("lang"),
+                        List.of(rs.getString("option_a"), rs.getString("option_b"), rs.getString("option_c"), rs.getString("option_d")),
+                        rs.getInt("answer_index"), rs.getString("explanation"))))
+                .optional();
+    }
+
     private List<Row> rows(UUID topicId) {
         return jdbc.sql("""
                 SELECT position, text, lang, option_a, option_b, option_c, option_d, answer_index, explanation

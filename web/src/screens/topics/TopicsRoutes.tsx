@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSession } from '../../auth/session.ts';
 import { PageColumn } from '../../design/PageColumn.tsx';
@@ -15,6 +15,7 @@ import { PRACTICE_PICKER } from '../practice/PracticeSummary.tsx';
 /** Where the picker sends a selection: the Topic Duel matchmaking view (Story 4.2); Solo Practice opens the practice screen (Story 4.3). */
 export const DUEL_PATH = '/play/duel/';
 export const PRACTICE_PATH = '/practice/';
+export const CUSTOM_PRACTICE_PATH = '/practice/custom/';
 
 function Pending() {
   const { t } = useTranslation();
@@ -71,7 +72,18 @@ function PracticeRoute({ id }: { id: string }) {
   useEffect(() => {
     if (!valid) navigate(PRACTICE_PICKER, { replace: true });
   }, [valid]);
-  return valid ? <PracticeScreen key={id} topicId={id} /> : <Pending />;
+  const target = useMemo(() => ({ kind: 'bank', topicId: id }) as const, [id]);
+  return valid ? <PracticeScreen key={id} target={target} /> : <Pending />;
+}
+
+/** `/practice/custom/:customTopicId` (Story 6.4): the same guard, for one of her own topics. */
+function CustomPracticeRoute({ id }: { id: string }) {
+  const valid = UUID.test(id);
+  useEffect(() => {
+    if (!valid) navigate(PRACTICE_PICKER, { replace: true });
+  }, [valid]);
+  const target = useMemo(() => ({ kind: 'custom', customTopicId: id }) as const, [id]);
+  return valid ? <PracticeScreen key={`custom:${id}`} target={target} /> : <Pending />;
 }
 
 /**
@@ -88,6 +100,7 @@ export default function TopicsRoutes() {
   if (status !== 'registered') return <Pending />;
 
   if (pathname.startsWith(DUEL_PATH)) return <DuelRoute id={pathname.slice(DUEL_PATH.length)} />;
+  if (pathname.startsWith(CUSTOM_PRACTICE_PATH)) return <CustomPracticeRoute id={pathname.slice(CUSTOM_PRACTICE_PATH.length)} />;
   if (pathname.startsWith(PRACTICE_PATH)) return <PracticeRoute id={pathname.slice(PRACTICE_PATH.length)} />;
   const params = new URLSearchParams(window.location.search);
   const target = params.get('for');
@@ -95,6 +108,8 @@ export default function TopicsRoutes() {
   return (
     <TopicPicker
       purpose={purpose}
+      sources={purpose === 'SOLO_PRACTICE' ? ['BANK', 'CUSTOM'] : ['BANK']}
+      onSelectCustom={(topic) => navigate(`${CUSTOM_PRACTICE_PATH}${topic.customTopicId}`)}
       notice={params.get('notice') === 'small' ? t('topics.notice.small') : undefined}
       onSelect={(topic) => {
         if (purpose === 'BATTLE_ROOM') {
