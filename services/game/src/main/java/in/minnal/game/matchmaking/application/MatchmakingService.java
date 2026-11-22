@@ -149,6 +149,14 @@ public class MatchmakingService implements DisposableBean {
     }
 
     public void join(MinnalPrincipal player, String sessionId, String modeName, String topicIdText) {
+        join(player, sessionId, modeName, topicIdText, false);
+    }
+
+    /**
+     * {@code customSource}: the join body named a custom source (Story 6.5a). Quick Match and Topic Duel have no custom
+     * path (a player's own questions are only for Battle Rooms and Solo Practice), so it is {@code INVALID_TOPIC}.
+     */
+    public void join(MinnalPrincipal player, String sessionId, String modeName, String topicIdText, boolean customSource) {
         if (drain.isDraining()) {
             reject(player, sessionId, ErrorCode.SERVER_DRAINING, null);
             return;
@@ -168,6 +176,10 @@ public class MatchmakingService implements DisposableBean {
         }
         if (mode == MatchMode.BATTLE_ROOM) {
             reject(player, sessionId, ErrorCode.MODE_UNAVAILABLE, null);
+            return;
+        }
+        if (customSource) {
+            reject(player, sessionId, ErrorCode.INVALID_TOPIC, null);
             return;
         }
         UUID topicId = null;

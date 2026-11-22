@@ -20,6 +20,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -211,7 +212,7 @@ class QuestionSetEndpointIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.topic.name").value("Districts"))
                 .andExpect(jsonPath("$.topic.subjectId").value(districts.subjectId().toString()))
                 .andExpect(jsonPath("$.topic.subjectName").value("Kerala Geography"));
-        request(bank(10)).andExpect(status().isOk()).andExpect(jsonPath("$.topic").doesNotExist());
+        request(bank(10)).andExpect(status().isOk()).andExpect(jsonPath("$.topic").value(org.hamcrest.Matchers.nullValue()));
     }
 
     @Test
@@ -277,13 +278,99 @@ class QuestionSetEndpointIntegrationTest extends PostgresIntegrationTest {
         }
     }
 
+    // Story 6.5a: the CUSTOM source.
+
+    UUID user(String name) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("INSERT INTO app_user (id, status, email, given_name, created_at, last_sign_in_at) VALUES (:id, 'ACTIVE', null, :n, :t, :t)")
+                .param("id", id).param("n", name).param("t", java.sql.Timestamp.from(Instant.now())).update();
+        return id;
+    }
+
+    UUID customTopic(UUID owner, String name, int questions, String lang, int revision) {
+        UUID id = UUID.randomUUID();
+        jdbc.sql("INSERT INTO custom_topic (id, owner_user_id, name, name_key, question_count, revision, created_at, updated_at) VALUES (:id, :o, :n, :k, :c, :r, :t, :t)")
+                .param("id", id).param("o", owner).param("n", name).param("k", name.toLowerCase()).param("c", questions).param("r", revision)
+                .param("t", java.sql.Timestamp.from(Instant.now())).update();
+        for (int i = 0; i < questions; i++) {
+            jdbc.sql("INSERT INTO custom_question (id, custom_topic_id, position, text, lang, option_a, option_b, option_c, option_d, answer_index, explanation) VALUES (:id, :t, :p, :text, :lang, 'A', 'B', 'C', 'D', 2, 'Because')")
+                    .param("id", UUID.randomUUID()).param("t", id).param("p", i + 1).param("text", "Own " + i).param("lang", lang).update();
+        }
+        return id;
+    }
+
+    static String custom(UUID topic, Object count, UUID requester) {
+        return "{\"source\": \"CUSTOM\", \"customTopicId\": " + (topic == null ? "null" : "\"" + topic + "\"")
+                + ", \"count\": " + count + ", \"requesterId\": \"" + requester + "\"}";
+    }
+
     @Test
-    void customSourceIs422NotAvailable() throws Exception {
+    void aCustomSetIsExactlyCountDistinctQuestionsFromTheOwnersTopicWithItsNameAndRevision() throws Exception {
+        UUID owner = user("Rajeev");
+        UUID topic = customTopic(owner, "Renaissance", 12, "ml", 3);
+        String json = request(custom(topic, 8, owner)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.questions.length()").value(8))
+                .andExpect(jsonPath("$.customTopic.customTopicId").value(topic.toString()))
+                .andExpect(jsonPath("$.customTopic.name").value("Renaissance"))
+                .andExpect(jsonPath("$.topic").value(org.hamcrest.Matchers.nullValue()))
+                .andReturn().getResponse().getContentAsString();
+        List<String> ids = JsonPath.read(json, "$.questions[*].questionId");
+        assertThat(new HashSet<>(ids)).hasSize(8);
+        assertThat((List<Integer>) JsonPath.read(json, "$.questions[*].version")).containsOnly(3);
+        assertThat((List<String>) JsonPath.read(json, "$.questions[*].textMl")).allMatch(t -> t.startsWith("Own "));
+        assertThat((List<Object>) JsonPath.read(json, "$.questions[*].textEn")).containsOnlyNulls();
+        assertThat((List<Object>) JsonPath.read(json, "$.questions[*].attribution")).containsOnlyNulls();
+        assertThat((List<Object>) JsonPath.read(json, "$.questions[*].topicId")).containsOnlyNulls();
+        for (int i = 0; i < 8; i++) {
+            int answer = JsonPath.read(json, "$.questions[" + i + "].answerIndex");
+            assertThat((String) JsonPath.read(json, "$.questions[" + i + "].options[" + answer + "]")).isEqualTo("C");
+        }
+    }
+
+    @Test
+    void anEnglishQuestionGoesInTextEn() throws Exception {
+        UUID owner = user("Rajeev");
+        request(custom(customTopic(owner, "English", 5, "en", 1), 5, owner)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.questions[0].textEn").isNotEmpty()).andExpect(jsonPath("$.questions[0].textMl").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void anotherPlayersAndAnUnknownTopicAreTheSame404() throws Exception {
+        UUID owner = user("Rajeev");
+        UUID other = user("Other");
+        UUID topic = customTopic(owner, "Mine", 6, "en", 1);
+        String foreign = request(custom(topic, 5, other)).andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)).andReturn().getResponse().getContentAsString();
+        String unknown = request(custom(UUID.randomUUID(), 5, other)).andExpect(status().isNotFound()).andReturn().getResponse().getContentAsString();
+        assertThat(JsonPath.<String>read(foreign, "$.detail")).isEqualTo(JsonPath.<String>read(unknown, "$.detail"));
+    }
+
+    @Test
+    void aTopicWithFewerThanCountQuestionsIs422AndNeverAShortSet() throws Exception {
+        UUID owner = user("Rajeev");
+        request(custom(customTopic(owner, "Small", 6, "en", 1), 7, owner)).andExpect(status().isUnprocessableContent());
+    }
+
+    @Test
+    void aCustomRequestWithFiltersOrWithoutATopicIdOrWithABadRequesterIs400() throws Exception {
+        UUID owner = user("Rajeev");
+        UUID topic = customTopic(owner, "Mine", 6, "en", 1);
+        request("{\"source\": \"CUSTOM\", \"customTopicId\": \"" + topic + "\", \"filters\": {\"category\": \"KERALA_PSC\"}, \"count\": 5, \"requesterId\": \"" + owner + "\"}")
+                .andExpect(status().isBadRequest());
+        request(custom(null, 5, owner)).andExpect(status().isBadRequest());
+        request("{\"source\": \"CUSTOM\", \"customTopicId\": \"" + topic + "\", \"count\": 5, \"requesterId\": \"player-1\"}")
+                .andExpect(status().isBadRequest());
+        request(custom(topic, 0, owner)).andExpect(status().isBadRequest());
+        request(custom(topic, 31, owner)).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void aGuestIdCannotDrawACustomSetAndTheBankIsUntouched() throws Exception {
+        UUID owner = user("Rajeev");
+        UUID topic = customTopic(owner, "Mine", 6, "en", 1);
+        request(custom(topic, 5, UUID.randomUUID())).andExpect(status().isNotFound());
         publish(5, fixtures.placement("Kerala Geography", "Rivers"));
-        request(body("\"CUSTOM\"", "{\"category\": \"KERALA_PSC\"}", 1))
-                .andExpect(status().isUnprocessableContent())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-                .andExpect(jsonPath("$.detail").value("custom source not available"));
+        request(bank(5)).andExpect(status().isOk()).andExpect(jsonPath("$.customTopic").value(org.hamcrest.Matchers.nullValue()));
     }
 
     @Test

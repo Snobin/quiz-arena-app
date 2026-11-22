@@ -1,0 +1,26 @@
+{
+  "type" : "ROOM_MATCH_STARTED",
+  "roomId" : "8e9f0a1b-2c3d-4e5f-a6b7-c8d9e0f1a2b3",
+  "seq" : 5,
+  "serverTime" : "2026-11-12T10:15:30.123Z",
+  "payload" : {
+    "roomId" : "8e9f0a1b-2c3d-4e5f-a6b7-c8d9e0f1a2b3",
+    "matchId" : "6f1c2a3e-8a4b-4c1d-9e2f-0a1b2c3d4e5f",
+    "mode" : "BATTLE_ROOM",
+    "participants" : [ {
+      "participantId" : "0b7e9c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+      "displayName" : "Anju",
+      "kind" : "USER"
+    }, {
+      "participantId" : "9d8c7b6a-5f4e-4d3c-b2a1-0f9e8d7c6b5a",
+      "displayName" : "ബിജു",
+      "kind" : "USER"
+    } ],
+    "questionCount" : 10,
+    "topic" : {
+      "name" : "Renaissance"
+    },
+    "firstQuestionAt" : "2026-11-12T10:15:33.623Z",
+    "questionSource" : "CUSTOM"
+  }
+}

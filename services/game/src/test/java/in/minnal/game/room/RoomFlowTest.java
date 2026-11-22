@@ -154,7 +154,10 @@ class RoomFlowTest extends GameIntegrationTest {
                 {"not json", "INVALID_ROOM_CONFIG"},
                 {"{\"source\":{\"type\":\"BANK\",\"topicId\":\"nope\"},\"questionCount\":10}", "INVALID_TOPIC"},
                 {"{\"source\":{\"type\":\"BANK\"},\"questionCount\":10}", "INVALID_TOPIC"},
-                {"{\"source\":{\"type\":\"CUSTOM\",\"customTopicId\":\"" + TOPIC + "\"},\"questionCount\":10}", "SOURCE_NOT_AVAILABLE"},
+                {"{\"source\":{\"type\":\"WEIRD\",\"topicId\":\"" + TOPIC + "\"},\"questionCount\":10}", "SOURCE_NOT_AVAILABLE"},
+                {"{\"source\":{\"type\":\"CUSTOM\"},\"questionCount\":10}", "INVALID_TOPIC"},
+                {"{\"source\":{\"type\":\"CUSTOM\",\"customTopicId\":\"nope\"},\"questionCount\":10}", "INVALID_TOPIC"},
+                {"{\"source\":{\"type\":\"CUSTOM\",\"customTopicId\":\"" + TOPIC + "\"},\"questionCount\":4}", "INVALID_ROOM_CONFIG"},
         };
         for (String[] bad : cases) {
             // A connection each: ten frames in a second would trip the inbound rate limit.
@@ -271,8 +274,10 @@ class RoomFlowTest extends GameIntegrationTest {
         // Invalid: refused to the host, nothing broadcast, nothing changed.
         anju.send("/app/room/" + roomId + "/configure", "{\"questionCount\":3}");
         assertThat(anju.error("INVALID_ROOM_CONFIG").get("roomId").asString()).isEqualTo(roomId);
-        anju.send("/app/room/" + roomId + "/configure", "{\"source\":{\"type\":\"CUSTOM\"}}");
+        anju.send("/app/room/" + roomId + "/configure", "{\"source\":{\"type\":\"WEIRD\"}}");
         anju.error("SOURCE_NOT_AVAILABLE");
+        anju.send("/app/room/" + roomId + "/configure", "{\"source\":{\"type\":\"CUSTOM\"}}");
+        anju.error("INVALID_TOPIC");
         anju.send("/app/room/" + roomId + "/configure", "{}");
         anju.error("INVALID_ROOM_CONFIG");
         anju.send("/app/room/" + roomId + "/configure", "{\"questionCount\":8}");

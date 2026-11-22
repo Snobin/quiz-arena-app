@@ -85,6 +85,17 @@ class ArchitectureTest {
     }
 
     @Test
+    void matchmakingCanOnlyRequestBankSets() {
+        // Story 6.5a: a player's own questions are for Battle Rooms and Solo Practice; Quick Match and Topic Duel have no
+        // custom path. Only the HTTP client (which maps core's 404 for a custom request) may name the custom source.
+        noClasses().that().resideInAPackage("in.minnal.game.matchmaking..")
+                .and().haveSimpleNameNotStartingWith("HttpQuestionSetClient")
+                .should().accessField(in.minnal.contracts.internal.QuestionSource.class, "CUSTOM")
+                .because("Quick Match and Topic Duel only draw from the question bank")
+                .check(classes);
+    }
+
+    @Test
     void scoringAndRevealHaveNoBotBranch() {
         noClasses().that().belongToAnyOf(MatchState.class, MatchParticipant.class, Scoring.class)
                 .should().dependOnClassesThat().belongToAnyOf(ParticipantKind.class)

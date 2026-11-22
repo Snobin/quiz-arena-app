@@ -219,6 +219,21 @@ class TopicDuelFlowTest extends GameIntegrationTest {
     }
 
     @Test
+    void aJoinCarryingACustomSourceIsInvalidTopicInQuickAndTopicDuelAndNeverQueued() {
+        String a = newSub();
+        StompTestClient anju = user(a);
+        String custom = "\"source\":{\"type\":\"CUSTOM\",\"customTopicId\":\"6f1b2c3d-1111-4222-8333-444455556666\"}";
+        anju.send("/app/matchmaking/QUICK/join", "{" + custom + "}");
+        anju.error("INVALID_TOPIC");
+        anju.send("/app/matchmaking/TOPIC_DUEL/join", "{\"topicId\":\"" + TOPIC_A + "\"," + custom + "}");
+        anju.error("INVALID_TOPIC");
+        anju.send("/app/matchmaking/TOPIC_DUEL/join", "{\"customTopicId\":\"6f1b2c3d-1111-4222-8333-444455556666\"}");
+        anju.error("INVALID_TOPIC");
+        assertThat(participation.activityOf(a)).isEmpty();
+        assertThat(CORE.calls()).isEmpty();
+    }
+
+    @Test
     void aMalformedJoinBodyStillQueuesQuickAndGivesInvalidTopicOnTopicDuel() {
         String a = newSub();
         StompTestClient anju = user(a);

@@ -86,7 +86,7 @@ export const ROOM_LOBBY_PHASES = ['LOBBY', 'STARTING'] as const;
 export type RoomLobbyPhase = (typeof ROOM_LOBBY_PHASES)[number];
 
 /** Why a start did not go ahead (ROOM_START_FAILED). */
-export const ROOM_START_FAILED_REASONS = ['TOPIC_UNAVAILABLE', 'UNAVAILABLE'] as const;
+export const ROOM_START_FAILED_REASONS = ['TOPIC_UNAVAILABLE', 'SOURCE_UNAVAILABLE', 'UNAVAILABLE'] as const;
 export type RoomStartFailedReason = (typeof ROOM_START_FAILED_REASONS)[number];
 
 /** The enum lists by their Java names, as `contracts/samples/enums.json` has them. */

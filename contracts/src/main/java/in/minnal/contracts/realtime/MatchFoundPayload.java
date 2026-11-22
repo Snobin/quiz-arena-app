@@ -9,7 +9,7 @@ import java.util.UUID;
  *
  * @param participants      every participant, the receiver included
  * @param questionCount     how many questions the match will ask
- * @param questionSource    always {@code BANK} until Epic 6
+ * @param questionSource    {@code BANK} in Quick Match and Topic Duel
  * @param topic             the Topic Duel topic, null in Quick Match
  * @param selfParticipantId which participant the receiver is
  */

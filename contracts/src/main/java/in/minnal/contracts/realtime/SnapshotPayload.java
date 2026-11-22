@@ -1,5 +1,6 @@
 package in.minnal.contracts.realtime;
 
+import in.minnal.contracts.internal.QuestionSource;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -28,6 +29,7 @@ import java.util.UUID;
  * @param topic         the Topic Duel topic, null in Quick Match
  * @param mode          the match's mode, so a client with no prior state (a reload) can tell a Battle Room
  *                      of two from a 1v1; null from an older server
+ * @param questionSource {@code CUSTOM} for a Battle Room on a host's own topic; null (omitted) otherwise (Story 6.5a)
  */
 public record SnapshotPayload(
         SnapshotPhase phase,
@@ -44,7 +46,17 @@ public record SnapshotPayload(
         MyAnswer myAnswer,
         UUID selfParticipantId,
         TopicInfo topic,
-        MatchMode mode) {
+        MatchMode mode,
+        QuestionSource questionSource) {
+
+    /** A snapshot with no question source (a bank match, or one from before Story 6.5a). */
+    public SnapshotPayload(SnapshotPhase phase, int questionIndex, int total, QuestionView question, Instant startedAt,
+            Instant deadline, QuestionRevealedPayload lastReveal, List<UUID> answered, List<ParticipantScore> scores,
+            List<Participant> participants, boolean youForfeited, MyAnswer myAnswer, UUID selfParticipantId,
+            TopicInfo topic, MatchMode mode) {
+        this(phase, questionIndex, total, question, startedAt, deadline, lastReveal, answered, scores, participants,
+                youForfeited, myAnswer, selfParticipantId, topic, mode, null);
+    }
 
     public SnapshotPayload {
         answered = List.copyOf(answered);

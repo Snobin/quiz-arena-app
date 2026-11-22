@@ -31,7 +31,8 @@ class MatchmakingController {
     @MessageMapping("/matchmaking/{mode}/join")
     void join(@DestinationVariable String mode, Message<?> message, Principal user,
             SimpMessageHeaderAccessor headers) {
-        matchmaking.join(principal(user), headers.getSessionId(), mode, topicIdOf(message.getPayload()));
+        matchmaking.join(principal(user), headers.getSessionId(), mode, topicIdOf(message.getPayload()),
+                customSourceOf(message.getPayload()));
     }
 
     /**
@@ -46,6 +47,22 @@ class MatchmakingController {
             return topicId != null && topicId.isString() ? topicId.asString() : null;
         } catch (RuntimeException e) {
             return null;
+        }
+    }
+
+    /** True when the body carries a {@code source} naming {@code CUSTOM} or a {@code customTopicId} (Story 6.5a). */
+    private static boolean customSourceOf(Object payload) {
+        try {
+            byte[] body = payload instanceof byte[] bytes ? bytes : String.valueOf(payload).getBytes(StandardCharsets.UTF_8);
+            JsonNode root = JSON.readTree(body);
+            JsonNode source = root.get("source");
+            if (root.get("customTopicId") != null) {
+                return true;
+            }
+            return source != null && source.isObject()
+                    && ((source.get("type") != null && "CUSTOM".equals(source.get("type").asString())) || source.get("customTopicId") != null);
+        } catch (RuntimeException e) {
+            return false;
         }
     }
 

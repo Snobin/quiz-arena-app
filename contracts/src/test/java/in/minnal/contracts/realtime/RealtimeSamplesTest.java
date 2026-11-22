@@ -7,6 +7,7 @@ import in.minnal.contracts.events.MatchCompletedEvent;
 import in.minnal.contracts.internal.InternalQuestion;
 import in.minnal.contracts.internal.QuestionSetFilters;
 import in.minnal.contracts.internal.QuestionSetRequest;
+import in.minnal.contracts.internal.QuestionSetCustomTopic;
 import in.minnal.contracts.internal.QuestionSetResponse;
 import in.minnal.contracts.internal.QuestionSetTopic;
 import in.minnal.contracts.internal.QuestionSource;
@@ -50,6 +51,7 @@ class RealtimeSamplesTest {
     static final UUID QUESTION_3_ID = UUID.fromString("5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b");
     static final UUID TOPIC_ID = UUID.fromString("1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d");
     static final UUID SUBJECT_ID = UUID.fromString("2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e");
+    static final UUID CUSTOM_ID = UUID.fromString("6f1b2c3d-1111-4222-8333-444455556666");
     static final TopicInfo TOPIC = new TopicInfo(TOPIC_ID, "Kerala History", "History");
     static final UUID ROOM_ID = UUID.fromString("8e9f0a1b-2c3d-4e5f-a6b7-c8d9e0f1a2b3");
     static final UUID EVENT_ID = UUID.fromString("7a8b9c0d-1e2f-4a3b-9c4d-5e6f7a8b9c0d");
@@ -176,6 +178,26 @@ class RealtimeSamplesTest {
                                 "കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി?", null, List.of("a", "b", "c", "d"), 0, "x", null, TOPIC_ID)),
                                 new QuestionSetTopic(TOPIC_ID, "കേരള ചരിത്രം", SUBJECT_ID, "ചരിത്രം")),
                         new TypeReference<QuestionSetResponse>() { }),
+                new Sample("question-set-response-custom.json",
+                        new QuestionSetResponse(List.of(new InternalQuestion(QUESTION_ID, 3,
+                                "എന്റെ ചോദ്യം?", null, List.of("a", "b", "c", "d"), 1, "x", null, null)), null,
+                                new QuestionSetCustomTopic(CUSTOM_ID, "Renaissance")),
+                        new TypeReference<QuestionSetResponse>() { }),
+                new Sample("room-start-failed-source-unavailable.json",
+                        ServerMessage.roomBroadcast(MessageType.ROOM_START_FAILED, ROOM_ID, 4, SERVER_TIME,
+                                new RoomStartFailedPayload(RoomStartFailedReason.SOURCE_UNAVAILABLE)),
+                        new TypeReference<ServerMessage<RoomStartFailedPayload>>() { }),
+                new Sample("room-match-started-custom.json",
+                        ServerMessage.roomBroadcast(MessageType.ROOM_MATCH_STARTED, ROOM_ID, 5, SERVER_TIME,
+                                new RoomMatchStartedPayload(ROOM_ID, MATCH_ID, MatchMode.BATTLE_ROOM,
+                                        joinedLobby.participants(), 10, new TopicInfo(null, "Renaissance", null),
+                                        Instant.parse("2026-11-12T10:15:33.623Z"), QuestionSource.CUSTOM)),
+                        new TypeReference<ServerMessage<RoomMatchStartedPayload>>() { }),
+                new Sample("room-lobby-updated-custom.json",
+                        ServerMessage.roomBroadcast(MessageType.ROOM_LOBBY_UPDATED, ROOM_ID, 2, SERVER_TIME,
+                                new RoomLobbyUpdatedPayload(new RoomView(ANJU, RoomSource.custom(CUSTOM_ID, "Renaissance"), 10, false,
+                                        Instant.parse("2026-11-12T10:25:33.623Z"), joinedLobby.participants(), 2), List.of(), List.of())),
+                        new TypeReference<ServerMessage<RoomLobbyUpdatedPayload>>() { }),
                 new Sample("matchmaking-failed.json",
                         ServerMessage.direct(MessageType.MATCHMAKING_FAILED, SERVER_TIME,
                                 new MatchmakingFailedPayload(MatchmakingFailedPayload.QUESTION_SET_UNAVAILABLE)),
@@ -435,6 +457,9 @@ class RealtimeSamplesTest {
         assertThat(busy.get("payload").get("roomId").asString()).isEqualTo(ROOM_ID.toString());
         assertThat(new RoomSource(QuestionSource.BANK, TOPIC_ID).rated()).isTrue();
         assertThat(new RoomSource(QuestionSource.CUSTOM, null).rated()).isFalse();
+        assertThat(RoomSource.custom(CUSTOM_ID, "Renaissance").rated()).isFalse();
+        assertThat(ContractJson.MAPPER.valueToTree(RoomSource.custom(CUSTOM_ID, "Renaissance")).propertyNames())
+                .containsExactly("type", "customTopicId", "topicName");
     }
 
     @Test

@@ -93,12 +93,16 @@ class RoomController {
         boolean countPresent = count != null && !count.isNull();
         String type = null;
         String topicId = null;
+        String customTopicId = null;
+        String topicName = null;
         if (sourcePresent && source.isObject()) {
             type = text(source.get("type"));
             topicId = text(source.get("topicId"));
+            customTopicId = text(source.get("customTopicId"));
+            topicName = text(source.get("topicName"));
         }
         Integer questionCount = countPresent && count.isIntegralNumber() && count.canConvertToInt() ? count.asInt() : null;
-        return new RoomConfigInput(sourcePresent, type, topicId, countPresent, questionCount);
+        return new RoomConfigInput(sourcePresent, type, topicId, customTopicId, topicName, countPresent, questionCount);
     }
 
     private static String text(JsonNode node) {

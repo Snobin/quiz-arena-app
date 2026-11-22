@@ -1,6 +1,7 @@
 package in.minnal.game.match.domain;
 
 import in.minnal.contracts.internal.InternalQuestion;
+import in.minnal.contracts.internal.QuestionSource;
 import in.minnal.contracts.realtime.AbortReason;
 import in.minnal.contracts.realtime.AnswerAcceptedPayload;
 import in.minnal.contracts.realtime.ErrorCode;
@@ -63,6 +64,7 @@ public final class MatchState {
     private final Duration window;
     /** The Topic Duel topic (Story 4.2); null in Quick Match. */
     private final TopicInfo topic;
+    private final QuestionSource questionSource;
     private final List<UUID> answered = new ArrayList<>();
 
     private MatchPhase phase = MatchPhase.LEAD_IN;
@@ -84,6 +86,11 @@ public final class MatchState {
 
     public MatchState(UUID matchId, MatchMode mode, List<MatchParticipant> participants, List<InternalQuestion> questions,
             Duration window, TopicInfo topic) {
+        this(matchId, mode, participants, questions, window, topic, QuestionSource.BANK);
+    }
+
+    public MatchState(UUID matchId, MatchMode mode, List<MatchParticipant> participants, List<InternalQuestion> questions,
+            Duration window, TopicInfo topic, QuestionSource questionSource) {
         if (participants.isEmpty() || questions.isEmpty()) {
             throw new IllegalArgumentException("a match needs participants and questions");
         }
@@ -93,6 +100,7 @@ public final class MatchState {
         this.questions = List.copyOf(questions);
         this.window = window;
         this.topic = topic;
+        this.questionSource = questionSource;
         for (MatchParticipant participant : this.participants) {
             byId.put(participant.participantId(), participant);
         }
@@ -115,7 +123,7 @@ public final class MatchState {
                     setup.ratings().getOrDefault(participant.participantId(), 1200), setup.questions().size(),
                     online ? Connection.CONNECTED : Connection.DISCONNECTED));
         }
-        return new MatchState(setup.matchId(), setup.mode(), participants, setup.questions(), window, setup.topic());
+        return new MatchState(setup.matchId(), setup.mode(), participants, setup.questions(), window, setup.topic(), setup.questionSource());
     }
 
     // -----------------------------------------------------------------------------------------
@@ -407,7 +415,9 @@ public final class MatchState {
                 myAnswer,
                 participantId,
                 topic,
-                mode);
+                mode,
+                // Only a custom source is named: a bank snapshot is unchanged on the wire.
+                questionSource == QuestionSource.CUSTOM ? questionSource : null);
         return ServerMessage.reply(MessageType.SNAPSHOT, matchId, seq, now, payload);
     }
 

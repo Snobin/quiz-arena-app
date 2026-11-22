@@ -23,4 +23,15 @@ public interface QuestionSetClient {
             super(message);
         }
     }
+
+    /**
+     * core answered {@code 404} to a {@code CUSTOM} request (Story 6.5a): the host's topic was deleted, or is not hers.
+     * The future fails with this (possibly wrapped in a {@code CompletionException}).
+     */
+    class SourceUnavailableException extends RuntimeException {
+
+        public SourceUnavailableException(String message) {
+            super(message);
+        }
+    }
 }

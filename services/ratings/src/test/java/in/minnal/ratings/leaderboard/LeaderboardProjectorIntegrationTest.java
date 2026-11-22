@@ -15,6 +15,7 @@ import in.minnal.ratings.support.PostgresIntegrationTest;
 import in.minnal.ratings.support.TestClock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -164,6 +165,41 @@ class LeaderboardProjectorIntegrationTest extends PostgresIntegrationTest {
 
         assertThat(store.boards.get(daily(t))).containsOnlyKeys(a.toString()).containsEntry(a.toString(), 16.0); // only the rated match
         store.boards.values().forEach(board -> assertThat(board).doesNotContainKeys(guest.participantId().toString(), bot.participantId().toString()));
+    }
+
+    /** Story 6.5a: a custom-topic Battle Room of 4 changes no rating, event or board, and still leaves a history record. */
+    @Test
+    void aFourPlayerCustomRoomMatchChangesNoRatingEventOrBoardAndWritesUnratedRecords() {
+        UUID a = UUID.randomUUID();
+        UUID b = UUID.randomUUID();
+        UUID c = UUID.randomUUID();
+        UUID d = UUID.randomUUID();
+        Instant t = Instant.parse("2026-11-19T10:00:00Z");
+        // Two of them have a rated history already, and their boards are projected.
+        handler.handle(match(t, QuestionSource.BANK, List.of(user(a, 7000, 1), user(b, 4000, 2))));
+        relay().publishPending();
+        var boardsBefore = new java.util.LinkedHashMap<String, Map<String, Double>>();
+        store.boards.forEach((key, board) -> boardsBefore.put(key, new java.util.LinkedHashMap<>(board)));
+        Map<String, Object> ratingsBefore = jdbc.sql("SELECT string_agg(user_id::text || ':' || mode || ':' || rating || ':' || matches_rated, ',' ORDER BY user_id, mode) AS dump FROM rating").query().singleRow();
+        long eventsBefore = count("rating_event");
+        long outboxBefore = count("event_outbox");
+
+        MatchCompletedEvent room = MatchCompletedEvent.of(UUID.randomUUID(), MatchMode.BATTLE_ROOM, UUID.randomUUID(), QuestionSource.CUSTOM,
+                t.plusSeconds(600).minusSeconds(180), t.plusSeconds(600), null,
+                List.of(user(a, 9000, 1), user(b, 7000, 2), user(c, 5000, 3), user(d, 3000, 4)));
+        assertThat(room.rated()).isFalse();
+        handler.handle(room);
+        relay().publishPending();
+
+        assertThat(count("rating_event")).isEqualTo(eventsBefore);
+        assertThat(count("event_outbox")).isEqualTo(outboxBefore);
+        assertThat(jdbc.sql("SELECT string_agg(user_id::text || ':' || mode || ':' || rating || ':' || matches_rated, ',' ORDER BY user_id, mode) AS dump FROM rating").query().singleRow())
+                .isEqualTo(ratingsBefore);
+        assertThat(store.boards).isEqualTo(boardsBefore);
+        assertThat(jdbc.sql("SELECT count(*) FROM rating WHERE mode = 'BATTLE_ROOM'").query(Long.class).single()).isZero();
+        // Four unrated records, one per user, with no delta.
+        assertThat(jdbc.sql("SELECT count(*) FROM match_record WHERE match_id = :m AND rated = false AND rating_delta IS NULL AND mode = 'BATTLE_ROOM'")
+                .param("m", room.matchId()).query(Long.class).single()).isEqualTo(4);
     }
 
     @Test

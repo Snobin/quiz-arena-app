@@ -39,6 +39,8 @@ public final class FakeCore implements AutoCloseable {
     public volatile int version = 1;
     /** The English text prefix the next call serves: question {@code i} reads {@code "<prefix> i"}. */
     public volatile String textPrefix = "Question";
+    /** The name core serves for a {@code CUSTOM} request (Story 6.5a). */
+    public volatile String customName = "Renaissance (core)";
 
     private FakeCore() throws IOException {
         server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
@@ -53,8 +55,10 @@ public final class FakeCore implements AutoCloseable {
             }
             int code = status;
             JsonNode topicId = body.path("filters").path("topicId");
+            boolean custom = "CUSTOM".equals(body.path("source").asString());
             byte[] out = (code == 200 ? questions(body.get("count").asInt() - shortBy, version, textPrefix,
-                    topicId.isString() ? topicId.asString() : null) : "{\"status\":" + code + "}")
+                    topicId.isString() ? topicId.asString() : null, custom ? body.path("customTopicId").asString() : null, customName)
+                    : "{\"status\":" + code + "}")
                     .getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", code == 200 ? "application/json" : "application/problem+json");
             try {
@@ -91,11 +95,13 @@ public final class FakeCore implements AutoCloseable {
         shortBy = 0;
         version = 1;
         textPrefix = "Question";
+        customName = "Renaissance (core)";
         calls.clear();
     }
 
-    private static String questions(int count, int version, String prefix, String topicId) {
-        String topic = topicId == null ? "" : (",\"topic\":{\"topicId\":\"%s\",\"name\":\"Kerala History\","
+    private static String questions(int count, int version, String prefix, String topicId, String customTopicId, String customName) {
+        String topic = customTopicId != null ? (",\"customTopic\":{\"customTopicId\":\"%s\",\"name\":\"%s\"}").formatted(customTopicId, customName)
+                : topicId == null ? "" : (",\"topic\":{\"topicId\":\"%s\",\"name\":\"Kerala History\","
                 + "\"subjectId\":\"%s\",\"subjectName\":\"History\"}").formatted(topicId, UUID.randomUUID());
         return IntStream.range(0, count).mapToObj(i -> """
                 {"questionId":"%s","version":%d,"textMl":"ചോദ്യം %d","textEn":"%s %d",
