@@ -1,3 +1,4 @@
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../../design/Button.tsx';
@@ -5,18 +6,22 @@ import { PageColumn } from '../../design/PageColumn.tsx';
 import { useDocumentTitle } from '../../i18n/useDocumentTitle.ts';
 import { announce } from '../../shell/announce.ts';
 import { useOnline } from '../../shell/online.ts';
+import { navigate } from '../../shell/router.ts';
 import { useLeaveGuard } from '../../shell/useLeaveGuard.ts';
+import { copyText } from '../rooms/share.ts';
 import { Disclosures } from './Disclosures.tsx';
 import { ImportErrorList } from './ImportErrorList.tsx';
-import { fetchUsage, importTopic, type Imported, type Usage } from './importApi.ts';
+import { fetchUsage, importTopic, replaceTopic, type Usage } from './importApi.ts';
 import './importCatalogue.ts';
-import { clearDraft, readDraft, writeDraft } from './importDraft.ts';
+import { clearDraft, NEW_DRAFT_KEY, readDraft, writeDraft } from './importDraft.ts';
 import { checkImport, MAX_NAME, offsetOf, type ImportCheck, type Problem } from './importParse.ts';
 import { LeaveDialog } from './LeaveDialog.tsx';
 import { PasteArea } from './PasteArea.tsx';
-import { SuccessCard } from './SuccessCard.tsx';
+import { fetchTopic, TOPIC_LIST_KEY, topicKey } from './manageApi.ts';
+import { topicToJson } from './topicFormat.ts';
 
 const DEBOUNCE_MS = 300;
+const COPIED_MS = 2000;
 const LIST_ID = 'importErrors';
 
 /** Publishes the bottom bar's height as `--fixed-bar-height`, so the page pads past it. */
@@ -56,11 +61,16 @@ type Server = { problems: Problem[] } | { note: string } | null;
  * `/me/custom-topics/import` (Story 6.2): paste LLM-written JSON, see everything wrong with it (with line numbers) before
  * anything is sent, and save it as a private topic. The browser checks what the server checks; the server decides.
  */
-export default function ImportScreen() {
+export default function ImportScreen({ topicId }: { topicId?: string }) {
   const { t } = useTranslation();
-  useDocumentTitle(t('import.title'));
   const online = useOnline();
-  const initial = useRef(readDraft()).current;
+  const queryClient = useQueryClient();
+  const draftKey = topicId ? `${NEW_DRAFT_KEY}:${topicId}` : NEW_DRAFT_KEY;
+  const initial = useRef(readDraft(draftKey)).current;
+  // Re-import mode (Story 6.3): the topic's current name and questions seed the form, and its questions count as freed.
+  const topicQuery = useQuery({ queryKey: topicKey(topicId ?? ''), queryFn: () => fetchTopic(topicId!), enabled: Boolean(topicId), retry: false });
+  const current = topicQuery.data;
+  useDocumentTitle(topicId ? t('import.replace.title', { topic: current?.name ?? '' }) : t('import.title'));
 
   const [name, setName] = useState(initial.name);
   const [nameEdited, setNameEdited] = useState(initial.nameEdited);
@@ -69,11 +79,11 @@ export default function ImportScreen() {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [server, setServer] = useState<Server>(null);
   const [sending, setSending] = useState(false);
-  const [done, setDone] = useState<Imported | null>(null);
   const [focusTick, setFocusTick] = useState(0);
   const [marked, setMarked] = useState<number | null>(null);
   const [open, setOpen] = useState<{ schema?: boolean; prompt?: boolean }>({});
-  const [fresh, setFresh] = useState(0);
+  const [copied, setCopied] = useState(false);
+  const seeded = useRef(false);
 
   const area = useRef<HTMLTextAreaElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -81,7 +91,7 @@ export default function ImportScreen() {
   const announced = useRef('');
   useFixedBarHeight(bar);
 
-  const dirty = text.trim() !== '' && !done;
+  const dirty = text.trim() !== '' && !(topicId && seeded.current && text === (current ? topicToJson(current) : ''));
   const guard = useLeaveGuard(dirty);
 
   useEffect(() => {
@@ -90,11 +100,26 @@ export default function ImportScreen() {
     return () => {
       live = false;
     };
-  }, [fresh]);
+  }, []);
+
+  // Re-import: once the topic loads, start from its stored name and questions (unless an unsent draft is already there).
+  useEffect(() => {
+    if (!topicId || !current || seeded.current) return;
+    seeded.current = true;
+    if (initial.text) return;
+    const json = topicToJson(current);
+    setName(current.name);
+    setNameEdited(true);
+    setText(json);
+    setCheck(checkImport(json));
+  }, [topicId, current, initial.text]);
+
+  useEffect(() => {
+    if (topicQuery.error && (topicQuery.error as { status?: number }).status === 404) navigate('/me/custom-topics', { replace: true });
+  }, [topicQuery.error]);
 
   // The check runs 300 ms after typing stops; the name follows "topic" only while it is unedited.
   useEffect(() => {
-    if (done) return;
     const timer = setTimeout(() => {
       const next = text.trim() ? checkImport(text) : null;
       setCheck(next);
@@ -108,11 +133,14 @@ export default function ImportScreen() {
       }
     }, DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [text, nameEdited, done, t]);
+  }, [text, nameEdited, t]);
 
   useEffect(() => {
-    if (!done) writeDraft({ name, text, nameEdited });
-  }, [name, text, nameEdited, done]);
+    if (topicId && !seeded.current) return;
+    // Re-import: the untouched stored questions are not a draft worth keeping across a reload.
+    if (topicId && current && text === topicToJson(current) && name === current.name) clearDraft(draftKey);
+    else writeDraft({ name, text, nameEdited }, draftKey);
+  }, [name, text, nameEdited, draftKey, topicId, current]);
 
   useEffect(() => {
     if (focusTick > 0) list.current?.focus();
@@ -121,9 +149,10 @@ export default function ImportScreen() {
   const problems = server && 'problems' in server ? server.problems : (check?.problems ?? []);
   const found = check?.found ?? 0;
   const trimmedName = name.trim();
-  const usedAfter = usage ? usage.questions + found : null;
+  const freed = current?.questionCount ?? 0;
+  const usedAfter = usage ? usage.questions - freed + found : null;
   const overQuestions = usage !== null && usedAfter !== null && usedAfter > usage.questionCap;
-  const overTopics = usage !== null && usage.topics >= usage.topicCap;
+  const overTopics = !topicId && usage !== null && usage.topics >= usage.topicCap;
 
   let reason: string | null = null;
   if (!online) reason = t('import.reason.offline');
@@ -161,12 +190,14 @@ export default function ImportScreen() {
     if (sending || reason) return;
     setSending(true);
     setServer(null);
-    const outcome = await importTopic(trimmedName, text);
+    const outcome = topicId ? await replaceTopic(topicId, trimmedName, text) : await importTopic(trimmedName, text);
     setSending(false);
     if (outcome.ok) {
-      clearDraft();
+      clearDraft(draftKey);
       guard.release();
-      setDone(outcome.data);
+      void queryClient.invalidateQueries({ queryKey: TOPIC_LIST_KEY });
+      void queryClient.invalidateQueries({ queryKey: topicKey(outcome.data.customTopicId) });
+      navigate(`/me/custom-topics/${outcome.data.customTopicId}?imported=1`, { replace: true });
       return;
     }
     if (outcome.kind === 'invalid') {
@@ -176,6 +207,8 @@ export default function ImportScreen() {
       const detail = outcome.kind === 'tooLarge' ? t('import.note.tooLarge') : (outcome.detail ?? t('import.note.server'));
       setServer({ problems: [{ field: 'import', problem: detail }] });
       setFocusTick((n) => n + 1);
+    } else if (outcome.kind === 'notFound') {
+      setServer({ note: t('import.note.notFound') });
     } else if (outcome.kind === 'rateLimited') {
       setServer({ note: t('import.note.rateLimited', { seconds: outcome.retryAfter ?? 60 }) });
     } else if (outcome.kind === 'unavailable') {
@@ -187,26 +220,12 @@ export default function ImportScreen() {
     }
   };
 
-  const another = () => {
-    clearDraft();
-    setDone(null);
-    setName('');
-    setNameEdited(false);
-    setText('');
-    setCheck(null);
-    setServer(null);
-    setFresh((n) => n + 1);
+  const copyCurrentJson = async () => {
+    if (!current || !(await copyText(topicToJson(current)))) return;
+    setCopied(true);
+    announce(t('import.copied'));
+    setTimeout(() => setCopied(false), COPIED_MS);
   };
-
-  if (done) {
-    return (
-      <PageColumn className="py-4">
-        <main className="flex flex-col gap-3">
-          <SuccessCard name={done.name} count={done.questionCount} onAnother={another} />
-        </main>
-      </PageColumn>
-    );
-  }
 
   const tally =
     found > 0 && usage
@@ -216,14 +235,22 @@ export default function ImportScreen() {
         : t('import.tally.empty');
   const warnQuestions = usage && !overQuestions && found > 0 && usedAfter! * 5 >= usage.questionCap * 4 ? usage.questionCap - usedAfter! : null;
   const topicsAfter = usage ? usage.topics + 1 : null;
-  const warnTopics = usage && !overTopics && found > 0 && topicsAfter! * 5 >= usage.topicCap * 4 ? usage.topicCap - topicsAfter! : null;
+  const warnTopics = usage && !topicId && !overTopics && found > 0 && topicsAfter! * 5 >= usage.topicCap * 4 ? usage.topicCap - topicsAfter! : null;
 
   return (
     <PageColumn className="py-4">
       <main className="flex flex-col gap-3">
         <h1 tabIndex={-1} className="font-title text-title">
-          {t('import.title')}
+          {topicId ? t('import.replace.title', { topic: current?.name ?? '' }) : t('import.title')}
         </h1>
+        {topicId && current ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-caption text-muted">{t('import.replace.note', { count: current.questionCount })}</p>
+            <button type="button" onClick={() => void copyCurrentJson()} className="hit-target inline-flex min-h-target-min items-center text-body font-semibold text-ink underline">
+              {copied ? t('import.copied') : t('import.copyJson')}
+            </button>
+          </div>
+        ) : null}
 
         {server && 'note' in server ? (
           <p role="alert" className="rounded-lg border border-brick bg-card p-4 text-body text-brick">

@@ -4,7 +4,7 @@ import { setReturnFocus } from '../../shell/returnFocus.ts';
 import { LockIcon } from './icons.tsx';
 import { signInPath } from './signInPath.ts';
 
-const IMPORT_PATH = '/me/custom-topics/import';
+const LIST_PATH = '/me/custom-topics';
 const ROW_ID = 'meCustomTopics';
 
 /**
@@ -18,7 +18,7 @@ export function CustomTopicsRow({ locked }: { locked: boolean }) {
       <li>
         <Link
           id={ROW_ID}
-          to={locked ? signInPath(IMPORT_PATH) : IMPORT_PATH}
+          to={locked ? signInPath(LIST_PATH) : LIST_PATH}
           aria-label={locked ? t('me.customTopics.locked.a11y') : undefined}
           onClick={(event) => {
             if (locked && isPlainLeftClick(event)) setReturnFocus(ROW_ID, '/me');

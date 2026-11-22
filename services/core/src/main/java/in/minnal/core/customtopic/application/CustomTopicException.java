@@ -31,6 +31,11 @@ public class CustomTopicException extends RuntimeException {
         return new CustomTopicException(HttpStatus.BAD_REQUEST, "bad-request", detail, List.of(), true);
     }
 
+    /** The same answer for an unknown, malformed or someone else's topic id: the API never confirms another player's topic exists. */
+    public static CustomTopicException notFound() {
+        return new CustomTopicException(HttpStatus.NOT_FOUND, "not-found", "Topic not found.", List.of(), true);
+    }
+
     public static CustomTopicException tooLarge() {
         return new CustomTopicException(HttpStatus.CONTENT_TOO_LARGE, "payload-too-large",
                 "Paste is too large (over 1 MB). Split it into smaller topics.", List.of(), true);
