@@ -15,6 +15,9 @@ public record RateLimitPolicy(String action, int capacity, int refillTokens, Dur
     /** Player question reports (Story 3.5): 5 reports, refilling 1 every 2 minutes. */
     public static final RateLimitPolicy QUESTION_REPORT = new RateLimitPolicy("question-report", 5, 1, Duration.ofMinutes(2));
 
+    /** Custom-topic imports (Story 6.1): 20 imports, refilling 20 per hour. */
+    public static final RateLimitPolicy CUSTOM_IMPORT = new RateLimitPolicy("custom-import", 20, 20, Duration.ofHours(1));
+
     /** Recent-topic writes (Story 4.1): 30 selections, refilling 1 every 4 seconds. */
     public static final RateLimitPolicy RECENT_TOPIC = new RateLimitPolicy("recent-topic", 30, 1, Duration.ofSeconds(4));
 

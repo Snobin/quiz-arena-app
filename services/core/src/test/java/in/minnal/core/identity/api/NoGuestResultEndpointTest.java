@@ -33,7 +33,9 @@ class NoGuestResultEndpointTest {
             "/api/core/v1/topics", "/api/core/v1/me/recent-topics", "/api/core/v1/me/recent-topics/{topicId}",
             // Story 4.3: Solo Practice, registered players only (guests get 403); unrated and never a match result.
             "/api/core/v1/solo/sessions", "/api/core/v1/solo/sessions/{sessionId}/next",
-            "/api/core/v1/solo/sessions/{sessionId}/answers", "/api/core/v1/solo/sessions/{sessionId}/end");
+            "/api/core/v1/solo/sessions/{sessionId}/answers", "/api/core/v1/solo/sessions/{sessionId}/end",
+            // Story 6.1: custom-topic import and usage, registered players with a profile only (guests get 403); never a match result.
+            "/api/core/v1/me/custom-topics", "/api/core/v1/me/custom-topics/usage");
 
     @Autowired
     @org.springframework.beans.factory.annotation.Qualifier("requestMappingHandlerMapping")

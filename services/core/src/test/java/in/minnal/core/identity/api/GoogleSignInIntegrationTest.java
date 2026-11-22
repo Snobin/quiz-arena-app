@@ -275,7 +275,7 @@ class GoogleSignInIntegrationTest extends PostgresIntegrationTest {
             String location = done.getHeader(HttpHeaders.LOCATION);
             assertThat(location).as(evil).startsWith(WEB + "/");
             assertThat(location).as(evil).doesNotContain("evil.com");
-            jdbc.sql("TRUNCATE refresh_token, user_identity, user_profile, app_user").update();
+            jdbc.sql("TRUNCATE custom_question, custom_topic, refresh_token, user_identity, user_profile, app_user").update();
             if (!evil.contains("%0d")) {
                 assertThat(location).as(evil).isEqualTo(WEB + "/auth/return?to=/");
             }

@@ -22,17 +22,27 @@ public class QuestionValidator {
 
     public static final List<String> OPTION_FIELDS = List.of("optionA", "optionB", "optionC", "optionD");
 
+    /** Which fields a write path owns: the bank carries tags and attribution, a custom topic does not. */
+    public enum Profile { BANK, CUSTOM_TOPIC }
+
+    /** Validates as a bank question (admin form, CSV upload, seed). */
     public List<FieldError> validate(QuestionCandidate candidate) {
+        return validate(candidate, Profile.BANK);
+    }
+
+    public List<FieldError> validate(QuestionCandidate candidate, Profile profile) {
         List<FieldError> errors = new ArrayList<>();
         if (candidate == null) {
             errors.add(new FieldError("question", "required"));
             return errors;
         }
-        requireEnum(errors, "category", candidate.category(), ContentCategory.class);
-        requireText(errors, "subject", candidate.subject());
-        requireText(errors, "topic", candidate.topic());
-        requireEnum(errors, "examLevel", candidate.examLevel(), ExamLevel.class);
-        requireEnum(errors, "difficulty", candidate.difficulty(), Difficulty.class);
+        if (profile == Profile.BANK) {
+            requireEnum(errors, "category", candidate.category(), ContentCategory.class);
+            requireText(errors, "subject", candidate.subject());
+            requireText(errors, "topic", candidate.topic());
+            requireEnum(errors, "examLevel", candidate.examLevel(), ExamLevel.class);
+            requireEnum(errors, "difficulty", candidate.difficulty(), Difficulty.class);
+        }
 
         if (Text.isBlank(candidate.textMl()) && Text.isBlank(candidate.textEn())) {
             errors.add(new FieldError("textMl/textEn", "required: at least one of textMl or textEn"));
@@ -78,7 +88,9 @@ public class QuestionValidator {
             }
         }
         cap(errors, "explanation", candidate.explanation(), MAX_EXPLANATION);
-        cap(errors, "attribution", candidate.attribution(), MAX_ATTRIBUTION);
+        if (profile == Profile.BANK) {
+            cap(errors, "attribution", candidate.attribution(), MAX_ATTRIBUTION);
+        }
         return errors;
     }
 
