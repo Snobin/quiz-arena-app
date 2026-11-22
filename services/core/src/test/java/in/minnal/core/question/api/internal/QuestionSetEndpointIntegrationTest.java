@@ -82,8 +82,11 @@ class QuestionSetEndpointIntegrationTest extends PostgresIntegrationTest {
             assertThat(expected).isNotNull();
             assertThat(q.get("version")).isEqualTo(1);
             assertThat(q.get("textEn")).isEqualTo(expected.content().textEn());
-            assertThat(q.get("options")).isEqualTo(expected.content().options());
-            assertThat(q.get("answerIndex")).isEqualTo(2);
+            // The option order is shuffled per draw: the same four options, and the answer index still points at the stored answer.
+            @SuppressWarnings("unchecked")
+            List<String> shown = (List<String>) q.get("options");
+            assertThat(shown).containsExactlyInAnyOrderElementsOf(expected.content().options());
+            assertThat(shown.get((Integer) q.get("answerIndex"))).isEqualTo(expected.content().options().get(2));
             assertThat(q.get("explanation")).isEqualTo(expected.content().explanation());
             assertThat(q.get("attribution")).isEqualTo("Kerala PSC test");
             assertThat(q).containsOnlyKeys("questionId", "version", "textMl", "textEn", "options", "answerIndex", "explanation", "attribution", "topicId");

@@ -127,8 +127,16 @@ class SoloPracticeIntegrationTest extends PostgresIntegrationTest {
         JsonNode n = next(p, session);
         String id = n.get("question").get("questionId").asString();
         int version = n.get("question").get("version").asInt();
-        answer(p, session, id, version, 2).andExpect(status().isOk()).andExpect(jsonPath("$.correct").value(true))
-                .andExpect(jsonPath("$.answerIndex").value(2)).andExpect(jsonPath("$.explanation").exists())
+        // Options are shuffled per session, so find the stored answer ("C ...") where it is shown.
+        int correct = -1;
+        for (int i = 0; i < 4; i++) {
+            if (n.get("question").get("options").get(i).asString().startsWith("C ")) {
+                correct = i;
+            }
+        }
+        assertThat(correct).isGreaterThanOrEqualTo(0);
+        answer(p, session, id, version, correct).andExpect(status().isOk()).andExpect(jsonPath("$.correct").value(true))
+                .andExpect(jsonPath("$.answerIndex").value(correct)).andExpect(jsonPath("$.explanation").exists())
                 .andExpect(jsonPath("$.attribution").value("Kerala PSC test"))
                 .andExpect(jsonPath("$.answeredCount").value(1)).andExpect(jsonPath("$.correctCount").value(1));
         answer(p, session, id, version, 0).andExpect(status().isConflict());
