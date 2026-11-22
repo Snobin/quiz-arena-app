@@ -21,3 +21,7 @@ _bmad-output/party-mode/
 
 # Local web build overrides
 web/.env.local
+
+# Playwright
+test-results/
+playwright-report/

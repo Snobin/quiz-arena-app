@@ -21,9 +21,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-design-foundation-theme-and-primitives.md`
   summary: Add a post-build check over `web/dist`: every token is a custom property in the built CSS, the initial JS is ≤ 150 KB gzipped, no DesignFixture code ships, and the classes used by primitives were actually generated.
   evidence: The token parity test reads the source `theme.css` only, so the built-output criteria regress silently. This belongs with the bundle check in Story 1.3 part 3.
-- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-design-foundation-theme-and-primitives.md`
-  summary: Automate the dark-swap and reflow checks (320px; 360px at 200% text) in a real browser, e.g. Playwright, when the shell lands.
-  evidence: jsdom can't lay out, so these matrix rows were verified only in a one-off headless Chrome run.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-3-malayalam-font-and-bilingual-text.md`
   summary: Extend the post-build `web/dist` check to assert the Malayalam woff2 is listed in `dist/sw.js`, the font preload is in `dist/index.html`, and the `/fonts/...` URLs still resolve under a non-root `BASE_URL`.
   evidence: These Story 1.3 part 2 acceptance criteria were verified by hand only (grep on dist); nothing fails if a Vite or workbox change drops them. Fold into the part 3 bundle/dist check.
