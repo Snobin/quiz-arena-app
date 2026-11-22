@@ -31,6 +31,12 @@ jobs:
           cache: maven
       - name: Build and test (mvnw verify)
         run: ./mvnw -B verify
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jacoco-report
+          path: services/*/target/site/jacoco/
+          retention-days: 7
 
   web:
     name: web

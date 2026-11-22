@@ -25,3 +25,4 @@ web/.env.local
 # Playwright
 test-results/
 playwright-report/
+coverage/
