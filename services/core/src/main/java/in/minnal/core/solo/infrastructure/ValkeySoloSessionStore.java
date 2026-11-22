@@ -14,9 +14,12 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Sessions as JSON strings: {@code <prefix>solo:{sessionId}} and {@code <prefix>solo:user:{userId}} (the player's one
- * active session), both with a 2 h sliding TTL. Updates are compare-and-set in one Lua script, so a double tap on an
- * answer cannot count twice.
+ * Each session is a hash {@code <prefix>solo:s:{sessionId}} with {@code data} (the session JSON) and {@code rev} (a counter),
+ * and {@code <prefix>solo:user:{userId}} points at the player's one active session; both have a 2 h sliding TTL. Create and
+ * replace are single Lua scripts: create deletes the earlier session and writes the new one atomically, so concurrent starts
+ * cannot orphan a session, and replace compares {@code rev}, so a double tap on an answer cannot count twice and a change to
+ * the {@link SoloSession} record cannot make live sessions fail. The key names are new (the earlier format was a plain
+ * string at {@code solo:{sessionId}}); sessions from the older release simply expire.
  */
 @Component
 @ConditionalOnProperty(name = "minnal.solo.store", havingValue = "valkey", matchIfMissing = true)
@@ -24,16 +27,31 @@ public class ValkeySoloSessionStore implements SoloSessionStore {
 
     public static final Duration TTL = Duration.ofHours(2);
 
-    /** KEYS[1] session; ARGV: expected raw value, new raw value, ttl ms. Returns 1 when replaced. */
-    static final String CAS = """
-            if redis.call('GET', KEYS[1]) == ARGV[1] then
-              redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+    /** KEYS[1] user pointer, KEYS[2] new session; ARGV: session JSON, session id, ttl ms, session key prefix. */
+    static final String CREATE = """
+            local previous = redis.call('GET', KEYS[1])
+            if previous then
+              redis.call('DEL', ARGV[4] .. previous)
+            end
+            redis.call('HSET', KEYS[2], 'data', ARGV[1], 'rev', '1')
+            redis.call('PEXPIRE', KEYS[2], ARGV[3])
+            redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+            return 1
+            """;
+
+    /** KEYS[1] session; ARGV: expected revision, new JSON, ttl ms. Returns 1 when replaced. */
+    static final String REPLACE = """
+            local rev = redis.call('HGET', KEYS[1], 'rev')
+            if rev and rev == ARGV[1] then
+              redis.call('HSET', KEYS[1], 'data', ARGV[2], 'rev', tostring(tonumber(rev) + 1))
+              redis.call('PEXPIRE', KEYS[1], ARGV[3])
               return 1
             end
             return 0
             """;
 
-    private static final DefaultRedisScript<Long> CAS_SCRIPT = new DefaultRedisScript<>(CAS, Long.class);
+    private static final DefaultRedisScript<Long> CREATE_SCRIPT = new DefaultRedisScript<>(CREATE, Long.class);
+    private static final DefaultRedisScript<Long> REPLACE_SCRIPT = new DefaultRedisScript<>(REPLACE, Long.class);
 
     private final StringRedisTemplate redis;
     private final JsonMapper json;
@@ -47,7 +65,11 @@ public class ValkeySoloSessionStore implements SoloSessionStore {
     }
 
     String sessionKey(UUID sessionId) {
-        return prefix + "solo:" + sessionId;
+        return sessionPrefix() + sessionId;
+    }
+
+    private String sessionPrefix() {
+        return prefix + "solo:s:";
     }
 
     String userKey(UUID userId) {
@@ -56,29 +78,26 @@ public class ValkeySoloSessionStore implements SoloSessionStore {
 
     @Override
     public void create(SoloSession session) {
-        String previous = redis.opsForValue().get(userKey(session.userId()));
-        if (previous != null) {
-            redis.delete(prefix + "solo:" + previous);
-        }
-        redis.opsForValue().set(sessionKey(session.sessionId()), json.writeValueAsString(session), TTL);
-        redis.opsForValue().set(userKey(session.userId()), session.sessionId().toString(), TTL);
+        redis.execute(CREATE_SCRIPT, List.of(userKey(session.userId()), sessionKey(session.sessionId())),
+                json.writeValueAsString(session), session.sessionId().toString(), Long.toString(TTL.toMillis()), sessionPrefix());
     }
 
     @Override
-    public Optional<SoloSession> find(UUID sessionId) {
-        String raw = redis.opsForValue().getAndExpire(sessionKey(sessionId), TTL);
-        if (raw == null) {
+    public Optional<Versioned> find(UUID sessionId) {
+        List<Object> fields = redis.opsForHash().multiGet(sessionKey(sessionId), List.of("data", "rev"));
+        if (fields.get(0) == null || fields.get(1) == null) {
             return Optional.empty();
         }
-        SoloSession session = json.readValue(raw, SoloSession.class);
+        redis.expire(sessionKey(sessionId), TTL);
+        SoloSession session = json.readValue(fields.get(0).toString(), SoloSession.class);
         redis.expire(userKey(session.userId()), TTL);
-        return Optional.of(session);
+        return Optional.of(new Versioned(session, Long.parseLong(fields.get(1).toString())));
     }
 
     @Override
-    public boolean replace(SoloSession expected, SoloSession next) {
-        Long done = redis.execute(CAS_SCRIPT, List.of(sessionKey(expected.sessionId())),
-                json.writeValueAsString(expected), json.writeValueAsString(next), Long.toString(TTL.toMillis()));
+    public boolean replace(Versioned expected, SoloSession next) {
+        Long done = redis.execute(REPLACE_SCRIPT, List.of(sessionKey(expected.session().sessionId())),
+                Long.toString(expected.revision()), json.writeValueAsString(next), Long.toString(TTL.toMillis()));
         return done != null && done == 1L;
     }
 

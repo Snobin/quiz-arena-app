@@ -99,7 +99,8 @@ public class SoloPracticeService {
 
     public Next next(UUID userId, UUID sessionId) {
         for (int attempt = 0; attempt < CAS_ATTEMPTS; attempt++) {
-            SoloSession session = owned(userId, sessionId);
+            SoloSessionStore.Versioned stored = owned(userId, sessionId);
+            SoloSession session = stored.session();
             JdbcSubjectTopicRepository.TopicWithSubject topic = topicOf(session);
             SoloSession.Current open = session.current();
             if (open != null && !open.answered()) {
@@ -108,7 +109,7 @@ public class SoloPracticeService {
                 return next(session, topic, served, open.reshuffled());
             }
             Advance advance = advance(session);
-            if (store.replace(session, advance.session())) {
+            if (store.replace(stored, advance.session())) {
                 return next(advance.session(), topic, advance.served(), advance.session().current().reshuffled());
             }
         }
@@ -120,7 +121,8 @@ public class SoloPracticeService {
             throw new SoloException(Kind.INVALID, "optionIndex must be 0-3.");
         }
         for (int attempt = 0; attempt < CAS_ATTEMPTS; attempt++) {
-            SoloSession session = owned(userId, sessionId);
+            SoloSessionStore.Versioned stored = owned(userId, sessionId);
+            SoloSession session = stored.session();
             SoloSession.Current current = session.current();
             if (current == null || current.answered() || !current.questionId().equals(questionId) || current.version() != version) {
                 throw new SoloException(Kind.CONFLICT, "That question is not the one being practised.");
@@ -132,7 +134,7 @@ public class SoloPracticeService {
             int shownAnswer = order.shownIndexOf(content.answerIndex());
             boolean correct = optionIndex == shownAnswer;
             SoloSession next = session.withAnswer(correct);
-            if (store.replace(session, next)) {
+            if (store.replace(stored, next)) {
                 return new AnswerResult(correct, shownAnswer, content.explanation(), content.attribution(),
                         next.answeredCount(), next.correctCount());
             }
@@ -141,7 +143,7 @@ public class SoloPracticeService {
     }
 
     public Summary end(UUID userId, UUID sessionId) {
-        SoloSession session = owned(userId, sessionId);
+        SoloSession session = owned(userId, sessionId).session();
         store.delete(session);
         return new Summary(session.answeredCount(), session.correctCount());
     }
@@ -193,8 +195,8 @@ public class SoloPracticeService {
         return copy;
     }
 
-    private SoloSession owned(UUID userId, UUID sessionId) {
-        return store.find(sessionId).filter(s -> s.userId().equals(userId))
+    private SoloSessionStore.Versioned owned(UUID userId, UUID sessionId) {
+        return store.find(sessionId).filter(s -> s.session().userId().equals(userId))
                 .orElseThrow(() -> new SoloException(Kind.NOT_FOUND, "Practice session not found."));
     }
 
