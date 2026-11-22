@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-11-2026 09:40
-last_updated: '11-22-2026 09:25'
+last_updated: '11-22-2026 21:08'
 project: quiz-arena
 project_key: NOKEY
 tracking_system: file-system
@@ -274,28 +274,28 @@ action_items:
     action: "Decide and implement limiter ordering and Valkey-outage policy for upload
       and report endpoints, with tests"
     owner: "Snobin to decide, dev to implement"
-    status: open
+    status: in-progress
     ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-11-22.md"
   - id: "epic-3-retro-item-27-add-a-stable-reason-to-the-editor-409-pr"
     epic: 3
     action: "Add a stable reason to the editor 409 Problem Details and split the save
       and refresh try blocks"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-11-22.md"
   - id: "epic-3-retro-item-28-add-fault-injection-test-that-publish-an"
     epic: 3
     action: "Add fault-injection test that publish and report resolution roll back
       together"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-11-22.md"
   - id: "epic-3-retro-item-29-add-requireadmin-assertion-to-adminmappi"
     epic: 3
     action: "Add requireAdmin assertion to AdminMappingArchitectureTest and a noindex
       for /admin"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-11-22.md"
   - id: "epic-3-retro-item-30-split-questioneditor-tsx-before-epic-6-a"
     epic: 3
