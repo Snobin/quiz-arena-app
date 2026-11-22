@@ -113,6 +113,40 @@ class QuestionValidatorTest {
         assertThat(new FieldError("explanation", "required")).hasToString("explanation · required");
     }
 
+    private static QuestionCandidate custom(String text, List<String> options, Integer answer, String explanation) {
+        return new QuestionCandidate(null, null, null, null, null, null, text, options, answer, explanation, null);
+    }
+
+    private List<FieldError> validateCustom(QuestionCandidate c) {
+        return validator.validate(c, QuestionValidator.Profile.CUSTOM_TOPIC);
+    }
+
+    @Test
+    void customProfileSkipsTheBankOnlyFields() {
+        assertThat(validateCustom(custom("Q?", List.of("a", "b", "c", "d"), 2, "Because."))).isEmpty();
+        // the bank profile still demands them
+        assertThat(validator.validate(custom("Q?", List.of("a", "b", "c", "d"), 2, "Because."))).isNotEmpty();
+    }
+
+    @Test
+    void customProfileReportsEveryProblemNotJustTheFirst() {
+        List<String> fields = validateCustom(custom(" ", List.of("a", "a", "c"), 9, " ")).stream().map(FieldError::field).toList();
+        assertThat(fields).containsExactly("textMl/textEn", "options", "answerIndex", "explanation");
+    }
+
+    @Test
+    void customProfileKeepsTheLengthRulesAndIgnoresAttribution() {
+        assertThat(validateCustom(custom("x".repeat(1001), List.of("a", "b", "c", "d"), 0, "e"))).extracting(FieldError::field).containsExactly("textEn");
+        QuestionCandidate longAttribution = new QuestionCandidate(null, null, null, null, null, null, "Q?", List.of("a", "b", "c", "d"), 0, "e", "a".repeat(500));
+        assertThat(validateCustom(longAttribution)).isEmpty();
+    }
+
+    @Test
+    void customProfileAcceptsMalayalamWithChilluAndZwj() {
+        String text = "അവൻ\u200d\u200c എവിടെ?";
+        assertThat(validateCustom(custom(text, List.of("കൊച്ചി", "ൽ", "ൻ", "ർ"), 1, "കാരണം."))).isEmpty();
+    }
+
     private static QuestionCandidate with(UnaryOperator<QuestionCandidate> change) {
         return change.apply(valid());
     }

@@ -361,3 +361,13 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-5-6-play-again.md`
   summary: Unverified (would be medium): `RoomRegistry.playAgain` sends to each player and the match topic while holding the synchronized registry lock.
   evidence: Settle by checking that `channel.toPlayer` and the match broadcaster never block, and whether `closed()` already sends under the lock.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-1-custom-topic-import-api.md`
+  summary: The 400 `errors[]` is unbounded, so a 1 MB paste of thousands of broken questions returns thousands of errors.
+  evidence: `CustomTopicService.importTopic` collects every problem per the story; consider capping at a few hundred with a count of the rest when the import screen (6.2) needs it.
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-1-custom-topic-import-api.md`
+  summary: A NUL character in the topic name or a question reaches Postgres and returns the generic 500 instead of a field error.
+  evidence: the validator has no control-character rule; the story's DB-failure test uses NUL on purpose, so decide whether to reject control characters up front.
+- source_spec: `_bmad-output/implementation-artifacts/spec-6-1-custom-topic-import-api.md`
+  summary: A database error while checking the profile (`CustomTopicController.caller`) has no handler and returns an unshaped 500.
+  evidence: only `CustomTopicService` maps `DataAccessException`; same gap exists on the other core endpoints.
