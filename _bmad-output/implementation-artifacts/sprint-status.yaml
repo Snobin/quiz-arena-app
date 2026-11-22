@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-11-2026 09:40
-last_updated: '11-21-2026 23:40'
+last_updated: '11-22-2026 09:25'
 project: quiz-arena
 project_key: NOKEY
 tracking_system: file-system
@@ -68,7 +68,7 @@ development_status:
   3-4-draft-review-queue: done
   3-5-players-report-a-wrong-question: done
   3-6-report-queue-and-resolution: done
-  epic-3-retrospective: optional
+  epic-3-retrospective: done
 
   epic-4: done
   4-1-topic-picker: done
@@ -269,3 +269,44 @@ action_items:
     owner: "owner"
     status: open
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-21.md"
+  - id: "epic-3-retro-item-26-decide-and-implement-limiter-ordering-an"
+    epic: 3
+    action: "Decide and implement limiter ordering and Valkey-outage policy for upload
+      and report endpoints, with tests"
+    owner: "Snobin to decide, dev to implement"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-11-22.md"
+  - id: "epic-3-retro-item-27-add-a-stable-reason-to-the-editor-409-pr"
+    epic: 3
+    action: "Add a stable reason to the editor 409 Problem Details and split the save
+      and refresh try blocks"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-11-22.md"
+  - id: "epic-3-retro-item-28-add-fault-injection-test-that-publish-an"
+    epic: 3
+    action: "Add fault-injection test that publish and report resolution roll back
+      together"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-11-22.md"
+  - id: "epic-3-retro-item-29-add-requireadmin-assertion-to-adminmappi"
+    epic: 3
+    action: "Add requireAdmin assertion to AdminMappingArchitectureTest and a noindex
+      for /admin"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-11-22.md"
+  - id: "epic-3-retro-item-30-split-questioneditor-tsx-before-epic-6-a"
+    epic: 3
+    action: "Split QuestionEditor.tsx before Epic 6; add rowVersion to publish and
+      discard once a second admin exists"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-11-22.md"
+  - id: "epic-3-retro-item-31-run-manual-playtest-of-the-admin-console"
+    epic: 3
+    action: "Run manual playtest of the admin console"
+    owner: "Snobin"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-11-22.md"
