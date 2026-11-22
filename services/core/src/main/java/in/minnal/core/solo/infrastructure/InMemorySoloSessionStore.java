@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "minnal.solo.store", havingValue = "memory")
 public class InMemorySoloSessionStore implements SoloSessionStore {
 
-    private final Map<UUID, SoloSession> sessions = new HashMap<>();
+    private final Map<UUID, Versioned> sessions = new HashMap<>();
     private final Map<UUID, UUID> active = new HashMap<>();
 
     @Override
@@ -23,20 +23,21 @@ public class InMemorySoloSessionStore implements SoloSessionStore {
         if (previous != null) {
             sessions.remove(previous);
         }
-        sessions.put(session.sessionId(), session);
+        sessions.put(session.sessionId(), new Versioned(session, 1));
     }
 
     @Override
-    public synchronized Optional<SoloSession> find(UUID sessionId) {
+    public synchronized Optional<Versioned> find(UUID sessionId) {
         return Optional.ofNullable(sessions.get(sessionId));
     }
 
     @Override
-    public synchronized boolean replace(SoloSession expected, SoloSession next) {
-        if (!expected.equals(sessions.get(expected.sessionId()))) {
+    public synchronized boolean replace(Versioned expected, SoloSession next) {
+        Versioned stored = sessions.get(expected.session().sessionId());
+        if (stored == null || stored.revision() != expected.revision()) {
             return false;
         }
-        sessions.put(next.sessionId(), next);
+        sessions.put(next.sessionId(), new Versioned(next, stored.revision() + 1));
         return true;
     }
 
