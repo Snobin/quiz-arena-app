@@ -41,7 +41,7 @@ export default function PractiseLink({ topicId, index }: { topicId: string; inde
     setFailed(false);
     cancelRematch();
     try {
-      const started = await startPractice(topicId);
+      const started = await startPractice({ kind: 'bank', topicId });
       saveStored(topicId, { sessionId: started.sessionId, answered: 0, correct: 0 });
       void markTopicUsed(topicId);
       navigate(`${PRACTICE_PATH}${encodeURIComponent(topicId)}`);

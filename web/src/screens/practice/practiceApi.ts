@@ -6,7 +6,13 @@ import type { QuestionView } from '../../realtime/protocol.ts';
 export const SOLO_SESSIONS_PATH = '/api/core/v1/solo/sessions';
 
 /** Tagged source, so a custom topic can be added later without changing existing fields. */
-export type PracticeSource = { type: 'BANK'; topicId: string; topicName: string; subjectName: string } | { type: 'CUSTOM'; [key: string]: unknown };
+export type PracticeSource =
+  | { type: 'BANK'; topicId: string; topicName: string; subjectName: string }
+  | { type: 'CUSTOM'; customTopicId: string; topicName: string };
+
+/** What a practice screen runs on: a bank topic, or one of the player's own custom topics (Story 6.4). */
+export type PracticeTarget = { kind: 'bank'; topicId: string } | { kind: 'custom'; customTopicId: string };
+export const targetId = (target: PracticeTarget) => (target.kind === 'bank' ? target.topicId : target.customTopicId);
 
 export type StartedSession = { sessionId: string; source: PracticeSource; poolSize: number };
 export type NextQuestion = { position: number; source: PracticeSource; reshuffled: boolean; question: QuestionView };
@@ -21,12 +27,12 @@ export type AnswerResult = {
 export type Tally = { answeredCount: number; correctCount: number };
 
 /**
- * `expired`: 404 (session gone). `unavailable`: 422 topic-unavailable. `conflict`: 409. `network`: no response.
- * `server`: anything else. `detail` is the Problem Details text when the server sent one.
+ * `expired`: 404 (session gone). `deleted`: 404 topic-deleted (the custom topic is gone). `unavailable`: 422 topic-unavailable.
+ * `conflict`: 409. `changed`: 409 topic-changed (the custom topic was re-imported). `network`: no response. `server`: anything else. `detail` is the Problem Details text when the server sent one.
  */
 export class PracticeError extends Error {
   constructor(
-    readonly kind: 'expired' | 'unavailable' | 'conflict' | 'network' | 'server',
+    readonly kind: 'expired' | 'deleted' | 'unavailable' | 'conflict' | 'changed' | 'network' | 'server',
     readonly detail: string | null,
     readonly status: number | null = null,
   ) {
@@ -49,8 +55,9 @@ async function request<T>(path: string, init: { method?: string; body?: unknown 
   if (!response.ok) {
     const problem = (await response.json().catch(() => null)) as { detail?: unknown; type?: unknown } | null;
     const detail = typeof problem?.detail === 'string' ? problem.detail : null;
-    if (response.status === 404) throw new PracticeError('expired', detail, 404);
-    if (response.status === 409) throw new PracticeError('conflict', detail, 409);
+    const type = typeof problem?.type === 'string' ? problem.type : '';
+    if (response.status === 404) throw new PracticeError(type.endsWith('topic-deleted') ? 'deleted' : 'expired', detail, 404);
+    if (response.status === 409) throw new PracticeError(type.endsWith('topic-changed') ? 'changed' : 'conflict', detail, 409);
     if (response.status === 422 && typeof problem?.type === 'string' && problem.type.endsWith('topic-unavailable')) {
       throw new PracticeError('unavailable', detail, 422);
     }
@@ -65,8 +72,11 @@ async function request<T>(path: string, init: { method?: string; body?: unknown 
 
 const session = (id: string) => `${SOLO_SESSIONS_PATH}/${encodeURIComponent(id)}`;
 
-export const startPractice = (topicId: string) =>
-  request<StartedSession>(SOLO_SESSIONS_PATH, { method: 'POST', body: { source: { type: 'BANK', topicId } } });
+export const startPractice = (target: PracticeTarget) =>
+  request<StartedSession>(SOLO_SESSIONS_PATH, {
+    method: 'POST',
+    body: { source: target.kind === 'bank' ? { type: 'BANK', topicId: target.topicId } : { type: 'CUSTOM', customTopicId: target.customTopicId } },
+  });
 export const fetchNext = (sessionId: string) => request<NextQuestion>(`${session(sessionId)}/next`);
 export const sendAnswer = (sessionId: string, questionId: string, version: number, optionIndex: number) =>
   request<AnswerResult>(`${session(sessionId)}/answers`, { method: 'POST', body: { questionId, version, optionIndex } });

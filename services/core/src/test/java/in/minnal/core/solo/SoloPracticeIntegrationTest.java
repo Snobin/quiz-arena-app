@@ -100,15 +100,12 @@ class SoloPracticeIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void shortUnknownAndCustomSourcesAreRefused() throws Exception {
+    void shortAndUnknownSourcesAreRefused() throws Exception {
         String p = player();
         var placement = fixtures.placement("History", "Short");
         publish(placement, 9);
         start(p, placement.topicId()).andExpect(status().isUnprocessableContent()).andExpect(jsonPath("$.type").value("urn:minnal:problem:topic-unavailable"));
         start(p, UUID.randomUUID()).andExpect(status().isNotFound());
-        mvc.perform(post("/api/core/v1/solo/sessions").header("Authorization", p).contentType(MediaType.APPLICATION_JSON)
-                .content("{\"source\":{\"type\":\"CUSTOM\",\"customTopicId\":\"" + UUID.randomUUID() + "\"}}"))
-                .andExpect(status().isUnprocessableContent()).andExpect(jsonPath("$.detail").value("custom source not available"));
     }
 
     @Test

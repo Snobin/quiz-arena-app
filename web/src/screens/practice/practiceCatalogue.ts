@@ -60,6 +60,27 @@ export const practiceCatalogue = {
   'practice.startAgain': { ml: 'വീണ്ടും തുടങ്ങാം', en: 'Start again', signoff: ['ml', 'en'] },
   'practice.error.generic': { ml: 'പരിശീലനം ലോഡ് ചെയ്യാനായില്ല.', en: "Couldn't load practice.", signoff: ['ml', 'en'] },
   'practice.error.answer': { ml: 'ഉത്തരം അയയ്ക്കാനായില്ല.', en: "Couldn't send your answer.", signoff: ['ml', 'en'] },
+  // Story 6.4: Solo Practice on a player's own custom topic, and its row in the solo picker.
+  'practice.own': { ml: 'സ്വന്തം', en: 'Own', signoff: ['ml', 'en'] },
+  'practice.changed': {
+    ml: 'ഈ ടോപ്പിക് പുതുക്കിയിട്ടുണ്ട്. പുതിയ ചോദ്യങ്ങളുമായി വീണ്ടും തുടങ്ങുന്നു.',
+    en: 'This topic was updated. Starting again with its new questions.',
+    signoff: ['ml', 'en'],
+  },
+  'practice.deleted': { ml: 'ഈ ടോപ്പിക് ഡിലീറ്റ് ചെയ്തു', en: 'This topic was deleted', signoff: ['ml', 'en'] },
+  'topics.mine': { ml: 'എന്റെ ടോപ്പിക്കുകൾ', en: 'My topics', signoff: ['ml', 'en'] },
+  'topics.mine.row_one': {
+    ml: '{{count, number}} ചോദ്യം · സ്വകാര്യം',
+    en: '{{count, number}} question · private',
+    signoff: ['ml', 'en'],
+    params: { ml: { count: 1 }, en: { count: 1 } },
+  },
+  'topics.mine.row_other': {
+    ml: '{{count, number}} ചോദ്യം · സ്വകാര്യം',
+    en: '{{count, number}} questions · private',
+    signoff: ['ml', 'en'],
+    params: { ml: { count: 15 }, en: { count: 15 } },
+  },
 } as const satisfies Record<string, Entry>;
 
 export type PracticeKey = keyof typeof practiceCatalogue;

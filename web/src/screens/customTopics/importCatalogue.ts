@@ -100,7 +100,7 @@ export const importCatalogue = {
   'import.success.sub': { ml: 'നിങ്ങൾക്കു മാത്രം · റേറ്റിംഗ് ഇല്ല', en: 'Private to you · never rated', signoff: both },
   'import.success.battle': { ml: 'ബാറ്റിൽ റൂമിൽ ഉപയോഗിക്കാം', en: 'Use in Battle Room', signoff: both },
   'import.success.practice': { ml: 'പ്രാക്ടീസ്', en: 'Practice', signoff: both },
-  'import.success.soon': { ml: 'പ്രാക്ടീസും ബാറ്റിൽ റൂമും ഉടൻ വരുന്നു', en: 'Practice and Battle Room arrive soon', signoff: both },
+  'import.success.soonBattle': { ml: 'ബാറ്റിൽ റൂം ഉടൻ വരുന്നു', en: 'Battle Room arrives soon', signoff: both },
   'import.another': { ml: 'മറ്റൊന്ന് ഇംപോർട്ട് ചെയ്യാം', en: 'Import another', signoff: both },
   'import.leave.title': { ml: 'ഇംപോർട്ട് ചെയ്യാതെ പോകണോ? ഈ ടാബ് അടയ്ക്കുംവരെ പേസ്റ്റ് ചെയ്ത ടെക്സ്റ്റ് ഇവിടെയുണ്ടാകും.', en: 'Leave without importing? Your pasted text stays until you close this tab.', signoff: both },
   'import.leave.stay': { ml: 'ഇവിടെ നിൽക്കാം', en: 'Stay', signoff: both },

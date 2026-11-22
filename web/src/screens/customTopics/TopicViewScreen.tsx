@@ -51,7 +51,7 @@ function QuestionCard({ q }: { q: TopicQuestion }) {
   );
 }
 
-/** `/me/custom-topics/{id}` (Story 6.3): the topic's questions and its actions: Re-import and Delete (Practice and Battle Room arrive with 6.4 and 6.5). */
+/** `/me/custom-topics/{id}` (Story 6.3): the topic's questions and its actions: Practice (Story 6.4), Re-import and Delete (Battle Room arrives with 6.5). */
 export default function TopicViewScreen({ id }: { id: string }) {
   const { t, i18n } = useTranslation();
   const online = useOnline();
@@ -110,11 +110,17 @@ export default function TopicViewScreen({ id }: { id: string }) {
               <Button variant="primary" disabled disabledReason="">
                 {t('import.success.battle')}
               </Button>
-              <Button variant="secondary" disabled disabledReason="">
-                {t('import.success.practice')}
-              </Button>
+              {online ? (
+                <Button variant="secondary" onClick={() => navigate(`/practice/custom/${id}`)}>
+                  {t('import.success.practice')}
+                </Button>
+              ) : (
+                <Button variant="secondary" disabled disabledReason={t('manage.offline')}>
+                  {t('import.success.practice')}
+                </Button>
+              )}
             </div>
-            <p className="text-caption text-muted">{t('import.success.soon')}</p>
+            <p className="text-caption text-muted">{t('import.success.soonBattle')}</p>
             <div className="flex flex-wrap items-start gap-2">
               {online ? (
                 <Button variant="secondary" onClick={() => navigate(`${LIST_PATH}/${id}/reimport`)}>

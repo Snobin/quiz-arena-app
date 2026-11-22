@@ -3,6 +3,7 @@ package in.minnal.core.solo.application;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import in.minnal.contracts.internal.InternalQuestion;
 import in.minnal.contracts.realtime.QuestionView;
+import in.minnal.core.customtopic.application.CustomTopicRepository;
 import in.minnal.core.question.application.TopicThreshold;
 import in.minnal.core.question.domain.ContentCategory;
 import in.minnal.core.question.domain.OptionOrder;
@@ -32,7 +33,7 @@ public class SoloPracticeService {
 
     /** The tagged source on the wire. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record SourceView(String type, UUID topicId, String topicName, String subjectName) {
+    public record SourceView(String type, UUID topicId, UUID customTopicId, String topicName, String subjectName) {
     }
 
     public record Started(UUID sessionId, SourceView source, int poolSize) {
@@ -61,26 +62,28 @@ public class SoloPracticeService {
     private final JdbcQuestionRepository questions;
     private final JdbcSubjectTopicRepository topics;
     private final TopicThreshold threshold;
+    private final CustomTopicRepository custom;
     private final RandomGenerator random;
 
     @org.springframework.beans.factory.annotation.Autowired
     public SoloPracticeService(SoloSessionStore store, JdbcQuestionRepository questions, JdbcSubjectTopicRepository topics,
-                               TopicThreshold threshold) {
-        this(store, questions, topics, threshold, RandomGenerator.getDefault());
+                               TopicThreshold threshold, CustomTopicRepository custom) {
+        this(store, questions, topics, threshold, custom, RandomGenerator.getDefault());
     }
 
     SoloPracticeService(SoloSessionStore store, JdbcQuestionRepository questions, JdbcSubjectTopicRepository topics,
-                        TopicThreshold threshold, RandomGenerator random) {
+                        TopicThreshold threshold, CustomTopicRepository custom, RandomGenerator random) {
         this.store = store;
         this.questions = questions;
         this.topics = topics;
         this.threshold = threshold;
+        this.custom = custom;
         this.random = random;
     }
 
     public Started start(UUID userId, String sourceType, UUID topicId) {
         if (SoloSession.Source.CUSTOM.equals(sourceType)) {
-            throw new SoloException(Kind.CUSTOM_UNAVAILABLE, "custom source not available");
+            return startCustom(userId, topicId);
         }
         if (!SoloSession.Source.BANK.equals(sourceType) || topicId == null) {
             throw new SoloException(Kind.INVALID, "source must be {type: BANK, topicId}.");
@@ -97,10 +100,34 @@ public class SoloPracticeService {
         return new Started(session.sessionId(), view(session.source(), topic), pool.size());
     }
 
+    /** Story 6.4: owner-only; no minimum size (nothing is rated), and an unknown or foreign topic is the same 404. */
+    private Started startCustom(UUID userId, UUID customTopicId) {
+        if (customTopicId == null) {
+            throw new SoloException(Kind.INVALID, "source must be {type: CUSTOM, customTopicId}.");
+        }
+        CustomTopicRepository.Header header = custom.header(userId, customTopicId)
+                .orElseThrow(() -> new SoloException(Kind.NOT_FOUND, "Topic not found."));
+        List<UUID> pool = shuffled(custom.questionIds(customTopicId));
+        if (pool.isEmpty()) {
+            throw new SoloException(Kind.TOPIC_UNAVAILABLE, "This topic has no questions right now.");
+        }
+        SoloSession session = new SoloSession(UUID.randomUUID(), userId, SoloSession.Source.custom(customTopicId, header.revision()),
+                1, pool, 0, null, 0, 0);
+        store.create(session);
+        return new Started(session.sessionId(), customView(session.source(), header.name()), pool.size());
+    }
+
     public Next next(UUID userId, UUID sessionId) {
         for (int attempt = 0; attempt < CAS_ATTEMPTS; attempt++) {
             SoloSessionStore.Versioned stored = owned(userId, sessionId);
             SoloSession session = stored.session();
+            if (session.source().isCustom()) {
+                Next served = nextCustom(userId, stored);
+                if (served != null) {
+                    return served;
+                }
+                continue;
+            }
             JdbcSubjectTopicRepository.TopicWithSubject topic = topicOf(session);
             SoloSession.Current open = session.current();
             if (open != null && !open.answered()) {
@@ -123,6 +150,13 @@ public class SoloPracticeService {
         for (int attempt = 0; attempt < CAS_ATTEMPTS; attempt++) {
             SoloSessionStore.Versioned stored = owned(userId, sessionId);
             SoloSession session = stored.session();
+            if (session.source().isCustom()) {
+                AnswerResult result = answerCustom(userId, stored, questionId, version, optionIndex);
+                if (result != null) {
+                    return result;
+                }
+                continue;
+            }
             SoloSession.Current current = session.current();
             if (current == null || current.answered() || !current.questionId().equals(questionId) || current.version() != version) {
                 throw new SoloException(Kind.CONFLICT, "That question is not the one being practised.");
@@ -146,6 +180,102 @@ public class SoloPracticeService {
         SoloSession session = owned(userId, sessionId).session();
         store.delete(session);
         return new Summary(session.answeredCount(), session.correctCount());
+    }
+
+    /** The custom topic as it is now, owner-scoped; a deleted topic ends the session's usefulness with 404 topic-deleted. */
+    private CustomTopicRepository.Header customHeader(UUID userId, SoloSession session) {
+        return custom.header(userId, session.source().topicId())
+                .orElseThrow(() -> new SoloException(Kind.TOPIC_DELETED, "This topic was deleted."));
+    }
+
+    /** Null when the compare-and-set lost a race (the caller retries). */
+    private Next nextCustom(UUID userId, SoloSessionStore.Versioned stored) {
+        SoloSession session = stored.session();
+        CustomTopicRepository.Header header = customHeader(userId, session);
+        UUID topicId = header.id();
+        boolean stale = session.source().revision() == null || session.source().revision() != header.revision();
+        SoloSession.Current open = session.current();
+        if (!stale && open != null && !open.answered()) {
+            Optional<CustomTopicRepository.Stored> served = custom.question(topicId, open.questionId());
+            if (served.isPresent()) {
+                return customNext(session, header, served.get(), open.reshuffled());
+            }
+            stale = true;
+        }
+        SoloSession base = session;
+        boolean reshuffled = false;
+        if (stale) {
+            // Re-imported: every question id changed. Rebuild from the current questions and keep the tally.
+            base = session.withSource(SoloSession.Source.custom(topicId, header.revision()))
+                    .withCurrent(null, 0, session.cycle() + 1, shuffled(custom.questionIds(topicId)));
+            reshuffled = true;
+        }
+        List<UUID> order = base.order();
+        int cursor = base.cursor();
+        int cycle = base.cycle();
+        while (true) {
+            if (cursor >= order.size()) {
+                if (reshuffled) {
+                    // The pool was already rebuilt in this call and is spent (or empty): nothing servable.
+                    throw new SoloException(Kind.TOPIC_UNAVAILABLE, "This topic has no questions right now.");
+                }
+                UUID last = base.current() == null ? null : base.current().questionId();
+                order = shuffled(custom.questionIds(topicId));
+                if (last != null && order.size() > 1 && order.get(0).equals(last)) {
+                    Collections.swap(order, 0, 1 + random.nextInt(order.size() - 1));
+                }
+                cursor = 0;
+                cycle++;
+                reshuffled = true;
+                continue;
+            }
+            UUID id = order.get(cursor++);
+            Optional<CustomTopicRepository.Stored> found = custom.question(topicId, id);
+            if (found.isPresent()) {
+                SoloSession next = base.withCurrent(new SoloSession.Current(id, header.revision(), false, reshuffled), cursor, cycle, order);
+                if (store.replace(stored, next)) {
+                    return customNext(next, header, found.get(), reshuffled);
+                }
+                return null;
+            }
+            // A question vanished between reads (re-import): skip it; the next call sees the new revision.
+        }
+    }
+
+    /** Null when the compare-and-set lost a race (the caller retries). */
+    private AnswerResult answerCustom(UUID userId, SoloSessionStore.Versioned stored, UUID questionId, int version, int optionIndex) {
+        SoloSession session = stored.session();
+        CustomTopicRepository.Header header = customHeader(userId, session);
+        if (session.source().revision() == null || session.source().revision() != header.revision()) {
+            throw new SoloException(Kind.TOPIC_CHANGED, "This topic was updated.");
+        }
+        SoloSession.Current current = session.current();
+        if (current == null || current.answered() || !current.questionId().equals(questionId) || current.version() != version) {
+            throw new SoloException(Kind.CONFLICT, "That question is not the one being practised.");
+        }
+        CustomTopicRepository.Row row = custom.question(header.id(), questionId)
+                .orElseThrow(() -> new SoloException(Kind.TOPIC_CHANGED, "This topic was updated.")).row();
+        int shownAnswer = orderFor(session, questionId, version).shownIndexOf(row.answerIndex());
+        boolean correct = optionIndex == shownAnswer;
+        SoloSession next = session.withAnswer(correct);
+        if (!store.replace(stored, next)) {
+            return null;
+        }
+        return new AnswerResult(correct, shownAnswer, row.explanation(), null, next.answeredCount(), next.correctCount());
+    }
+
+    private Next customNext(SoloSession session, CustomTopicRepository.Header header, CustomTopicRepository.Stored served, boolean reshuffled) {
+        CustomTopicRepository.Row row = served.row();
+        OptionOrder order = orderFor(session, served.id(), header.revision());
+        boolean ml = "ml".equals(row.lang());
+        InternalQuestion internal = new InternalQuestion(served.id(), header.revision(), ml ? row.text() : null, ml ? null : row.text(),
+                order.apply(row.options()), order.shownIndexOf(row.answerIndex()), row.explanation(), null);
+        return new Next(session.answeredCount() + 1, customView(session.source(), header.name()), reshuffled,
+                QuestionBody.of(QuestionView.of(internal)));
+    }
+
+    private static SourceView customView(SoloSession.Source source, String topicName) {
+        return new SourceView(SoloSession.Source.CUSTOM, null, source.topicId(), topicName, null);
     }
 
     private record Advance(SoloSession session, QuestionVersion served) {
@@ -206,7 +336,7 @@ public class SoloPracticeService {
     }
 
     private static SourceView view(SoloSession.Source source, JdbcSubjectTopicRepository.TopicWithSubject topic) {
-        return new SourceView(source.type(), source.topicId(), topic.topicName(), topic.subjectName());
+        return new SourceView(source.type(), source.topicId(), null, topic.topicName(), topic.subjectName());
     }
 
     private static Next next(SoloSession session, JdbcSubjectTopicRepository.TopicWithSubject topic, QuestionVersion served,

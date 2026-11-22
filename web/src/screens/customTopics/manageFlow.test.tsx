@@ -162,15 +162,15 @@ describe('the list', () => {
 });
 
 describe('the topic view', () => {
-  it('shows the name, count and date, the meter, the disabled actions and every question with the correct option marked', async () => {
+  it('shows the name, count and date, the meter, Practice enabled, Battle Room still a stub and every question with the correct option marked', async () => {
     stub();
     await open(`/me/custom-topics/${ID}`);
     expect(await screen.findByRole('heading', { level: 1, name: 'Renaissance' })).toBeInTheDocument();
     expect(screen.getByText('3 questions · updated 11 Nov')).toBeInTheDocument();
     expect(await screen.findByTestId('usage-meter')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Practice' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('button', { name: 'Practice' })).not.toHaveAttribute('aria-disabled');
     expect(screen.getByRole('button', { name: 'Use in Battle Room' })).toHaveAttribute('aria-disabled', 'true');
-    expect(screen.getByText('Practice and Battle Room arrive soon')).toBeInTheDocument();
+    expect(screen.getByText('Battle Room arrives soon')).toBeInTheDocument();
     expect(screen.getByText('Question 1?')).toBeInTheDocument();
     expect(screen.getAllByText(/correct answer/)).toHaveLength(3);
     expect(screen.getByText('Because 2.')).toBeInTheDocument();
@@ -220,7 +220,8 @@ describe('the topic view', () => {
       await screen.findByRole('heading', { level: 1, name: 'Renaissance' });
       expect(screen.getByRole('button', { name: 'Re-import' })).toHaveAttribute('aria-disabled', 'true');
       expect(screen.getByRole('button', { name: 'Delete' })).toHaveAttribute('aria-disabled', 'true');
-      expect(screen.getAllByText('You are offline. Connect to change your topics.')).toHaveLength(2);
+      expect(screen.getByRole('button', { name: 'Practice' })).toHaveAttribute('aria-disabled', 'true');
+      expect(screen.getAllByText('You are offline. Connect to change your topics.')).toHaveLength(3);
     } finally {
       Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
     }

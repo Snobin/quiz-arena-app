@@ -34,7 +34,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 public class SoloPracticeController {
 
     /** {@code source} is tagged: {@code type} plus its type-specific id. */
-    public record SourceRequest(String type, UUID topicId) {
+    public record SourceRequest(String type, UUID topicId, UUID customTopicId) {
     }
 
     public record StartRequest(SourceRequest source) {
@@ -62,7 +62,8 @@ public class SoloPracticeController {
         if (body == null || body.source() == null) {
             throw new SoloException(SoloException.Kind.INVALID, "source is required.");
         }
-        SoloPracticeService.Started started = service.start(caller.userId(), body.source().type(), body.source().topicId());
+        SoloPracticeService.Started started = service.start(caller.userId(), body.source().type(),
+                "CUSTOM".equals(body.source().type()) ? body.source().customTopicId() : body.source().topicId());
         return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore()).body(started);
     }
 
@@ -125,7 +126,8 @@ public class SoloPracticeController {
                 case NOT_FOUND -> respond(HttpStatus.NOT_FOUND, null, e.getMessage(), 0);
                 case CONFLICT -> respond(HttpStatus.CONFLICT, null, e.getMessage(), 0);
                 case TOPIC_UNAVAILABLE -> respond(HttpStatus.UNPROCESSABLE_CONTENT, "topic-unavailable", e.getMessage(), 0);
-                case CUSTOM_UNAVAILABLE -> respond(HttpStatus.UNPROCESSABLE_CONTENT, "custom-source-unavailable", e.getMessage(), 0);
+                case TOPIC_CHANGED -> respond(HttpStatus.CONFLICT, "topic-changed", e.getMessage(), 0);
+                case TOPIC_DELETED -> respond(HttpStatus.NOT_FOUND, "topic-deleted", e.getMessage(), 0);
                 case RATE_LIMITED -> respond(HttpStatus.TOO_MANY_REQUESTS, null, e.getMessage(), e.retryAfterSeconds());
             };
         }
