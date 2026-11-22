@@ -44,6 +44,7 @@ class AdminExceptionHandler {
             case CONFLICT -> HttpStatus.CONFLICT;
             case RATE_LIMITED -> HttpStatus.TOO_MANY_REQUESTS;
             case INTERNAL -> HttpStatus.INTERNAL_SERVER_ERROR;
+            case UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
         };
         ProblemDetail problem = problem(status, e.getMessage());
         if (!e.errors().isEmpty()) {

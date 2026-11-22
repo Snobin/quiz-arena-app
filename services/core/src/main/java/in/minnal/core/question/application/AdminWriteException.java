@@ -10,7 +10,7 @@ import java.util.Map;
  */
 public class AdminWriteException extends RuntimeException {
 
-    public enum Kind { INVALID, NOT_FOUND, CONFLICT, RATE_LIMITED, INTERNAL }
+    public enum Kind { INVALID, NOT_FOUND, CONFLICT, RATE_LIMITED, INTERNAL, UNAVAILABLE }
 
     private final Kind kind;
     private final List<FieldError> errors;
@@ -41,6 +41,11 @@ public class AdminWriteException extends RuntimeException {
 
     public static AdminWriteException rateLimited(long retryAfterSeconds) {
         return new AdminWriteException(Kind.RATE_LIMITED, "Too many requests. Try again later.", List.of(), Map.of(), retryAfterSeconds);
+    }
+
+    /** A dependency (the rate-limit store) is down; the request fails closed with a 503. */
+    public static AdminWriteException unavailable() {
+        return new AdminWriteException(Kind.UNAVAILABLE, "This is temporarily unavailable. Try again in a minute.", List.of(), Map.of());
     }
 
     public static AdminWriteException internal(String detail) {

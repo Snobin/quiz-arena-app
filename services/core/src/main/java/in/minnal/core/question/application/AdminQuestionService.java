@@ -74,7 +74,7 @@ public class AdminQuestionService {
     public Saved saveDraft(UUID actor, UUID questionId, QuestionPayload payload) {
         Question question = questions.findQuestion(questionId).orElseThrow(() -> AdminWriteException.notFound("No such question."));
         if (question.isDeleted()) {
-            throw AdminWriteException.conflict("This question is deleted. Restore it before editing.");
+            throw AdminWriteException.conflict("This question is deleted. Restore it before editing.", Map.of("reason", "deleted"));
         }
         QuestionContent content = prepare(payload, List.of());
         Instant now = Instant.now();
@@ -155,7 +155,7 @@ public class AdminQuestionService {
     }
 
     private static AdminWriteException staleDraft() {
-        return AdminWriteException.conflict("This draft changed since you opened it.");
+        return AdminWriteException.conflict("This draft changed since you opened it.", Map.of("reason", "stale"));
     }
 
     /**

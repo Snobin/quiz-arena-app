@@ -49,7 +49,7 @@ public class AdminUploadController {
             @RequestHeader(name = HttpHeaders.AUTHORIZATION, required = false) String authorization,
             HttpServletRequest request) {
         BearerAuthenticator.Caller caller = auth.requireAdmin(authorization);
-        RateLimiter.Decision decision = limiter.tryAcquire(RateLimitPolicy.ADMIN_UPLOAD, caller.userId().toString());
+        RateLimiter.Decision decision = acquire(caller);
         if (!decision.allowed()) {
             LOG.atInfo().addKeyValue("userId", caller.userId()).addKeyValue("route", "admin.uploads.create").log("admin upload rate limited");
             throw AdminWriteException.rateLimited(decision.retryAfterSeconds());
@@ -58,6 +58,16 @@ public class AdminUploadController {
         byte[] bytes = read(request);
         CsvUploadResult result = service.upload(caller.userId(), bytes);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(result);
+    }
+
+    /** Fails closed: if the limiter store is down the upload is refused with a 503, not an unshaped 500. */
+    private RateLimiter.Decision acquire(BearerAuthenticator.Caller caller) {
+        try {
+            return limiter.tryAcquire(RateLimitPolicy.ADMIN_UPLOAD, caller.userId().toString());
+        } catch (RuntimeException e) {
+            LOG.atError().setCause(e).addKeyValue("route", "admin.uploads.create").log("rate limiter unavailable");
+            throw AdminWriteException.unavailable();
+        }
     }
 
     private static byte[] read(HttpServletRequest request) {

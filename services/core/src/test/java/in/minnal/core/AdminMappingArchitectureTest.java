@@ -55,6 +55,34 @@ class AdminMappingArchitectureTest {
         assertThat(violations).isEmpty();
     }
 
+    /** Every handler method in an admin controller must authenticate with requireAdmin (source scan). */
+    @Test
+    void everyAdminHandlerMethodCallsRequireAdmin() throws IOException {
+        Pattern handler = Pattern.compile("@(Get|Post|Put|Patch|Delete)Mapping\\b");
+        List<String> violations = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(Path.of("src/main/java"))) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".java")).filter(AdminMappingArchitectureTest::inAdminPackage).toList()) {
+                String text = Files.readString(file);
+                if (!Pattern.compile("@(Rest)?Controller\\b").matcher(text).find()) {
+                    continue;
+                }
+                var m = handler.matcher(text);
+                List<Integer> starts = new ArrayList<>();
+                while (m.find()) {
+                    starts.add(m.start());
+                }
+                for (int i = 0; i < starts.size(); i++) {
+                    int end = i + 1 < starts.size() ? starts.get(i + 1) : text.length();
+                    String method = text.substring(starts.get(i), end);
+                    if (!method.contains("requireAdmin(")) {
+                        violations.add(file + ": handler near offset " + starts.get(i) + " does not call requireAdmin");
+                    }
+                }
+            }
+        }
+        assertThat(violations).isEmpty();
+    }
+
     @Test
     void thereIsAtLeastOneAdminController() throws IOException {
         try (Stream<Path> files = Files.walk(Path.of("src/main/java"))) {

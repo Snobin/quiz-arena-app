@@ -218,14 +218,20 @@ export function QuestionEditor({ questionId }: { questionId: string | null }) {
         guard.release();
         navigate(`/admin/questions/${result.questionId}/edit`, { replace: true });
       } else {
-        // Refresh the header and version history; the typed values stay as they are.
-        const fresh = await fetchQuestion(questionId);
-        setLoad({ status: 'ready', detail: fresh });
-        setRowVersion(fresh.editing.rowVersion);
+        // Refresh the header and version history; the typed values stay as they are. The save already
+        // succeeded, so a failed refresh must not read as "Could not save": keep the saved row version
+        // and tell the admin to reload for the new history.
+        try {
+          const fresh = await fetchQuestion(questionId);
+          setLoad({ status: 'ready', detail: fresh });
+          setRowVersion(fresh.editing.rowVersion);
+        } catch {
+          announce(adminT('editor.refreshFailed'));
+        }
       }
     } catch (error) {
       if (error instanceof AdminApiError && error.status === 400 && error.errors.length > 0) fail(error.errors);
-      else if (error instanceof AdminApiError && error.status === 409 && questionId && !deleted && !error.detail?.includes('deleted')) {
+      else if (error instanceof AdminApiError && error.status === 409 && questionId && !deleted && error.reason !== 'deleted') {
         setStale(true);
         announce(adminT('editor.stale'));
       } else {

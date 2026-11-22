@@ -62,7 +62,7 @@ public class QuestionReportController {
             @PathVariable UUID questionId, @PathVariable int version,
             @RequestBody(required = false) QuestionReportRequest body) {
         BearerAuthenticator.Caller caller = auth.requireRegistered(authorization);
-        RateLimiter.Decision decision = limiter.tryAcquire(RateLimitPolicy.QUESTION_REPORT, caller.userId().toString());
+        RateLimiter.Decision decision = acquire(caller);
         if (!decision.allowed()) {
             LOG.atInfo().addKeyValue("userId", caller.userId()).addKeyValue("route", "questions.reports.create").log("report rate limited");
             throw AdminWriteException.rateLimited(decision.retryAfterSeconds());
@@ -70,6 +70,16 @@ public class QuestionReportController {
         UUID id = service.report(caller.userId(), questionId, version, body);
         LOG.atInfo().addKeyValue("userId", caller.userId()).addKeyValue("route", "questions.reports.create").log("question reported");
         return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore()).body(new Created(id));
+    }
+
+    /** Fails closed: if the limiter store is down the report is refused with a 503, not an unshaped 500. */
+    private RateLimiter.Decision acquire(BearerAuthenticator.Caller caller) {
+        try {
+            return limiter.tryAcquire(RateLimitPolicy.QUESTION_REPORT, caller.userId().toString());
+        } catch (RuntimeException e) {
+            LOG.atError().setCause(e).addKeyValue("route", "questions.reports.create").log("rate limiter unavailable");
+            throw AdminWriteException.unavailable();
+        }
     }
 
     /** RFC 9457 Problem Details for this endpoint: 400 (with {@code errors[]}), 401, 403, 404, 409, 429. */
@@ -94,6 +104,7 @@ public class QuestionReportController {
                 case CONFLICT -> HttpStatus.CONFLICT;
                 case RATE_LIMITED -> HttpStatus.TOO_MANY_REQUESTS;
                 case INTERNAL -> HttpStatus.INTERNAL_SERVER_ERROR;
+                case UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
             };
             return respond(status, e.getMessage(), e.errors(), e.kind() == AdminWriteException.Kind.RATE_LIMITED ? Math.max(1, e.retryAfterSeconds()) : 0);
         }
