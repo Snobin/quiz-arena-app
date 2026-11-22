@@ -268,6 +268,8 @@ export type SnapshotOptions = {
   myAnswer?: { pickedIndex: number; correct?: boolean; points?: number; answerIndex?: number; totalScore?: number };
   /** Who the receiver is: defaults to the first participant; `null` leaves the field out (an older server). */
   selfParticipantId?: string | null;
+  /** The match's mode; left out (an older server) when not given. */
+  mode?: 'QUICK_MATCH' | 'TOPIC_DUEL' | 'BATTLE_ROOM';
   serverTime?: string;
 };
 
@@ -296,6 +298,7 @@ export function snapshot(matchId: string, o: SnapshotOptions) {
       youForfeited: o.youForfeited ?? false,
       ...(o.myAnswer ? { myAnswer: o.myAnswer } : {}),
       ...(self ? { selfParticipantId: self } : {}),
+      ...(o.mode ? { mode: o.mode } : {}),
     },
   };
 }

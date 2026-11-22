@@ -1109,6 +1109,23 @@ describe('rejoin after a reload', () => {
     expect(liveMatchId.load()).toBeNull();
   });
 
+  it('reload in a two-player Battle Room: the SNAPSHOT carries the mode, so it is not mistaken for a 1v1', async () => {
+    const { matchId, self, opponent, participants } = aMatch();
+    await rejoin(matchId);
+    last().deliver(
+      snapshot(matchId, {
+        refSeq: 4,
+        questionIndex: 1,
+        startedAt: T0,
+        scores: [{ participantId: self, score: 900 }, { participantId: opponent, score: 400 }],
+        participants,
+        selfParticipantId: self,
+        mode: 'BATTLE_ROOM',
+      }),
+    );
+    expect(state().live).toMatchObject({ matchId, mode: 'BATTLE_ROOM', phase: 'open' });
+  });
+
   it('reload mid-question: the SNAPSHOT builds the live match on the open question, and she can answer', async () => {
     const { matchId, self, opponent, participants } = aMatch();
     await rejoin(matchId);
