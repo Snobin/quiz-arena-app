@@ -278,6 +278,8 @@ export type SnapshotPayload = {
   /** Which participant the receiver is; null from an older server (lets a reloaded client rejoin). */
   selfParticipantId: string | null;
   topic?: TopicInfo;
+  /** The match's mode; null from an older server. A reloaded client needs it to tell a two-player Battle Room from a 1v1. */
+  mode: MatchMode | null;
 };
 
 /** PARTICIPANT_FORFEITED (broadcast): a participant left the match (grace ran out, or Leave). */
@@ -566,6 +568,8 @@ export function parseSnapshot(value: unknown): SnapshotPayload | null {
   }
   const topic = parseTopic(value.topic);
   if (topic === null) return null;
+  if (value.mode !== undefined && !isMatchMode(value.mode)) return null;
+  const mode = value.mode === undefined ? null : value.mode;
   return {
     phase,
     questionIndex,
@@ -580,6 +584,7 @@ export function parseSnapshot(value: unknown): SnapshotPayload | null {
     youForfeited,
     myAnswer,
     selfParticipantId,
+    mode,
     ...(topic && { topic }),
   };
 }

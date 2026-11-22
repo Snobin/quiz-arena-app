@@ -566,6 +566,7 @@ export function createRealtime(env: RealtimeEnv): Realtime {
             selfParticipantId: payload.selfParticipantId,
             total: payload.total,
             topic: payload.topic,
+            ...(payload.mode && { mode: payload.mode }),
           });
           const held = buffer;
           endRejoin(null);

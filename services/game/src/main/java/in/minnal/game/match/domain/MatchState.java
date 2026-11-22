@@ -406,7 +406,8 @@ public final class MatchState {
                 self != null && self.forfeited(),
                 myAnswer,
                 participantId,
-                topic);
+                topic,
+                mode);
         return ServerMessage.reply(MessageType.SNAPSHOT, matchId, seq, now, payload);
     }
 

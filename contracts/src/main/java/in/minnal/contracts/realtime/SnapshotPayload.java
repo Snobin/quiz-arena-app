@@ -26,6 +26,8 @@ import java.util.UUID;
  * @param selfParticipantId which participant the receiver is (so a client with no prior state,
  *                      such as after a page reload, can tell herself apart)
  * @param topic         the Topic Duel topic, null in Quick Match
+ * @param mode          the match's mode, so a client with no prior state (a reload) can tell a Battle Room
+ *                      of two from a 1v1; null from an older server
  */
 public record SnapshotPayload(
         SnapshotPhase phase,
@@ -41,7 +43,8 @@ public record SnapshotPayload(
         boolean youForfeited,
         MyAnswer myAnswer,
         UUID selfParticipantId,
-        TopicInfo topic) {
+        TopicInfo topic,
+        MatchMode mode) {
 
     public SnapshotPayload {
         answered = List.copyOf(answered);

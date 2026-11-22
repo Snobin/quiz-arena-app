@@ -148,7 +148,7 @@ class RealtimeSamplesTest {
                         ServerMessage.reply(MessageType.SNAPSHOT, MATCH_ID, 14, SERVER_TIME, new SnapshotPayload(
                                 SnapshotPhase.REVEAL, 3, 10, null, null, null, revealed(3), List.of(),
                                 List.of(new ParticipantScore(ANJU, 2140, false), new ParticipantScore(BOT, 1310, false)),
-                                participants, false, null, ANJU, TOPIC)),
+                                participants, false, null, ANJU, TOPIC, null)),
                         new TypeReference<ServerMessage<SnapshotPayload>>() { }),
                 new Sample("match-ended-topic-duel.json",
                         ServerMessage.aboutMatch(MessageType.MATCH_ENDED, MATCH_ID, SERVER_TIME, new MatchEndedPayload(
@@ -222,13 +222,13 @@ class RealtimeSamplesTest {
                                 SnapshotPhase.QUESTION_OPEN, 3, 10, questionView(), SERVER_TIME.minusSeconds(6),
                                 SERVER_TIME.plusSeconds(9), revealed(2), List.of(ANJU),
                                 List.of(new ParticipantScore(ANJU, 2140, false), new ParticipantScore(BOT, 1310, false)),
-                                participants, false, MyAnswer.withResult(1, true, 900, 1, 3040), ANJU, null)),
+                                participants, false, MyAnswer.withResult(1, true, 900, 1, 3040), ANJU, null, null)),
                         new TypeReference<ServerMessage<SnapshotPayload>>() { }),
                 new Sample("snapshot-forfeited.json",
                         ServerMessage.reply(MessageType.SNAPSHOT, MATCH_ID, 14, SERVER_TIME, new SnapshotPayload(
                                 SnapshotPhase.REVEAL, 3, 10, null, null, null, revealed(3), List.of(),
                                 List.of(new ParticipantScore(ANJU, 2140, true), new ParticipantScore(BOT, 1310, false)),
-                                participants, true, null, ANJU, null)),
+                                participants, true, null, ANJU, null, null)),
                         new TypeReference<ServerMessage<SnapshotPayload>>() { }),
                 new Sample("participant-forfeited.json",
                         ServerMessage.broadcast(MessageType.PARTICIPANT_FORFEITED, MATCH_ID, 13, SERVER_TIME,
@@ -452,9 +452,10 @@ class RealtimeSamplesTest {
     @Test
     void aSnapshotOutsideAnOpenQuestionOmitsTheQuestionFields() {
         JsonNode snapshot = ContractJson.MAPPER.valueToTree(new SnapshotPayload(SnapshotPhase.LEAD_IN, 0, 10, null, null,
-                null, null, List.of(), List.of(), List.of(), false, null, ANJU, null));
+                null, null, List.of(), List.of(), List.of(), false, null, ANJU, null, MatchMode.BATTLE_ROOM));
         assertThat(snapshot.propertyNames()).containsExactly("phase", "questionIndex", "total", "answered", "scores",
-                "participants", "youForfeited", "selfParticipantId");
+                "participants", "youForfeited", "selfParticipantId", "mode");
+        assertThat(snapshot.get("mode").asString()).isEqualTo("BATTLE_ROOM");
         JsonNode receipt = ContractJson.MAPPER.valueToTree(MyAnswer.receipt(2));
         assertThat(receipt.propertyNames()).containsExactly("pickedIndex");
     }
