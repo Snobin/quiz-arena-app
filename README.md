@@ -236,10 +236,13 @@ Start the Compose stack first so the dev proxy has something to talk to.
 ## CI
 
 `.github/workflows/ci.yml` runs on every push to any branch, not tags (and by hand from the Actions tab).
-Any failing step turns the run red. It has three jobs:
+Any failing step turns the run red. It has these jobs:
 
-- **backend**: JDK 25 (Temurin), `./mvnw -B verify`. Core's integration tests start Postgres with
-  Testcontainers, so they need Docker.
+- **backend (core, game, ratings)**: one parallel job per service, JDK 25 (Temurin),
+  `./mvnw -B verify -pl services/<name> -am` (`-am` also builds and tests `contracts`). The
+  integration tests start Postgres with Testcontainers, so they need Docker. JaCoCo reports are
+  uploaded as `jacoco-report-<name>`.
+- **e2e**: Playwright browser smoke tests against the production web build.
 - **web**: Node 22, `npm ci`, then `typecheck`, `test`, `check:i18n`, `check:tokens` and
   `build:check`.
 - **compose**: `node --test deploy/*.test.mjs` (the check script's own tests), then
