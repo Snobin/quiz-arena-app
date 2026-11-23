@@ -225,6 +225,40 @@ export const roomCatalogue = {
     en: 'That topic has too few questions right now. Pick another.',
     signoff: both,
   },
+  // Story 6.5b: a room on the host's own custom topic.
+  'rooms.custom.tag': { ml: 'സ്വന്തം', en: 'Own', signoff: both },
+  'rooms.custom.note': {
+    ml: 'റേറ്റിംഗ് ഇല്ല · സ്വന്തം ചോദ്യങ്ങൾ',
+    en: "Unrated · the host's own questions don't change ratings",
+    signoff: both,
+  },
+  'rooms.custom.a11y': {
+    ml: '{{topic}}, സ്വന്തം ടോപ്പിക്, റേറ്റിംഗ് ഇല്ല',
+    en: '{{topic}}, own topic, unrated',
+    signoff: both,
+    params: { ml: { topic: 'നവോത്ഥാനം' }, en: { topic: 'Renaissance' } },
+  },
+  'rooms.start.sourceGone': {
+    ml: 'ആ ടോപ്പിക് ഇപ്പോൾ ഇല്ല. മറ്റൊന്ന് തിരഞ്ഞെടുക്കൂ.',
+    en: 'That topic no longer exists. Choose another one.',
+    signoff: both,
+  },
+  'rooms.start.customTooFew': {
+    ml: 'ആ ടോപ്പിക്കിൽ ഇപ്പോൾ {{count, number}} ചോദ്യത്തിൽ കുറവാണ്. എണ്ണം കുറയ്ക്കൂ, അല്ലെങ്കിൽ മറ്റൊരു ടോപ്പിക് തിരഞ്ഞെടുക്കൂ.',
+    en: 'That topic now has fewer than {{count, number}} questions. Lower the count or choose another topic.',
+    signoff: both,
+    params: { ml: { count: 15 }, en: { count: 15 } },
+  },
+  'rooms.mine.row_one': { ml: '{{count, number}} ചോദ്യം · റേറ്റിംഗ് ഇല്ല', en: '{{count, number}} question · unrated', signoff: both, params: { ml: { count: 1 }, en: { count: 1 } } },
+  'rooms.mine.row_other': { ml: '{{count, number}} ചോദ്യം · റേറ്റിംഗ് ഇല്ല', en: '{{count, number}} questions · unrated', signoff: both, params: { ml: { count: 15 }, en: { count: 15 } } },
+  'rooms.mine.hidden': {
+    ml: '5 ചോദ്യത്തിൽ കുറവുള്ള ടോപ്പിക്കുകൾ റൂമിൽ ഉപയോഗിക്കാൻ പറ്റില്ല',
+    en: "Topics with fewer than 5 questions can't be used in a room",
+    signoff: both,
+  },
+  'rooms.mine.tooSmall': { ml: 'ഒരു റൂമിന് കുറഞ്ഞത് 5 ചോദ്യം വേണം', en: 'A room needs at least 5 questions', signoff: both },
+  'room.result.ownUnrated': { ml: 'സ്വന്തം · റേറ്റിംഗ് ഇല്ല', en: 'Own · unrated', signoff: both },
+  'room.live.title': { ml: 'ബാറ്റിൽ റൂം · {{topic}}', en: 'Battle Room · {{topic}}', signoff: both, params: { ml: { topic: 'നവോത്ഥാനം' }, en: { topic: 'Renaissance' } } },
   'rooms.start.changeTopic': { ml: 'ടോപ്പിക് മാറ്റാം', en: 'Change topic', signoff: both },
   'rooms.start.draining': {
     ml: 'മിന്നൽ അപ്ഡേറ്റ് ചെയ്യുകയാണ്. അൽപ്പം കഴിഞ്ഞ് വീണ്ടും ശ്രമിക്കൂ.',

@@ -76,4 +76,27 @@ describe('room parsers over the golden samples', () => {
     expect(parseRoomIncoming(JSON.stringify({ ...lobby, payload: { room: lobby.payload.room } }))).toMatchObject({ payload: { joined: [], left: [] } });
     expect(parseRoomIncoming(text('match-found.json'))?.type).toBe('OTHER');
   });
+
+  it('parse the Story 6.5 custom-topic samples the server emits, keeping the custom source and the name-only topic', () => {
+    const lobby = parseRoomIncoming(text('room-lobby-updated-custom.json'));
+    expect(lobby).toMatchObject({
+      type: 'ROOM_LOBBY_UPDATED',
+      payload: { room: { rated: false, source: { type: 'CUSTOM', customTopicId: '6f1b2c3d-1111-4222-8333-444455556666', topicName: 'Renaissance' } } },
+    });
+    const started = parseRoomIncoming(text('room-match-started-custom.json'));
+    expect(started).toMatchObject({ type: 'ROOM_MATCH_STARTED', payload: { questionSource: 'CUSTOM', topic: { name: 'Renaissance' } } });
+    expect(started?.type === 'ROOM_MATCH_STARTED' && started.payload.topic).not.toHaveProperty('topicId');
+    expect(parseRoomIncoming(text('room-start-failed-source-unavailable.json'))).toMatchObject({
+      type: 'ROOM_START_FAILED',
+      payload: { reason: 'SOURCE_UNAVAILABLE' },
+    });
+    // A bank match start still reads as before (no questionSource on a sample from an older server).
+    const bank = JSON.parse(text('room-match-started.json')) as { payload: Record<string, unknown> };
+    delete bank.payload.questionSource;
+    expect(parseRoomIncoming(JSON.stringify(bank))).toMatchObject({ type: 'ROOM_MATCH_STARTED' });
+    // Wrong types are refused.
+    const custom = JSON.parse(text('room-lobby-updated-custom.json')) as { payload: { room: { source: Record<string, unknown> } } };
+    custom.payload.room.source.topicName = 7;
+    expect(parseRoomIncoming(JSON.stringify(custom))).toBeNull();
+  });
 });

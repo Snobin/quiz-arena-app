@@ -7,7 +7,9 @@ import { detectLanguage } from '../../i18n/Lang.tsx';
 import type { MessageKey } from '../../i18n/index.ts';
 import { useDocumentTitle } from '../../i18n/useDocumentTitle.ts';
 import '../practice/practiceCatalogue.ts';
+import '../rooms/roomCatalogue.ts';
 import { fetchTopicList, TOPIC_LIST_KEY, type TopicSummary } from '../customTopics/manageApi.ts';
+import { MIN_QUESTIONS } from '../rooms/roomConfig.ts';
 import { useReducedEffects } from '../../motion/reduceEffects.ts';
 import { announce } from '../../shell/announce.ts';
 import { Link } from '../../shell/Link.tsx';
@@ -130,9 +132,9 @@ function TopicRow({ topic, subjectName, disabled, onPick }: RowProps) {
   );
 }
 
-function MineRow({ topic, disabled, onPick }: { topic: TopicSummary; disabled: boolean; onPick: () => void }) {
+function MineRow({ topic, unrated, disabled, onPick }: { topic: TopicSummary; unrated: boolean; disabled: boolean; onPick: () => void }) {
   const { t } = useTranslation();
-  const questions = t('topics.mine.row', { count: topic.questionCount });
+  const questions = t(unrated ? 'rooms.mine.row' : 'topics.mine.row', { count: topic.questionCount });
   return (
     <li className="border-b border-hairline last:border-b-0">
       <button
@@ -187,11 +189,16 @@ export function TopicPicker({ purpose, notice, onSelect, onSelectCustom, sources
   const data: Catalogue | undefined = catalogue.data;
   const searching = query.trim() !== '';
   const filtered = useMemo(() => (data ? filterCatalogue(data.subjects, query) : []), [data, query]);
+  // A room needs 5 questions or more (Story 6.5b): smaller topics are left out, and one muted line says so.
+  const room = purpose === 'BATTLE_ROOM';
+  const allMine = withCustom ? (mine.data?.topics ?? []) : [];
+  const usableMine = room ? allMine.filter((topic) => topic.questionCount >= MIN_QUESTIONS) : allMine;
+  const hiddenMine = allMine.length - usableMine.length;
   const mineRows = useMemo(() => {
-    const all = withCustom ? (mine.data?.topics ?? []) : [];
     const needle = fold(query.trim());
-    return needle ? all.filter((topic) => fold(topic.name).includes(needle)) : all;
-  }, [mine.data, query, withCustom]);
+    return needle ? usableMine.filter((topic) => fold(topic.name).includes(needle)) : usableMine;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mine.data, query, withCustom, room]);
   const matchCount = filtered.reduce((sum, subject) => sum + subject.topics.length, 0) + mineRows.length;
 
   // The count is announced once per settled query, not on every keystroke.
@@ -282,10 +289,15 @@ export function TopicPicker({ purpose, notice, onSelect, onSelectCustom, sources
                 </h2>
                 <ul data-testid="my-topics" className="rounded-lg border border-hairline bg-card">
                   {mineRows.map((topic) => (
-                    <MineRow key={topic.customTopicId} topic={topic} disabled={offlineDisabled} onPick={() => onSelectCustom?.(topic)} />
+                    <MineRow key={topic.customTopicId} topic={topic} unrated={room} disabled={offlineDisabled} onPick={() => onSelectCustom?.(topic)} />
                   ))}
                 </ul>
               </section>
+            ) : null}
+            {room && hiddenMine > 0 ? (
+              <p data-testid="my-topics-hidden" className="text-caption text-muted">
+                {t('rooms.mine.hidden')}
+              </p>
             ) : null}
             {!searching && recentRows.length > 0 ? (
               <section aria-labelledby="topicsRecent" className="flex flex-col gap-2">

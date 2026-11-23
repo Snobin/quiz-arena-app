@@ -108,8 +108,19 @@ export default function TopicsRoutes() {
   return (
     <TopicPicker
       purpose={purpose}
-      sources={purpose === 'SOLO_PRACTICE' ? ['BANK', 'CUSTOM'] : ['BANK']}
-      onSelectCustom={(topic) => navigate(`${CUSTOM_PRACTICE_PATH}${topic.customTopicId}`)}
+      sources={purpose === 'SOLO_PRACTICE' || purpose === 'BATTLE_ROOM' ? ['BANK', 'CUSTOM'] : ['BANK']}
+      onSelectCustom={(topic) => {
+        if (purpose === 'BATTLE_ROOM') {
+          // As a bank topic: back to Create, or into the host's configure (Story 6.5b).
+          const roomId = params.get('roomId');
+          const count = Number(params.get('count'));
+          void import('../rooms/pickerReturn.ts')
+            .then((m) => m.returnPickedCustomTopic(topic, { roomId, count: Number.isInteger(count) && count > 0 ? count : null }))
+            .catch(() => navigate('/rooms', { replace: true }));
+          return;
+        }
+        navigate(`${CUSTOM_PRACTICE_PATH}${topic.customTopicId}`);
+      }}
       notice={params.get('notice') === 'small' ? t('topics.notice.small') : undefined}
       onSelect={(topic) => {
         if (purpose === 'BATTLE_ROOM') {

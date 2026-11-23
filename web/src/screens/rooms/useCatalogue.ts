@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { fetchTopicList, TOPIC_LIST_KEY, type TopicSummary } from '../customTopics/manageApi.ts';
 import { fetchTopics, type Catalogue, type SubjectItem, type TopicItem } from '../topics/topicsApi.ts';
 
 /** The same query the topic picker uses (`['topics']`), so the picker's result is already here when she comes back. */
@@ -19,4 +20,22 @@ export function findTopic(catalogue: Catalogue | undefined, topicId: string | nu
     if (topic) return { topic, subject };
   }
   return null;
+}
+
+/** A custom topic needs at least this many questions to be a room's source (FR76). */
+export const MIN_CUSTOM_QUESTIONS = 5;
+
+/**
+ * The host's own custom topics (Story 6.5b), loaded only when `enabled` (a custom source is in play, so a bank room or a
+ * non-host never asks). The same query as My topics, so a screen she came from has already filled it.
+ */
+export function useCustomTopics(enabled: boolean) {
+  return useQuery({ queryKey: TOPIC_LIST_KEY, queryFn: fetchTopicList, staleTime: STALE_MS, retry: false, enabled });
+}
+
+/** A custom topic by id that a room can use (5 or more questions), or null. */
+export function findCustomTopic(topics: readonly TopicSummary[] | undefined, id: string | null | undefined): TopicSummary | null {
+  if (!topics || !id) return null;
+  const found = topics.find((topic) => topic.customTopicId === id);
+  return found && found.questionCount >= MIN_CUSTOM_QUESTIONS ? found : null;
 }

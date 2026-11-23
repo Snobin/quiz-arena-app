@@ -1,5 +1,6 @@
 import {
   isMatchMode,
+  isQuestionSource,
   parseErrorPayload,
   parseParticipant,
   parseServerMessage,
@@ -45,12 +46,18 @@ export function parseRoomView(value: unknown): RoomView | null {
   if (typeof hostParticipantId !== 'string' || !isObject(source) || !isInt(questionCount) || typeof rated !== 'boolean') return null;
   if (typeof expiresAt !== 'string' || !Number.isFinite(Date.parse(expiresAt)) || !Array.isArray(participants) || !isInt(humanCount)) return null;
   if (typeof source.type !== 'string' || (source.topicId !== undefined && typeof source.topicId !== 'string')) return null;
+  if ((source.customTopicId !== undefined && typeof source.customTopicId !== 'string') || (source.topicName !== undefined && typeof source.topicName !== 'string')) return null;
   if (source.type !== 'BANK' && source.type !== 'CUSTOM') return null;
   const parsed = participants.map(parseParticipant);
   if (parsed.some((p) => p === null)) return null;
   return {
     hostParticipantId,
-    source: { type: source.type, ...(source.topicId !== undefined && { topicId: source.topicId }) },
+    source: {
+      type: source.type,
+      ...(source.topicId !== undefined && { topicId: source.topicId }),
+      ...(source.customTopicId !== undefined && { customTopicId: source.customTopicId }),
+      ...(source.topicName !== undefined && { topicName: source.topicName }),
+    },
     questionCount,
     rated,
     expiresAt,
@@ -97,7 +104,18 @@ export function parseRoomMatchStarted(value: unknown): RoomMatchStartedPayload |
   if (parsed.some((p) => p === null)) return null;
   const topic = parseTopic(value.topic);
   if (topic === null) return null;
-  return { roomId, matchId, mode, participants: parsed as Participant[], questionCount, firstQuestionAt, ...(topic && { topic }) };
+  const questionSource = value.questionSource;
+  if (questionSource !== undefined && !isQuestionSource(questionSource)) return null;
+  return {
+    roomId,
+    matchId,
+    mode,
+    participants: parsed as Participant[],
+    questionCount,
+    firstQuestionAt,
+    ...(topic && { topic }),
+    ...(questionSource !== undefined && { questionSource }),
+  };
 }
 
 export function parseRoomClosed(value: unknown): RoomClosedPayload | null {

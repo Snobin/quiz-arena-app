@@ -119,8 +119,11 @@ export type ServerMessage<P = unknown> = {
 
 export type Participant = { participantId: string; displayName: string; kind: ParticipantKind };
 
-/** The Topic Duel topic (Story 4.2); absent in Quick Match. */
-export type TopicInfo = { topicId: string; name: string; subjectName: string };
+/**
+ * The Topic Duel or Battle Room topic (Story 4.2); absent in Quick Match. A custom topic (Story 6.5) has only a `name`: no
+ * bank topic id and no subject.
+ */
+export type TopicInfo = { topicId?: string; name: string; subjectName?: string };
 
 export type MatchFoundPayload = {
   matchId: string;
@@ -137,8 +140,11 @@ export type MatchmakingFailedPayload = { reason: string };
 
 export type ErrorPayload = { code: ErrorCode; matchId?: string; roomId?: string };
 
-/** A Battle Room's question source (Story 5.1): tagged, so Epic 6 can add `CUSTOM`. Only `BANK` is accepted today. */
-export type RoomSource = { type: QuestionSource; topicId?: string };
+/**
+ * A Battle Room's question source (Story 5.1): tagged. `BANK` names a bank `topicId`; `CUSTOM` (Story 6.5) names the host's
+ * `customTopicId` and carries its `topicName` as the host's client sent it.
+ */
+export type RoomSource = { type: QuestionSource; topicId?: string; customTopicId?: string; topicName?: string };
 
 /** The lobby as `ROOM_JOINED` and `ROOM_LOBBY_UPDATED` show it. Types only: the parsers are in the lazy rooms chunk (`screens/rooms/roomProtocol.ts`). */
 export type RoomView = {
@@ -176,6 +182,8 @@ export type RoomMatchStartedPayload = {
   questionCount: number;
   topic?: TopicInfo;
   firstQuestionAt: string;
+  /** `CUSTOM` for a room on the host's own topic; absent from an older server (read as `BANK`). */
+  questionSource?: QuestionSource;
 };
 
 /**
@@ -280,6 +288,8 @@ export type SnapshotPayload = {
   topic?: TopicInfo;
   /** The match's mode; null from an older server. A reloaded client needs it to tell a two-player Battle Room from a 1v1. */
   mode: MatchMode | null;
+  /** `CUSTOM` for a Battle Room on a custom topic; absent (null) otherwise. */
+  questionSource: QuestionSource | null;
 };
 
 /** PARTICIPANT_FORFEITED (broadcast): a participant left the match (grace ran out, or Leave). */
@@ -414,8 +424,14 @@ export function parseParticipant(value: unknown): Participant | null {
 /** The optional `topic`: undefined when absent, null when malformed. */
 export function parseTopic(value: unknown): TopicInfo | undefined | null {
   if (value === undefined) return undefined;
-  if (!isObject(value) || !isString(value.topicId) || !isString(value.name) || !isString(value.subjectName)) return null;
-  return { topicId: value.topicId, name: value.name, subjectName: value.subjectName };
+  if (!isObject(value) || !isString(value.name)) return null;
+  if (value.topicId !== undefined && !isString(value.topicId)) return null;
+  if (value.subjectName !== undefined && !isString(value.subjectName)) return null;
+  return {
+    ...(value.topicId !== undefined && { topicId: value.topicId }),
+    name: value.name,
+    ...(value.subjectName !== undefined && { subjectName: value.subjectName }),
+  };
 }
 
 export function parseMatchFound(value: unknown): MatchFoundPayload | null {
@@ -570,6 +586,8 @@ export function parseSnapshot(value: unknown): SnapshotPayload | null {
   if (topic === null) return null;
   if (value.mode !== undefined && !isMatchMode(value.mode)) return null;
   const mode = value.mode === undefined ? null : value.mode;
+  if (value.questionSource !== undefined && !isQuestionSource(value.questionSource)) return null;
+  const questionSource = value.questionSource === undefined ? null : value.questionSource;
   return {
     phase,
     questionIndex,
@@ -585,6 +603,7 @@ export function parseSnapshot(value: unknown): SnapshotPayload | null {
     myAnswer,
     selfParticipantId,
     mode,
+    questionSource,
     ...(topic && { topic }),
   };
 }

@@ -45,7 +45,8 @@ function storeRoom(selfIndex: number, o: { forfeited?: number; source?: 'BANK' |
     count: 2,
   }).payload as Record<string, unknown>;
   raw.room = { roomId: 'room-1', hostParticipantId: 'p0' };
-  raw.topic = { topicId: 't1', name: 'Kerala Renaissance', subjectName: 'History' };
+  // A room on the host's own topic has a name only (Story 6.5b).
+  raw.topic = o.source === 'CUSTOM' ? { name: 'Renaissance' } : { topicId: 't1', name: 'Kerala Renaissance', subjectName: 'History' };
   lastResult.save({ matchId: MATCH_ID, selfId: ids[selfIndex]!, payload: parseMatchEnded(raw)!, guest: false });
 }
 
@@ -352,5 +353,41 @@ describe('Battle Room play again', () => {
     const bar = await screen.findByTestId('results-actions');
     expect(within(bar).getAllByRole('button')).toHaveLength(1);
     expect(screen.queryByTestId('room-join-new')).toBeNull();
+  });
+
+  describe('on a custom topic (Story 6.5b)', () => {
+    it('labels the result "Own · unrated" and never asks for a rating change or shows one', async () => {
+      const fetchMatch = vi.fn(() => rated(11)());
+      await open(2, fetchMatch, { source: 'CUSTOM' });
+      await screen.findByTestId('breakdown');
+      expect(screen.getAllByText(/Renaissance · Own · unrated/).length).toBeGreaterThan(0);
+      expect(fetchMatch).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('rating-delta')).toBeNull();
+      expect(screen.queryByText(/updating/i)).toBeNull();
+    });
+
+    it('a breakdown row shows the explanation with no source line, report link or Practise link', async () => {
+      await open(2, rated(11), { source: 'CUSTOM' });
+      const rows = await screen.findAllByTestId('breakdown-row');
+      act(() => within(rows[0]!).getAllByRole('button')[0]!.click());
+      // The correct row opens on tap and the wrong one is open already: both show the explanation.
+      await waitFor(() => expect(screen.getAllByTestId('reveal-details').length).toBe(2));
+      expect(screen.queryByTestId('attribution')).toBeNull();
+      expect(screen.queryByTestId('report-link')).toBeNull();
+      expect(screen.queryByText(/Practise this topic/i)).toBeNull();
+    });
+
+    it('after the window the host sees New room, which opens a blank Create (the payload names no topic id)', async () => {
+      stubCore(rated(11));
+      storeRoom(0, { source: 'CUSTOM' });
+      ageStored(61_000);
+      session.start();
+      await session.ready();
+      renderApp('/results');
+      const button = await screen.findByTestId('room-new-room');
+      act(() => button.click());
+      await waitFor(() => expect(window.location.pathname).toBe('/rooms/create'));
+      expect(window.location.search).toBe('?count=2');
+    });
   });
 });

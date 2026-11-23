@@ -260,7 +260,7 @@ describe('importing', () => {
     expect(screen.queryByTestId('usage-meter')).toBeNull();
     expect(screen.getByRole('button', { name: 'Use in Battle Room' })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByRole('button', { name: 'Practice' })).not.toHaveAttribute('aria-disabled');
-    expect(screen.getByText('Battle Room arrives soon')).toBeInTheDocument();
+    expect(screen.getByText('A room needs at least 5 questions')).toBeInTheDocument();
     expect(window.sessionStorage.getItem('minnal.customImportDraft')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Import another' }));

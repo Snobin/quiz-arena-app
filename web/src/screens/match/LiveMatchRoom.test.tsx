@@ -47,9 +47,17 @@ function renderApp(path: string) {
 }
 
 /** The room's match as the room client seeds it, on an open match socket; `firstQuestionAt` in ms since epoch. */
-async function roomMatch(firstQuestionAt: number, clockOffsetMs = 0) {
+async function roomMatch(firstQuestionAt: number, clockOffsetMs = 0, custom = false) {
   startRoomMatch(
-    { matchId: MATCH, mode: 'BATTLE_ROOM', participants: people, questionCount: 5, questionSource: 'BANK', selfParticipantId: SELF, topic: { topicId: 't', name: 'Kerala History', subjectName: 'History' } },
+    {
+      matchId: MATCH,
+      mode: 'BATTLE_ROOM',
+      participants: people,
+      questionCount: 5,
+      questionSource: custom ? 'CUSTOM' : 'BANK',
+      selfParticipantId: SELF,
+      topic: custom ? { name: 'Renaissance' } : { topicId: 't', name: 'Kerala History', subjectName: 'History' },
+    },
     new Date(firstQuestionAt).toISOString(),
     clockOffsetMs,
   );
@@ -175,6 +183,29 @@ describe('the Battle Room live screen (Story 5.4)', () => {
     expect(document.body.querySelector('[aria-live] [data-testid="room-standings"]')).toBeNull();
     // Nobody is announced as having answered: forty-nine of those would bury everything.
     expect(useAnnouncements.getState().polite.text).not.toContain('answered');
+  });
+
+  it('a custom-topic room reads "Battle Room · <topic>" with the own tag, and its reveal has no source line', async () => {
+    await roomMatch(Date.now() - 1_000, 0, true);
+    renderApp('/match');
+    open(0);
+    await screen.findByTestId('progress');
+    const header = screen.getByTestId('room-custom-header');
+    expect(header).toHaveTextContent('Battle Room · Renaissance');
+    expect(within(header).getByTestId('own-tag')).toHaveTextContent('Own');
+    expect(screen.getByTestId('mode-label')).toHaveTextContent('Battle Room · Renaissance');
+    reveal(0, [100, 100, 100, 100, 100]);
+    await screen.findByTestId('reveal-details');
+    expect(screen.queryByTestId('attribution')).toBeNull();
+    expect(screen.queryByTestId('report-link')).toBeNull();
+  });
+
+  it('a bank room has no custom header', async () => {
+    await roomMatch(Date.now() - 1_000);
+    renderApp('/match');
+    open(0);
+    await screen.findByTestId('progress');
+    expect(screen.queryByTestId('room-custom-header')).toBeNull();
   });
 
   it('after a reveal the standings re-rank by total, and the opponents are not named under the options', async () => {

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { clearRecentRooms, loadRecentRooms, recentRoomsKey, saveRecentRoom, type RecentRoom } from './recentRooms.ts';
+import { clearRecentRooms, loadRecentRooms, recentRoomsKey, saveRecentRoom, sourceId, type RecentRoom } from './recentRooms.ts';
 
 const entry = (topicId: string, hostedAt = '2026-11-11T10:00:00.000Z', questionCount = 10): RecentRoom => ({
   source: { type: 'BANK', topicId },
@@ -14,14 +14,14 @@ beforeEach(() => localStorage.clear());
 describe('recent rooms', () => {
   it('keeps the newest first, at most 3', () => {
     for (const id of ['a', 'b', 'c', 'd']) saveRecentRoom('u1', entry(id));
-    expect(loadRecentRooms('u1').map((r) => r.source.topicId)).toEqual(['d', 'c', 'b']);
+    expect(loadRecentRooms('u1').map((r) => sourceId(r.source))).toEqual(['d', 'c', 'b']);
   });
 
   it('replaces an entry with the same source and moves it to the front', () => {
     saveRecentRoom('u1', entry('a', '2026-11-01T10:00:00.000Z', 10));
     saveRecentRoom('u1', entry('b'));
     const list = saveRecentRoom('u1', entry('a', '2026-11-12T10:00:00.000Z', 20));
-    expect(list.map((r) => r.source.topicId)).toEqual(['a', 'b']);
+    expect(list.map((r) => sourceId(r.source))).toEqual(['a', 'b']);
     expect(list[0]!.questionCount).toBe(20);
   });
 
