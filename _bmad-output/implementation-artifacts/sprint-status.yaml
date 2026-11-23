@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-11-2026 09:40
-last_updated: '11-23-2026 16:00'
+last_updated: '11-23-2026 23:19'
 project: quiz-arena
 project_key: NOKEY
 tracking_system: file-system
@@ -97,9 +97,9 @@ development_status:
   epic-7: in-progress
   7-1-result-share-card: done
   7-2-install-prompt: done
-  7-3-launch-metrics: in-progress
-  7-4-launch-readiness: backlog
-  epic-7-retrospective: optional
+  7-3-launch-metrics: done
+  7-4-launch-readiness: done
+  epic-7-retrospective: done
 action_items:
   - id: "epic-2-retro-item-1-a1-answer-the-dpdp-erasure-question-and"
     epic: 2
@@ -242,7 +242,7 @@ action_items:
     epic: 5
     action: "Split roomClient.ts before Epic 6 adds the custom source"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-21.md"
   - id: "epic-5-retro-item-22-reconcile-epic-text-on-hostparticipantid"
     epic: 5
@@ -322,14 +322,14 @@ action_items:
     action: "Remove the epic 6 duplication: one 5-question room constant per side,
       one custom-question language mapper in core, one own-tag component"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-11-23.md"
   - id: "epic-6-retro-item-34-add-a-room-live-screen-test-with-a-singl"
     epic: 6
     action: "Add a room live-screen test with a single-language custom question asserting
       no EN tag and the written lang"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-11-23.md"
   - id: "epic-6-retro-item-35-manual-playtest-on-a-real-phone-import-r"
     epic: 6
@@ -374,3 +374,67 @@ action_items:
     owner: "owner"
     status: open
     ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-11-23.md"
+  - id: "epic-7-retro-item-41-make-the-web-test-fixtures-date-relative"
+    epic: 7
+    action: "Make the web test fixtures date-relative, or pin the system time, in
+      every fake-Date test (LiveMatchScreen.test.tsx and others)"
+    owner: "developer"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-11-23.md"
+  - id: "epic-7-retro-item-42-stabilise-the-three-flaky-tests-uploadpa"
+    epic: 7
+    action: "Stabilise the three flaky tests: UploadPage focus, LiveMatchScreen lazy
+      results chunk, RoomMatchFlowTest custom-topic case"
+    owner: "developer"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-11-23.md"
+  - id: "epic-7-retro-item-43-decide-whether-stories-may-spawn-reviewe"
+    epic: 7
+    action: "Decide whether stories may spawn reviewer subagents, and run one independent
+      review over the epic 6 and epic 7 ranges before launch"
+    owner: "owner and developer"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-11-23.md"
+  - id: "epic-7-retro-item-44-make-deploy-backup-sh-and-restore-drill"
+    epic: 7
+    action: "Make deploy/backup.sh and restore-drill.sh parse .env safely instead
+      of sourcing it, and test a value with spaces"
+    owner: "developer"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-11-23.md"
+  - id: "epic-7-retro-item-45-reconcile-epics-md-stories-7-1-to-7-4-wi"
+    epic: 7
+    action: "Reconcile epics.md Stories 7.1 to 7.4 with the as-built (story splits,
+      session start at first play, tag renames, no Lighthouse, backup premise, Health
+      panel gaps)"
+    owner: "owner"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-11-23.md"
+  - id: "epic-7-retro-item-46-playtest-epic-7-on-a-real-phone-share-to"
+    epic: 7
+    action: "Playtest Epic 7 on a real phone: share to WhatsApp, Android install,
+      /q link, 320 px and 200 percent text"
+    owner: "owner"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-11-23.md"
+  - id: "epic-7-retro-item-47-after-the-first-real-push-check-the-dash"
+    epic: 7
+    action: "After the first real push: check the dashboard metric names in Explore,
+      import dashboards and alerts, force each alert once and log it"
+    owner: "owner"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-11-23.md"
+  - id: "epic-7-retro-item-48-build-story-1-2-part-2-production-deploy"
+    epic: 7
+    action: "Build Story 1.2 part 2 (production deploy), the prerequisite for most
+      launch-checklist items"
+    owner: "owner and developer"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-11-23.md"
+  - id: "epic-7-retro-item-49-drop-redundant-publishpercentiles-calls"
+    epic: 7
+    action: "Drop redundant publishPercentiles calls once MatchLoadTest reads histogram
+      buckets"
+    owner: "developer"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-11-23.md"
