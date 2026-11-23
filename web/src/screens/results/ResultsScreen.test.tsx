@@ -51,6 +51,10 @@ vi.mock('../../motion/flashScheduler.ts', () => ({
   },
 }));
 
+// The share chunk is exercised in `share/shareResult.test.ts`; here only the button and its notes are under test.
+const shareResultMock = vi.hoisted(() => vi.fn());
+vi.mock('../../share/shareResult.ts', () => ({ shareResult: shareResultMock }));
+
 function runFlashes(): number {
   let ran = 0;
   act(() => {
@@ -552,7 +556,7 @@ describe('rematch (Story 1.10 part 2)', () => {
   it('the bar has Rematch (primary) and Home (secondary); the minimal view keeps Home only', async () => {
     await liveResults(LOSS);
     const bar = screen.getByTestId('results-actions');
-    expect(within(bar).getAllByRole('button').map((b) => b.textContent)).toEqual(['Rematch', 'Home']);
+    expect(within(bar).getAllByRole('button').map((b) => b.textContent)).toEqual(['Rematch', 'Home', 'Share']);
     expect(within(bar).getByRole('button', { name: 'Home' }).className).toContain('border-ink');
     cleanup();
     resetRealtime();
@@ -740,5 +744,86 @@ describe('Topic Duel results (Story 4.2)', () => {
     const note = await screen.findByTestId('rematch-note');
     expect(note).toHaveTextContent('Rematch unavailable · topic too small now');
     expect(within(note).getByRole('link', { name: 'Choose a topic' })).toHaveAttribute('href', '/play/topics?for=duel');
+  });
+});
+
+describe('Share (Story 7.1)', () => {
+  const LOSS = { self: { score: 2980, placement: 2 }, opponent: { score: 3140, placement: 1 } };
+
+  beforeEach(() => {
+    shareResultMock.mockReset();
+  });
+
+  it('sits last in a 1v1 bar after Rematch and Home, and shares this match', async () => {
+    shareResultMock.mockResolvedValue({ outcome: 'shared' });
+    const m = await liveResults(LOSS);
+    const bar = await screen.findByTestId('results-actions');
+    const labels = within(bar).getAllByRole('button').map((b) => b.textContent);
+    expect(labels).toEqual(['Rematch', 'Home', 'Share']);
+    fireEvent.click(within(bar).getByTestId('share-button'));
+    await waitFor(() => expect(shareResultMock).toHaveBeenCalledTimes(1));
+    const [payload, selfId] = shareResultMock.mock.calls[0]!;
+    expect(payload.matchId).toBe(m.matchId);
+    expect(selfId).toBe(m.self);
+    expect(screen.queryByTestId('share-note')).toBeNull();
+  });
+
+  it('reads "…" while the card renders and ignores taps, then says the image was saved, announced once', async () => {
+    let finish!: (value: unknown) => void;
+    shareResultMock.mockImplementation(() => new Promise((resolve) => (finish = resolve)));
+    await liveResults(LOSS);
+    fireEvent.click(await screen.findByTestId('share-button'));
+    await waitFor(() => expect(screen.getByTestId('share-button')).toHaveTextContent('…'));
+    fireEvent.click(screen.getByTestId('share-button'));
+    expect(shareResultMock).toHaveBeenCalledTimes(1);
+    await act(async () => finish({ outcome: 'saved' }));
+    expect(await screen.findByTestId('share-note')).toHaveTextContent('Image saved · link copied');
+    expect(screen.getByTestId('share-button')).toHaveTextContent('Share');
+    expect(useAnnouncements.getState().polite.text.trim()).toBe('Image saved · link copied');
+  });
+
+  it('shows the link as selectable text when the clipboard was refused', async () => {
+    shareResultMock.mockResolvedValue({ outcome: 'savedLink', url: 'https://minnal.example/q' });
+    await liveResults(LOSS);
+    fireEvent.click(await screen.findByTestId('share-button'));
+    expect(await screen.findByTestId('share-note')).toHaveTextContent('Image saved · link: https://minnal.example/q');
+  });
+
+  it('a cancelled share sheet shows nothing, and a failure says so', async () => {
+    shareResultMock.mockResolvedValueOnce({ outcome: 'cancelled' });
+    await liveResults(LOSS);
+    fireEvent.click(await screen.findByTestId('share-button'));
+    await waitFor(() => expect(shareResultMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTestId('share-button')).toHaveTextContent('Share'));
+    expect(screen.queryByTestId('share-note')).toBeNull();
+    shareResultMock.mockRejectedValueOnce(new Error('chunk'));
+    fireEvent.click(screen.getByTestId('share-button'));
+    expect(await screen.findByTestId('share-note')).toHaveTextContent("Couldn't share. Try again.");
+  });
+
+  it('is aria-disabled with the offline caption while offline, and sends nothing', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    await liveResults(LOSS);
+    const button = await screen.findByTestId('share-button');
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText('Sharing needs a connection')).toBeInTheDocument();
+    fireEvent.click(button);
+    expect(shareResultMock).not.toHaveBeenCalled();
+  });
+
+  it('is in the Battle Room player bar after Home, and a guest who signed in after her match still has it', async () => {
+    await liveResults({ mode: 'BATTLE_ROOM' });
+    const bar = await screen.findByTestId('results-actions');
+    expect(within(bar).getAllByRole('button').map((b) => b.textContent)).toEqual(['Home', 'Share']);
+  });
+
+  it('the minimal view, with no MATCH_ENDED yet, has no Share', async () => {
+    const m = await found();
+    act(() => socket().deliverTopic(m.matchId, questionStarted(m.matchId, { seq: 1, questionIndex: 2, startedAt: Date.now() })));
+    act(() => void leaveMatch());
+    act(() => socket().deliverTopic(m.matchId, participantForfeited(m.matchId, 2, m.self, 2)));
+    renderApp('/results');
+    expect(screen.getByTestId('results-pending')).toBeInTheDocument();
+    expect(screen.queryByTestId('share-button')).toBeNull();
   });
 });

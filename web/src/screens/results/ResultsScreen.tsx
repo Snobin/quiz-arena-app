@@ -25,6 +25,7 @@ import { Podium } from './Podium.tsx';
 import { RematchCard } from './RematchCard.tsx';
 import { ResultsBand } from './ResultsBand.tsx';
 import { RoomStandings } from './RoomStandings.tsx';
+import { useShareCard, type ShareSlot } from './ShareButton.tsx';
 import { WinTakeover } from './WinTakeover.tsx';
 import { createPath } from '../rooms/pickerReturn.ts';
 import { saveRecentRoom } from '../rooms/recentRooms.ts';
@@ -180,6 +181,8 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
     return entry?.matchId === matchId ? entry : null;
   });
   const answers = full.payload.breakdown.find((b) => b.participantId === full.selfId)?.answers ?? [];
+  // Share (Story 7.1): the card is drawn from this MATCH_ENDED, in the lazy share chunk, only when she taps.
+  const share = useShareCard(full.payload, full.selfId);
 
   return (
     <>
@@ -245,11 +248,11 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
             </ol>
           </main>
           {room ? (
-            <RoomActions payload={full.payload} selfId={full.selfId} endedAt={kept?.endedAt ?? null} stored={kept?.succeeded ?? null} />
+            <RoomActions payload={full.payload} selfId={full.selfId} endedAt={kept?.endedAt ?? null} stored={kept?.succeeded ?? null} share={share} />
           ) : signedInAfterGuest ? (
-            <PlayAgainActions />
+            <PlayAgainActions share={share} />
           ) : (
-            <RematchActions matchId={matchId} rivalName={view.rival?.displayName ?? ''} />
+            <RematchActions matchId={matchId} rivalName={view.rival?.displayName ?? ''} share={share} />
           )}
         </PageColumn>
       </div>
@@ -276,11 +279,13 @@ function RoomActions({
   selfId,
   endedAt,
   stored,
+  share,
 }: {
   payload: MatchEndedPayload;
   selfId: string;
   endedAt: number | null;
   stored: RoomSucceededPayload | null;
+  share: ShareSlot;
 }) {
   const { t } = useTranslation();
   const isHost = payload.room?.hostParticipantId === selfId;
@@ -297,14 +302,17 @@ function RoomActions({
         custom={payload.questionSource === 'CUSTOM'}
         count={payload.questions.length}
         endedAt={endedAt}
+        shareNote={share.note}
       >
         {home}
+        {share.button}
       </HostActions>
     );
   }
   return (
-    <PlayerActions matchId={payload.matchId} stored={stored}>
+    <PlayerActions matchId={payload.matchId} stored={stored} shareNote={share.note}>
       {home}
+      {share.button}
     </PlayerActions>
   );
 }
@@ -316,6 +324,7 @@ function HostActions({
   custom,
   count,
   endedAt,
+  shareNote,
   children,
 }: {
   roomId: string;
@@ -324,6 +333,7 @@ function HostActions({
   custom: boolean;
   count: number;
   endedAt: number | null;
+  shareNote: ReactNode;
   children: ReactNode;
 }) {
   const { t } = useTranslation();
@@ -384,13 +394,22 @@ function HostActions({
   };
 
   return (
-    <ActionBar note={error ? <RoomError error={error} scope="create" returnTo="/results" /> : null}>
+    <ActionBar
+      note={
+        error || shareNote ? (
+          <>
+            {error ? <RoomError error={error} scope="create" returnTo="/results" /> : null}
+            {shareNote}
+          </>
+        ) : null
+      }
+    >
       {open ? (
-        <Button data-testid="room-play-again" aria-busy={sending ? true : undefined} onClick={playAgain}>
+        <Button data-testid="room-play-again" style={{ flexGrow: 2 }} aria-busy={sending ? true : undefined} onClick={playAgain}>
           {t('results.playAgain')}
         </Button>
       ) : (
-        <Button data-testid="room-new-room" onClick={() => navigate(createPath(custom ? undefined : topic.topicId, count))}>
+        <Button data-testid="room-new-room" style={{ flexGrow: 2 }} onClick={() => navigate(createPath(custom ? undefined : topic.topicId, count))}>
           {t('room.playAgain.newRoom')}
         </Button>
       )}
@@ -400,7 +419,17 @@ function HostActions({
 }
 
 /** A player's bar: Home, plus "Join <host>'s new room" once ROOM_SUCCEEDED has come (or was stored before a reload). */
-function PlayerActions({ matchId, stored, children }: { matchId: string; stored: RoomSucceededPayload | null; children: ReactNode }) {
+function PlayerActions({
+  matchId,
+  stored,
+  shareNote,
+  children,
+}: {
+  matchId: string;
+  stored: RoomSucceededPayload | null;
+  shareNote: ReactNode;
+  children: ReactNode;
+}) {
   const { t } = useTranslation();
   const live = useLiveGame((s) => s.succeeded);
   const succeeded = (live?.matchId === matchId ? live.payload : null) ?? stored;
@@ -437,7 +466,16 @@ function PlayerActions({ matchId, stored, children }: { matchId: string; stored:
   };
 
   return (
-    <ActionBar note={error && succeeded ? <JoinError id="room-join-error" error={error} typed={succeeded.code} /> : null}>
+    <ActionBar
+      note={
+        (error && succeeded) || shareNote ? (
+          <>
+            {error && succeeded ? <JoinError id="room-join-error" error={error} typed={succeeded.code} /> : null}
+            {shareNote}
+          </>
+        ) : null
+      }
+    >
       {succeeded ? (
         <Button data-testid="room-join-new" aria-busy={joining ? true : undefined} onClick={join}>
           {t('room.playAgain.join', { host: succeeded.hostDisplayName })}
@@ -453,16 +491,17 @@ function PlayerActions({ matchId, stored, children }: { matchId: string; stored:
  * window ended with the guest session, so there is no Rematch. "Play again" starts a new Quick Match as
  * her registered self; Home stays.
  */
-function PlayAgainActions() {
+function PlayAgainActions({ share }: { share: ShareSlot }) {
   const { t } = useTranslation();
   return (
-    <ActionBar>
-      <Button data-testid="play-again-button" onClick={() => navigate('/matchmaking')}>
+    <ActionBar note={share.note}>
+      <Button data-testid="play-again-button" style={{ flexGrow: 2 }} onClick={() => navigate('/matchmaking')}>
         {t('results.playAgain')}
       </Button>
       <Button variant="secondary" onClick={() => navigate('/')}>
         {t('common.home')}
       </Button>
+      {share.button}
     </ActionBar>
   );
 }
@@ -477,7 +516,7 @@ function PlayAgainActions() {
  * Home (secondary) is always there. Home, or leaving `/results` any other way, withdraws a pending
  * request.
  */
-function RematchActions({ matchId, rivalName }: { matchId: string; rivalName: string }) {
+function RematchActions({ matchId, rivalName, share }: { matchId: string; rivalName: string; share: ShareSlot }) {
   const { t } = useTranslation();
   const stored = useLiveGame((s) => s.rematch);
   const clockOffsetMs = useLiveGame((s) => s.clockOffsetMs);
@@ -525,7 +564,9 @@ function RematchActions({ matchId, rivalName }: { matchId: string; rivalName: st
   return (
     <ActionBar
       note={
-        note ? (
+        note || share.note ? (
+          <>
+            {note ? (
           <p data-testid="rematch-note" className="text-body text-muted">
             {note}
             {rematch?.note === 'topicUnavailable' ? (
@@ -537,6 +578,9 @@ function RematchActions({ matchId, rivalName }: { matchId: string; rivalName: st
               </>
             ) : null}
           </p>
+            ) : null}
+            {share.note}
+          </>
         ) : null
       }
     >
@@ -548,13 +592,14 @@ function RematchActions({ matchId, rivalName }: { matchId: string; rivalName: st
           onCancel={() => cancelRematch()}
         />
       ) : (
-        <Button data-testid="rematch-button" aria-busy={state === 'starting' ? true : undefined} onClick={onRematch}>
+        <Button data-testid="rematch-button" style={{ flexGrow: 2 }} aria-busy={state === 'starting' ? true : undefined} onClick={onRematch}>
           {incoming ? t('rematch.accept') : t('rematch.request')}
         </Button>
       )}
       <Button variant="secondary" onClick={onHome}>
         {t('common.home')}
       </Button>
+      {share.button}
     </ActionBar>
   );
 }
