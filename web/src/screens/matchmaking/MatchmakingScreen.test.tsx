@@ -91,7 +91,7 @@ describe('searching', () => {
   it('joins on mount and shows the heading, an animated indicator and a 48px Cancel; no tab bar', async () => {
     await searching();
     expect(heading()).toHaveTextContent('Finding an opponent…');
-    expect(document.title).toBe('Matchmaking · Minnal');
+    await waitFor(() => expect(document.title).toBe('Matchmaking · Minnal'));
     expect(screen.getByTestId('matchmaking-indicator')).toHaveAttribute('aria-hidden', 'true');
     expect(screen.queryByTestId('matchmaking-elapsed')).toBeNull();
     const cancel = screen.getByRole('button', { name: 'Cancel' });
@@ -117,7 +117,7 @@ describe('searching', () => {
     await waitFor(() => expect(quickMatch).not.toHaveAttribute('aria-disabled'));
     await user.click(quickMatch);
     expect(window.location.pathname).toBe('/matchmaking');
-    expect(heading()).toHaveFocus();
+    await waitFor(() => expect(heading()).toHaveFocus());
     await waitFor(() => expect(clients).toHaveLength(1));
     expect(socket().authorization).toMatch(/^Bearer .+\..+\..+$/);
   });
@@ -143,7 +143,7 @@ describe('found', () => {
     const strip = screen.getByTestId('score-strip');
     expect(strip).toHaveTextContent('Minnal Bot');
     expect(within(strip).getByTestId('bot-badge')).toBeInTheDocument();
-    expect(document.title).toBe('Match · Minnal');
+    await waitFor(() => expect(document.title).toBe('Match · Minnal'));
     expect(screen.queryByRole('navigation')).toBeNull();
   });
 
@@ -351,7 +351,7 @@ describe('/match with no match', () => {
     renderApp('/match');
     expect(heading()).toHaveTextContent('Match');
     expect(screen.getByText("There's no match on this screen.")).toBeInTheDocument();
-    expect(document.title).toBe('Match · Minnal');
+    await waitFor(() => expect(document.title).toBe('Match · Minnal'));
     expect(screen.queryByRole('navigation')).toBeNull();
     await user.click(screen.getByRole('link', { name: 'Home' }));
     expect(window.location.pathname).toBe('/');

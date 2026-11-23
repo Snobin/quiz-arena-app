@@ -53,7 +53,7 @@ describe('ReportQuestion', () => {
     const link = screen.getByTestId('report-link');
     expect(link.className).toContain('min-h-target-min');
     const note = await openNote();
-    expect(document.activeElement).toBe(note);
+    await waitFor(() => expect(document.activeElement).toBe(note));
     fireEvent.change(note, { target: { value: 'wrong answer' } });
     expect(screen.getByTestId('report-count').textContent).toBe('12 / 500');
     expect(note.maxLength).toBe(500);
@@ -63,7 +63,7 @@ describe('ReportQuestion', () => {
     const [url, init] = mocks.apiFetch.mock.calls[0]!;
     expect(String(url)).toBe('/api/core/v1/questions/q-1/versions/2/reports');
     expect(JSON.parse(String(init.body))).toEqual({ note: 'wrong answer', surface: 'RESULTS', matchId: 'm-1' });
-    expect(document.activeElement).toBe(thanks);
+    await waitFor(() => expect(document.activeElement).toBe(thanks));
     expect(useAnnouncements.getState().polite.text).toContain('Thanks, we got your report');
     expect(screen.queryByTestId('report-link')).toBeNull();
     expect(screen.queryByLabelText("What's wrong? (optional)")).toBeNull();
@@ -122,7 +122,7 @@ describe('ReportQuestion', () => {
     await openNote();
     fireEvent.click(screen.getByText('Cancel'));
     await waitFor(() => expect(screen.queryByTestId('report-note')).toBeNull());
-    expect(document.activeElement).toBe(screen.getByTestId('report-link'));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId('report-link')));
   });
 
   it('live reveal: the tap only marks (nothing sent), announces it politely, and shows the marked line', async () => {

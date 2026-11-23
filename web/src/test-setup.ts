@@ -7,9 +7,9 @@ afterEach(() => {
 });
 
 // Screens are React.lazy chunks: the first visit in a worker loads and transforms them on demand,
-// which can pass Testing Library's 1 s default when ~70 files run in parallel (or with coverage on).
+// which can pass Testing Library's 1 s default when ~70 files run in parallel (or with coverage on). Measured on 18 cores: with 5 s, about one full run in two had a cold-chunk flake; 15 s is only a ceiling, findBy*/waitFor still return as soon as the element appears.
 // findBy*/waitFor still return as soon as the element appears; this only raises the ceiling.
-configure({ asyncUtilTimeout: 5000 });
+configure({ asyncUtilTimeout: 15000 });
 
 // jsdom does not implement scrolling; the shell restores scroll offsets with window.scrollTo.
 window.scrollTo = (() => {}) as typeof window.scrollTo;

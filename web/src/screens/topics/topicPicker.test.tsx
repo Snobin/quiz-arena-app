@@ -123,7 +123,7 @@ describe('topic picker', () => {
     expect(within(row).getByText('1,240 questions')).toHaveAttribute('lang', 'en');
     expect(within(row).getByText('Kerala History')).toHaveAttribute('lang', 'en');
     expect(screen.getByText('കേരളത്തിലെ നദികൾ')).toHaveAttribute('lang', 'ml');
-    expect(document.title).toBe('Choose a topic · Minnal');
+    await waitFor(() => expect(document.title).toBe('Choose a topic · Minnal'));
     // The tab bar stays.
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
@@ -159,7 +159,7 @@ describe('topic picker', () => {
     fireEvent.change(search, { target: { value: 'nothing here' } });
     expect(await screen.findByText("No topics match 'nothing here'")).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Clear search' }));
-    expect(search).toHaveFocus();
+    await waitFor(() => expect(search).toHaveFocus());
     expect(search).toHaveValue('');
     expect(await screen.findByRole('button', { name: /Kerala History/ })).toBeInTheDocument();
   });

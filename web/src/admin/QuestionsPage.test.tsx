@@ -246,7 +246,7 @@ describe('Questions page', () => {
     serve(() => page([question(1)]));
     renderPage();
     await screen.findByRole('table');
-    expect(document.title).toBe('Questions · Admin · Minnal');
+    await waitFor(() => expect(document.title).toBe('Questions · Admin · Minnal'));
   });
 
   it('replaces a stale page in the URL with the last valid page', async () => {

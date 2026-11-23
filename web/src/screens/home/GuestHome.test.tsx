@@ -64,7 +64,7 @@ describe('guest Home structure', () => {
   it('one ink card, one nudge before 3 locked rows, no rank or ratings, no volt', async () => {
     await homeReady();
     expect(screen.getByRole('heading', { level: 1, name: 'Playing as guest' })).toBeInTheDocument();
-    expect(document.title).toBe('Home · Minnal');
+    await waitFor(() => expect(document.title).toBe('Home · Minnal'));
 
     const main = screen.getByRole('main');
     // The Quick Match card is the only filled ink (band) element.
@@ -126,7 +126,7 @@ describe('Quick Match', () => {
     await user.click(quickMatch());
     expect(window.location.pathname).toBe('/matchmaking');
     expect(await screen.findByRole('heading', { level: 1, name: 'Finding an opponent…' })).toHaveFocus();
-    expect(document.title).toBe('Matchmaking · Minnal');
+    await waitFor(() => expect(document.title).toBe('Matchmaking · Minnal'));
     expect(screen.queryByRole('navigation')).toBeNull();
     await waitFor(() => expect(sockets).toHaveLength(1));
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
@@ -229,7 +229,7 @@ describe('Sign-in prompt', () => {
     expect(new URLSearchParams(window.location.search).get('returnTo')).toBe('/');
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(await screen.findByRole('heading', { level: 1, name: 'Sign in to Minnal' })).toHaveFocus();
-    expect(document.title).toBe('Sign in · Minnal');
+    await waitFor(() => expect(document.title).toBe('Sign in · Minnal'));
     expect(screen.getByText(/need a free account/)).toBeInTheDocument();
     const google = screen.getByRole('button', { name: 'Continue with Google' });
     expect(google).not.toHaveAttribute('aria-disabled');
@@ -263,7 +263,7 @@ describe('Sign-in prompt', () => {
     await user.click(screen.getByRole('link', { name: ROW_NAMES[2] }));
     await user.click(screen.getByRole('link', { name: 'Rooms' }));
     await user.click(screen.getByRole('link', { name: 'Play' }));
-    expect(screen.getByRole('heading', { level: 1, name: 'Playing as guest' })).toHaveFocus();
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Playing as guest' })).toHaveFocus());
   });
 
   it('on a direct load, Back navigates to returnTo', async () => {

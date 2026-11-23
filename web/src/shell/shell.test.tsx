@@ -64,7 +64,7 @@ describe('tab bar', () => {
     renderApp('/');
     await user.click(tab('റൂമുകൾ'));
     expect(await screen.findByRole('heading', { level: 1, name: 'റൂമുകൾ' })).toBeInTheDocument();
-    expect(document.title).toBe('റൂമുകൾ · മിന്നൽ');
+    await waitFor(() => expect(document.title).toBe('റൂമുകൾ · മിന്നൽ'));
     expect(window.location.pathname).toBe('/rooms');
     await user.click(tab('ഞാൻ'));
     expect(await screen.findByRole('heading', { level: 1, name: 'ഞാൻ' })).toBeInTheDocument();
@@ -108,12 +108,12 @@ describe('focus on navigation', () => {
   it('moves focus to the new screen heading after a tab click, but not on first load', async () => {
     const user = userEvent.setup();
     renderApp('/');
-    expect(document.activeElement).toBe(document.body);
+    await waitFor(() => expect(document.activeElement).toBe(document.body));
     expect(screen.getByRole('heading', { level: 1, name: 'അതിഥിയായി കളിക്കുന്നു' })).toHaveAttribute('tabindex', '-1');
     await user.click(tab('റൂമുകൾ'));
-    expect(screen.getByRole('heading', { level: 1, name: 'റൂമുകൾ' })).toHaveFocus();
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'റൂമുകൾ' })).toHaveFocus());
     await user.click(tab('കളി'));
-    expect(screen.getByRole('heading', { level: 1, name: 'അതിഥിയായി കളിക്കുന്നു' })).toHaveFocus();
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'അതിഥിയായി കളിക്കുന്നു' })).toHaveFocus());
   });
 
   it('focuses without scrolling, so the scroll restore wins', async () => {

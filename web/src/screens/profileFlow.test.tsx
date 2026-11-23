@@ -129,7 +129,7 @@ describe('profile setup', () => {
     await user.type(name, 'A');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(name).toHaveFocus();
+    await waitFor(() => expect(name).toHaveFocus());
     expect(name).toHaveAttribute('aria-invalid', 'true');
     const nameError = document.getElementById(name.getAttribute('aria-describedby')!)!;
     expect(nameError).toHaveTextContent('⚠ Use 2–24 letters');
@@ -171,7 +171,7 @@ describe('profile setup', () => {
     const name = screen.getByLabelText('Display name');
     await waitFor(() => expect(name).toHaveAttribute('aria-invalid', 'true'));
     expect(document.getElementById(name.getAttribute('aria-describedby')!)).toHaveTextContent('⚠ Choose a different name');
-    expect(name).toHaveFocus();
+    await waitFor(() => expect(name).toHaveFocus());
   });
 
   it('switches the whole UI at once when the language changes, keeps focus, announces it, and saves nothing', async () => {
@@ -184,8 +184,8 @@ describe('profile setup', () => {
 
     await waitFor(() => expect(document.documentElement.lang).toBe('ml'));
     expect(screen.getByRole('heading', { level: 1, name: 'പ്രൊഫൈൽ സജ്ജമാക്കാം' })).toBeInTheDocument();
-    expect(document.title).toContain('പ്രൊഫൈൽ');
-    expect(screen.getByLabelText('ഭാഷ')).toHaveFocus();
+    await waitFor(() => expect(document.title).toContain('പ്രൊഫൈൽ'));
+    await waitFor(() => expect(screen.getByLabelText('ഭാഷ')).toHaveFocus());
     await waitFor(() => expect(useAnnouncements.getState().polite.text.trim()).toBe('ഭാഷ മലയാളം'));
     expect(core.puts).toHaveLength(0);
   });

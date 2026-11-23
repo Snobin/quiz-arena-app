@@ -109,7 +109,7 @@ describe('the list', () => {
     stub({ topics: [{ customTopicId: ID, name: 'Renaissance', questionCount: 15, updatedAt: '2026-11-11T10:00:00Z' }] });
     await open('/me/custom-topics');
     expect(await screen.findByRole('heading', { level: 1, name: 'Custom Topics' })).toBeInTheDocument();
-    expect(document.title).toBe('Custom Topics · Minnal');
+    await waitFor(() => expect(document.title).toBe('Custom Topics · Minnal'));
     expect(await screen.findByText('Private to you · never rated')).toBeInTheDocument();
     expect(screen.getByTestId('usage-meter')).toHaveTextContent('2 / 50 topics · 410 / 500 questions');
     const row = screen.getByRole('link', { name: 'Renaissance, 15 questions, 11 Nov' });
@@ -192,7 +192,7 @@ describe('the topic view', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
     const dialog = await screen.findByRole('alertdialog');
     expect(dialog).toHaveTextContent("Delete 'Renaissance'? Its 3 questions will be removed. This can't be undone.");
-    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus();
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus());
     fireEvent.keyDown(dialog, { key: 'Escape' });
     expect(screen.queryByRole('alertdialog')).toBeNull();
 

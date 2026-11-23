@@ -49,7 +49,7 @@ describe('ChunkErrorBoundary', () => {
     );
     const heading = await screen.findByRole('heading', { name: 'This screen could not load' });
     expect(screen.getByRole('alert')).toBeInTheDocument();
-    expect(heading).toHaveFocus();
+    await waitFor(() => expect(heading).toHaveFocus());
     expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument();
     expect(console.error).toHaveBeenCalled();
 

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App.tsx';
 import { guestSession } from './auth/guestSession.ts';
@@ -32,7 +32,7 @@ describe('App', () => {
     renderApp('/');
     expect(screen.getByRole('heading', { level: 1, name: 'അതിഥിയായി കളിക്കുന്നു' })).toBeInTheDocument();
     expect(screen.getByText('മിന്നൽ', { selector: '.sr-only' })).toBeInTheDocument();
-    expect(document.title).toBe('ഹോം · മിന്നൽ');
+    await waitFor(() => expect(document.title).toBe('ഹോം · മിന്നൽ'));
     // The scaffold probe is gone: no request to /api/core/v1/ping.
     await screen.findByRole('button', { name: 'ക്വിക്ക് മാച്ച്' });
     const urls = vi.mocked(fetch).mock.calls.map(([input]) => String(input));

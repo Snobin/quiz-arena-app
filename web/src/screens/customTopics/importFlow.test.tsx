@@ -132,7 +132,7 @@ describe('the screen', () => {
     stub();
     await openImport();
     expect(screen.getByRole('heading', { level: 1, name: 'Import' })).toBeInTheDocument();
-    expect(document.title).toBe('Import · Minnal');
+    await waitFor(() => expect(document.title).toBe('Import · Minnal'));
     expect(screen.getByLabelText('Topic name')).toBeInTheDocument();
     const button = importButton();
     expect(button).toHaveAttribute('aria-disabled', 'true');
@@ -180,7 +180,7 @@ describe('the screen', () => {
     expect(document.querySelectorAll('[data-testid="paste-gutter"] [data-bad="true"]').length).toBeGreaterThan(0);
 
     fireEvent.click(row);
-    expect(document.activeElement).toBe(area);
+    await waitFor(() => expect(document.activeElement).toBe(area));
     expect(document.querySelector('[data-marked="true"]')).not.toBeNull();
   });
 
@@ -200,7 +200,7 @@ describe('the screen', () => {
     paste(area, topic([q({ answer: 9 })]));
     const alert = await screen.findByRole('alert');
     fireEvent.click(importButton());
-    expect(document.activeElement).toBe(alert);
+    await waitFor(() => expect(document.activeElement).toBe(alert));
   });
 
   it('more than 20 problems shows the first 20 and a CSV of all of them', async () => {
@@ -255,7 +255,7 @@ describe('importing', () => {
     const heading = await screen.findByRole('heading', { level: 1, name: 'Renaissance · 3 questions imported' });
     expect(seen.posts).toEqual([{ name: 'Renaissance', json: text }]);
     expect(window.location.pathname + window.location.search).toBe('/me/custom-topics/6f1b2c3d-1111-4222-8333-444455556666?imported=1');
-    expect(heading).toHaveFocus();
+    await waitFor(() => expect(heading).toHaveFocus());
     expect(screen.getByText('Private to you · never rated')).toBeInTheDocument();
     expect(screen.queryByTestId('usage-meter')).toBeNull();
     expect(screen.getByRole('button', { name: 'Use in Battle Room' })).toHaveAttribute('aria-disabled', 'true');
@@ -283,7 +283,7 @@ describe('importing', () => {
     fireEvent.click(importButton());
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Question 2: must have exactly 4 options (got 3)');
-    expect(alert).toHaveFocus();
+    await waitFor(() => expect(alert).toHaveFocus());
     expect(area).toHaveValue(text);
     expect(importButton()).toHaveAttribute('aria-disabled', 'true');
   });

@@ -175,7 +175,7 @@ describe('UploadPage result with problems', () => {
     renderPage();
     await send();
     const alert = await screen.findByRole('alert');
-    expect(document.activeElement).toBe(alert);
+    await waitFor(() => expect(document.activeElement).toBe(alert));
     expect(within(alert).getByText('2 problems to fix')).toBeTruthy();
     const items = within(alert).getAllByRole('listitem');
     expect(items[0]?.textContent).toContain('Row 3 · answerIndex · must be 0–3 · Use 0 for A … 3 for D');
