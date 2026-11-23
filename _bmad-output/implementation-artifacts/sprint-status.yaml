@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-11-2026 09:40
-last_updated: '11-23-2026 12:00'
+last_updated: '11-23-2026 12:40'
 project: quiz-arena
 project_key: NOKEY
 tracking_system: file-system
@@ -92,7 +92,7 @@ development_status:
   6-3-manage-my-custom-topics: done
   6-4-practise-a-custom-topic: done
   6-5-battle-room-with-a-custom-topic: done
-  epic-6-retrospective: optional
+  epic-6-retrospective: done
 
   epic-7: backlog
   7-1-result-share-card: backlog
@@ -160,7 +160,7 @@ action_items:
     action: "Add an error boundary with retry for failed lazy-chunk loads before any
       Epic 5 story"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-11-21.md"
   - id: "epic-4-retro-item-10-add-a-topic-duel-forfeit-and-disconnect"
     epic: 4
@@ -188,7 +188,7 @@ action_items:
     action: "Make the Valkey solo session create atomic and use a revision counter
       for CAS before Story 6.4"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-11-21.md"
   - id: "epic-4-retro-item-14-reject-recent-topics-writes-from-a-delet"
     epic: 4
@@ -215,14 +215,14 @@ action_items:
     action: "Confirm a review triage log is present in the spec file after writing
       it"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-11-21.md"
   - id: "epic-5-retro-item-18-fix-snapshot-resync-so-a-reload-or-misse"
     epic: 5
     action: "Fix SNAPSHOT/resync so a reload or missed message mid room match returns
       the player to the room"
     owner: "dev"
-    status: open
+    status: in-progress
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-21.md"
   - id: "epic-5-retro-item-19-verify-playagain-sends-under-the-roomreg"
     epic: 5
@@ -236,7 +236,7 @@ action_items:
     action: "Decide and schedule the Battle Room polish story: joint-win/win takeovers,
       Show my place, history placement, a11y, 320px audit"
     owner: "owner"
-    status: open
+    status: in-progress
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-21.md"
   - id: "epic-5-retro-item-21-split-roomclient-ts-before-epic-6-adds-t"
     epic: 5
@@ -310,3 +310,67 @@ action_items:
     owner: "Snobin"
     status: open
     ref: "_bmad-output/implementation-artifacts/epic-3-retro-2026-11-22.md"
+  - id: "epic-6-retro-item-32-run-an-independent-review-over-the-epic"
+    epic: 6
+    action: "Run an independent review over the epic 6 range 45fd2bb^..587ebb5 before
+      launch (owner scoping, CUSTOM question-set branch, lobby topic name, room reconnect)"
+    owner: "owner and dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-11-23.md"
+  - id: "epic-6-retro-item-33-remove-the-epic-6-duplication-one-5-ques"
+    epic: 6
+    action: "Remove the epic 6 duplication: one 5-question room constant per side,
+      one custom-question language mapper in core, one own-tag component"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-11-23.md"
+  - id: "epic-6-retro-item-34-add-a-room-live-screen-test-with-a-singl"
+    epic: 6
+    action: "Add a room live-screen test with a single-language custom question asserting
+      no EN tag and the written lang"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-11-23.md"
+  - id: "epic-6-retro-item-35-manual-playtest-on-a-real-phone-import-r"
+    epic: 6
+    action: "Manual playtest on a real phone: import, re-import mid practice, host
+      a custom room with two players, check history and ratings, at 320 px and 200
+      percent text"
+    owner: "owner"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-11-23.md"
+  - id: "epic-6-retro-item-36-split-roomclient-ts-and-questioneditor-t"
+    epic: 6
+    action: "Split roomClient.ts and QuestionEditor.tsx before any Epic 7 story touches
+      rooms or the admin editor"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-11-23.md"
+  - id: "epic-6-retro-item-37-reconcile-the-epic-6-5-text-results-line"
+    epic: 6
+    action: "Reconcile the epic 6.5 text (results line, questionSource on room match
+      start, New room after the play-again window) or add the custom topic id to MATCH_ENDED"
+    owner: "owner and dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-11-23.md"
+  - id: "epic-6-retro-item-38-sign-off-the-malayalam-copy-for-epic-6-s"
+    epic: 6
+    action: "Sign off the Malayalam copy for Epic 6 strings together with Epic 2 action
+      A3"
+    owner: "owner"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-11-23.md"
+  - id: "epic-6-retro-item-39-strip-control-and-bidirectional-characte"
+    epic: 6
+    action: "Strip control and bidirectional characters from the room client-sent
+      topic name"
+    owner: "dev"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-11-23.md"
+  - id: "epic-6-retro-item-40-decide-once-whether-stories-may-spawn-re"
+    epic: 6
+    action: "Decide once whether stories may spawn reviewer subagents so the three
+      review layers run"
+    owner: "owner"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-11-23.md"
