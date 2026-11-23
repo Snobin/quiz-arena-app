@@ -12,6 +12,16 @@ public interface CustomTopicRepository {
     }
 
     record Row(int position, String text, String lang, List<String> options, int answerIndex, String explanation) {
+
+        /** A custom question is single-language as written: its text is {@code textMl} when it is Malayalam, else null. */
+        public String textMl() {
+            return "ml".equals(lang) ? text : null;
+        }
+
+        /** The text when it was written in English (any other language tag), else null. */
+        public String textEn() {
+            return "ml".equals(lang) ? null : text;
+        }
     }
 
     record Summary(UUID id, String name, int questionCount, Instant updatedAt) {

@@ -139,7 +139,7 @@ describe('solo practice on a custom topic', () => {
     expect(heading).toHaveAttribute('lang', 'ml');
     expect(screen.queryByTestId('en-tag')).toBeNull();
     expect(screen.getByTestId('practice-topic')).toHaveTextContent('Renaissance');
-    expect(screen.getByTestId('practice-own-tag')).toHaveTextContent('Own');
+    expect(screen.getByTestId('own-tag')).toHaveTextContent('Own');
     await waitFor(() => expect(document.title).toBe('Practice · Renaissance · Minnal'));
     expect(window.sessionStorage.getItem(`minnal.practice.${CUSTOM}`)).toContain(SESSION);
   });

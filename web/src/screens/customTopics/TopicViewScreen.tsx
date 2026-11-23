@@ -8,6 +8,7 @@ import { useOnline } from '../../shell/online.ts';
 import { navigate, searchParam } from '../../shell/router.ts';
 import { DeleteDialog } from './DeleteDialog.tsx';
 import '../rooms/roomCatalogue.ts';
+import { MAX_QUESTIONS, MIN_QUESTIONS } from '../rooms/roomConfig.ts';
 import './importCatalogue.ts';
 import { deleteTopic, fetchTopic, fetchTopicList, ManageError, TOPIC_LIST_KEY, topicKey, type TopicQuestion } from './manageApi.ts';
 import { SuccessCard } from './SuccessCard.tsx';
@@ -16,9 +17,6 @@ import { scriptLang, shortDate } from './topicFormat.ts';
 import { UsageMeter } from './UsageMeter.tsx';
 
 const PAGE = 50;
-/** A room needs 5 to 30 questions (FR76); the whole topic is the default count, up to 30. */
-const MIN_ROOM_QUESTIONS = 5;
-const MAX_ROOM_QUESTIONS = 30;
 const LETTERS = ['A', 'B', 'C', 'D'] as const;
 
 function QuestionCard({ q }: { q: TopicQuestion }) {
@@ -111,10 +109,10 @@ export default function TopicViewScreen({ id }: { id: string }) {
               </p>
             ) : null}
             <div className="grid grid-cols-[2fr_1fr] gap-2">
-              {online && data.questionCount >= MIN_ROOM_QUESTIONS ? (
+              {online && data.questionCount >= MIN_QUESTIONS ? (
                 <Button
                   variant="primary"
-                  onClick={() => navigate(`/rooms/create?customTopicId=${encodeURIComponent(id)}&count=${Math.min(MAX_ROOM_QUESTIONS, data.questionCount)}`)}
+                  onClick={() => navigate(`/rooms/create?customTopicId=${encodeURIComponent(id)}&count=${Math.min(MAX_QUESTIONS, data.questionCount)}`)}
                 >
                   {t('import.success.battle')}
                 </Button>
