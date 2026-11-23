@@ -716,7 +716,8 @@ describe('reveal', () => {
     expect(window.location.pathname).toBe('/match');
     await act(() => vi.advanceTimersByTimeAsync(200));
     expect(window.location.pathname).toBe('/results');
-    expect(screen.getByTestId('result-self')).toHaveTextContent('7,420');
+    // The results screen is a lazy chunk: wait for it (vi.waitFor advances the fake timers while it polls).
+    await vi.waitFor(() => expect(screen.getByTestId('result-self')).toHaveTextContent('7,420'), { timeout: 4000 });
     expect(screen.queryByTestId('results-pending')).toBeNull();
   });
 

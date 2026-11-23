@@ -1,0 +1,32 @@
+# Opens a "Monthly restore drill" issue on the 1st of every month (Story 7.4b). It is only the reminder:
+# the drill itself runs on the VPS, see deploy/RUNBOOK-restore.md.
+name: Monthly restore drill
+
+on:
+  schedule:
+    - cron: '0 3 1 * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Open the reminder issue unless one is already open
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          open=$(gh issue list --state open --search '"Monthly restore drill" in:title' --json number --jq 'length')
+          if [ "$open" != "0" ]; then
+            echo "A restore-drill issue is already open; nothing to do."
+            exit 0
+          fi
+          gh issue create --title "Monthly restore drill" --body "Run the monthly restore drill on the VPS and log it.
+
+          - How: [deploy/RUNBOOK-restore.md](../blob/main/deploy/RUNBOOK-restore.md), section **Monthly drill**
+          - Log the result in the runbook's **Drill log** table, then close this issue.
+          - A drill older than 30 days blocks launch (deploy/LAUNCH-CHECKLIST.md)."
