@@ -357,3 +357,30 @@ describe('/match with no match', () => {
     expect(window.location.pathname).toBe('/');
   });
 });
+
+describe('a shared result link (Story 7.1)', () => {
+  it('/q joins Quick Match at once for a guest, with no landing page, and lands on the matchmaking screen', async () => {
+    await searching('/q');
+    await waitFor(() => expect(window.location.pathname).toBe('/matchmaking'));
+    expect(heading()).toHaveTextContent(/finding|searching|opponent/i);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // The link never carries her to a direct challenge: the join is the plain Quick Match join.
+    expect(socket().sentTo(JOIN)).toBe(1);
+  });
+
+  it('/q while offline lands on Home instead', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    renderApp('/q');
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+    expect(clients).toHaveLength(0);
+  });
+
+  it('Cancel from a /q arrival returns to Home', async () => {
+    await searching('/q');
+    await waitFor(() => expect(window.location.pathname).toBe('/matchmaking'));
+    act(() => screen.getByRole('button', { name: /cancel/i }).click());
+    expect(socket().sentTo(CANCEL)).toBe(1);
+    act(() => socket().deliver(MATCHMAKING_CANCELLED));
+    await waitFor(() => expect(window.location.pathname).toBe('/'));
+  });
+});

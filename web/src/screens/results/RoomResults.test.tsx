@@ -143,10 +143,10 @@ describe('Battle Room results', () => {
     expect(screen.getByTestId('rating-delta-updating')).toHaveTextContent('updating');
   });
 
-  it('shows Home only (no Rematch, no Share), and Home goes to the Home screen', async () => {
+  it('shows Home and Share (no Rematch), and Home goes to the Home screen', async () => {
     await open(2, rated(-6));
     const bar = await screen.findByTestId('results-actions');
-    expect(within(bar).getAllByRole('button')).toHaveLength(1);
+    expect(within(bar).getAllByRole('button').map((b) => b.textContent)).toEqual(['Home', 'Share']);
     expect(screen.queryByTestId('rematch-button')).toBeNull();
     act(() => within(bar).getByRole('button', { name: 'Home' }).click());
     await waitFor(() => expect(window.location.pathname).toBe('/'));
@@ -219,7 +219,7 @@ describe('Battle Room play again', () => {
   it('the host sees Play again (primary) and Home; a player sees Home alone until the successor arrives', async () => {
     await open(0, rated(11));
     const bar = await screen.findByTestId('results-actions');
-    expect(within(bar).getAllByRole('button').map((b) => b.textContent)).toEqual(['Play again', 'Home']);
+    expect(within(bar).getAllByRole('button').map((b) => b.textContent)).toEqual(['Play again', 'Home', 'Share']);
     expect(screen.queryByTestId('room-join-new')).toBeNull();
     expect(screen.queryByTestId('rematch-button')).toBeNull();
   });
@@ -304,7 +304,7 @@ describe('Battle Room play again', () => {
     act(() => liveGameStore.setState({ succeeded: { matchId: MATCH_ID, payload: SUCCEEDED } }));
     const join = await screen.findByTestId('room-join-new');
     expect(join).toHaveTextContent("Join Fathima S's new room");
-    expect(within(screen.getByTestId('results-actions')).getAllByRole('button')).toHaveLength(2);
+    expect(within(screen.getByTestId('results-actions')).getAllByRole('button')).toHaveLength(3);
     // The topic's copy of the same message changes nothing.
     act(() => liveGameStore.setState({ succeeded: { matchId: MATCH_ID, payload: { ...SUCCEEDED } } }));
     act(() => join.click());
@@ -351,7 +351,7 @@ describe('Battle Room play again', () => {
     await session.ready();
     renderApp('/results');
     const bar = await screen.findByTestId('results-actions');
-    expect(within(bar).getAllByRole('button')).toHaveLength(1);
+    expect(within(bar).getAllByRole('button')).toHaveLength(2);
     expect(screen.queryByTestId('room-join-new')).toBeNull();
   });
 

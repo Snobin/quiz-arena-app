@@ -34,6 +34,8 @@ const TopicsRoutes = lazyWithRetry(() => import('./screens/topics/TopicsRoutes.t
 const CustomTopicsRoutes = lazyWithRetry(() => import('./screens/customTopics/CustomTopicsRoutes.tsx'));
 // Battle Room Create and the host lobby (Story 5.2) load on demand too; `/rooms` itself is RoomsScreen's.
 const RoomsRoutes = lazyWithRetry(() => import('./screens/rooms/RoomsRoutes.tsx'));
+// A shared result link (Story 7.1): straight into Quick Match, no landing page.
+const ShareLink = lazyWithRetry(() => import('./screens/ShareLink.tsx'));
 const isCustomTopicsPath = (pathname: string) => pathname.startsWith('/me/custom-topics');
 const isRoomsPath = (pathname: string) => pathname === '/rooms/create' || pathname.startsWith('/r/');
 const isTopicsPath = (pathname: string) => pathname === '/play/topics' || pathname.startsWith('/play/duel/') || pathname.startsWith('/practice/');
@@ -89,6 +91,7 @@ const ROUTES: Record<string, ComponentType> = {
   '/matchmaking': MatchmakingScreen,
   '/match': LiveMatchScreen,
   '/results': ResultsScreen,
+  '/q': ShareLink,
 };
 
 // Dev-only QA fixtures, rendered outside the shell. `import.meta.env.DEV` is a build-time

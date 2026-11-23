@@ -20,6 +20,7 @@ import type { PracticeKey } from '../screens/practice/practiceCatalogue.ts';
 import type { ImportKey } from '../screens/customTopics/importCatalogue.ts';
 import type { PractiseKey } from '../screens/results/practiseCatalogue.ts';
 import type { RoomKey } from '../screens/rooms/roomCatalogue.ts';
+import type { ShareKey } from '../share/shareCatalogue.ts';
 import { LANGUAGES, type Language } from './language.ts';
 
 export { LANGUAGES, type Language } from './language.ts';
@@ -929,6 +930,6 @@ declare module 'i18next' {
   interface CustomTypeOptions {
     keySeparator: false;
     nsSeparator: false;
-    resources: { translation: Record<CatalogueKey | ImportKey | PracticeKey | PractiseKey | RoomKey, string> };
+    resources: { translation: Record<CatalogueKey | ImportKey | PracticeKey | PractiseKey | RoomKey | ShareKey, string> };
   }
 }

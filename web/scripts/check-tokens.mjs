@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Token-usage check (DESIGN.md rules that a simple scan can enforce):
 //   1. `dim` is never a text colour, and its raw value is never used outside the token files.
-//   2. Volt appears only under src/design/peak/, which is reserved for band surfaces.
+//   2. Volt appears only under src/design/peak/, which is reserved for band surfaces, and in the share card's
+//      layout (src/share/cardLayout.ts: the card is a band surface drawn on a canvas, UX-DR3).
 //   3. No `outline: none` / `outline-none` without a :focus-visible replacement.
 // Patterns run over the whole file text, so multi-line declarations are caught.
 // Usage: node scripts/check-tokens.mjs [path...]   (default: src and index.html; paths resolve
@@ -76,7 +77,8 @@ export function webPath(file) {
 
 /** True when the file lives under src/design/peak/ (resolved against the web root). */
 export function isPeakPath(file) {
-  return webPath(file).startsWith('src/design/peak/');
+  const path = webPath(file);
+  return path.startsWith('src/design/peak/') || path === 'src/share/cardLayout.ts';
 }
 
 function exemptRanges(path, text) {
