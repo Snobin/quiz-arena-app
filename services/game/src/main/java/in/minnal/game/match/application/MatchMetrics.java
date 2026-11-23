@@ -14,7 +14,7 @@ import java.util.Map;
  * The live-match meters (NFR1, NFR2):
  * <ul>
  *   <li>{@code minnal.match.answer.ack}: an answer's server receive instant → its {@code ANSWER_ACCEPTED} send;
- *   <li>{@code minnal.match.broadcast.lag{type}}: the triggering instant (the answer's receive
+ *   <li>{@code minnal.match.broadcast.lag{kind}}: the triggering instant (the answer's receive
  *       instant, or the timer's due instant) → the broadcast send;
  *   <li>{@code minnal.match.ended}: completed matches (Q1 was revealed; Story 1.9);
  *   <li>{@code minnal.match.aborted}: matches every human left before Q1 was revealed;
@@ -46,7 +46,7 @@ public final class MatchMetrics {
         for (MessageType type : List.of(MessageType.QUESTION_STARTED, MessageType.SCOREBOARD, MessageType.QUESTION_REVEALED)) {
             lag.put(type, Timer.builder(BROADCAST_LAG)
                     .description("Triggering instant to match broadcast send")
-                    .tag("type", type.name())
+                    .tag("kind", type.name())
                     .publishPercentiles(0.5, 0.95, 0.99)
                     .register(meters));
         }

@@ -21,6 +21,16 @@ server:
   port: ${SERVER_PORT:8082}
 
 management:
+  metrics:
+    tags:
+      # Every meter carries the service name (the tag allowlist keeps `service`).
+      service: game
+  otlp:
+    metrics:
+      export:
+        # Pushed only under the prod profile (Story 7.3a); local and tests push nothing.
+        enabled: false
+        step: 60s
   endpoints:
     web:
       exposure:

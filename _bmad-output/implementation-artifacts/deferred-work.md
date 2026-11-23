@@ -382,3 +382,10 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-6-5a-room-custom-source-backend.md`
   summary: Story 6.5b, the web half of Battle Room with a custom topic: "My topics" in the room picker (5 or more questions only), enabled "Use in Battle Room" on the topic view, Create and lobby source row with the "സ്വന്തം" tag and unrated note, live-match header and language handling, results ("സ്വന്തം · unrated", no delta, no report or practise link), history "unrated", recently hosted list with custom sources, the `SOURCE_UNAVAILABLE` and shrunk-topic host messages, and the web `RoomSource` and `TopicInfo` parsing.
   evidence: split from Story 6.5 at the Step 2 size gate (about 2,400 tokens, four services plus about 15 web files); the server half lands first so the web half builds on real contracts.
+
+- source_spec: none
+  summary: Story 7.3b: the product metrics (7-day return job, matches per session, bot-ended rate and queue wait, completed vs aborted, answer-confirm latency with `prevAckRttMs`, Battle Room hosts and rooms per week via Valkey HyperLogLog).
+  evidence: split from Story 7.3 (launch metrics) as an independently shippable deliverable; needs 7.3a's OTLP push and tag allowlist first.
+- source_spec: none
+  summary: Story 7.3c: the "Launch" and "Health" Grafana dashboards, the five alert rules in `deploy/grafana/`, a forced-failure test of each alert, and the coaching-centre "proxy" note.
+  evidence: split from Story 7.3 as an independently shippable deliverable; depends on the meter names from 7.3b.

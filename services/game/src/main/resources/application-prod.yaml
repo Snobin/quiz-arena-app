@@ -5,3 +5,13 @@ minnal:
 logging:
   level:
     in.minnal: INFO
+
+management:
+  otlp:
+    metrics:
+      export:
+        enabled: true
+        # Grafana Cloud free tier (OTLP gateway); both values come from the server-side .env only.
+        url: ${GRAFANA_OTLP_URL:}
+        headers:
+          Authorization: ${GRAFANA_OTLP_AUTHORIZATION:}

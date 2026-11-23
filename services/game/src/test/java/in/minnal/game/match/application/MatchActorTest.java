@@ -125,7 +125,7 @@ class MatchActorTest {
         assertThat(reveal.seq()).isEqualTo(3);
         await().atMost(Duration.ofSeconds(2)).until(() -> endedWith.get() == actor);
         assertThat(meters.get(MatchMetrics.ACK).timer().count()).isEqualTo(1);
-        assertThat(meters.get(MatchMetrics.BROADCAST_LAG).tag("type", "SCOREBOARD").timer().count()).isEqualTo(1);
+        assertThat(meters.get(MatchMetrics.BROADCAST_LAG).tag("kind", "SCOREBOARD").timer().count()).isEqualTo(1);
     }
 
     /**

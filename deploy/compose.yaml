@@ -24,6 +24,9 @@ x-service-env: &service-env
   VALKEY_PORT: "6379"
   VALKEY_PASSWORD: ${VALKEY_PASSWORD:?set VALKEY_PASSWORD in deploy/.env}
   CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+  # Metrics push to Grafana Cloud (prod profile only; Story 7.3a). Unset = the push fails quietly, never the service.
+  GRAFANA_OTLP_URL: ${GRAFANA_OTLP_URL:-}
+  GRAFANA_OTLP_AUTHORIZATION: ${GRAFANA_OTLP_AUTHORIZATION:-}
 
 services:
   caddy:
