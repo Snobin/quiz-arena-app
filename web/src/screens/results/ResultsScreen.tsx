@@ -19,6 +19,7 @@ import { navigate } from '../../shell/router.ts';
 import { useHideTabBar } from '../../shell/useHideTabBar.ts';
 import { BreakdownRow } from './BreakdownRow.tsx';
 import { DotStrip } from './DotStrip.tsx';
+import { InstallCard } from './InstallCard.tsx';
 import { GuestResultsPrompt } from './GuestResultsPrompt.tsx';
 import { resultView, type ResultView } from './outcome.ts';
 import { Podium } from './Podium.tsx';
@@ -212,6 +213,7 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
               </>
             ) : null}
             {showPrompt ? <GuestResultsPrompt view={view} /> : null}
+            {!takeover && status === 'registered' && !playedAsGuest && session.userId() ? <InstallCard userId={session.userId()!} /> : null}
             {signedInAfterGuest ? (
               <p data-testid="guest-match-note" className="text-caption text-muted">
                 {t('results.guestNote')}
