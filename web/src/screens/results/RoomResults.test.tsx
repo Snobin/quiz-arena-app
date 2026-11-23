@@ -123,7 +123,7 @@ describe('Battle Room results', () => {
     expect(screen.getAllByTestId('results-standings-row')).toHaveLength(5);
     expect(screen.getByTestId('self-tag')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveAccessibleName(/Place 3 of 5, 3,960 points, rating -6/));
-    expect(document.title).toContain('Battle Room results');
+    await waitFor(() => expect(document.title).toContain('Battle Room results'));
   });
 
   it('a joint winner has a volt chip delta and no takeover', async () => {

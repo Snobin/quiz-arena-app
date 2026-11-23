@@ -205,7 +205,7 @@ describe('leave', () => {
     fireEvent.click(leaveButton);
     const dialog = screen.getByRole('alertdialog');
     expect(dialog).toHaveAccessibleName("Leave? You'll forfeit the remaining questions");
-    expect(within(dialog).getByRole('button', { name: 'Stay' })).toHaveFocus();
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Stay' })).toHaveFocus());
     expect(content()).toHaveAttribute('inert');
     expect(content().className).toContain('opacity-[0.42]');
     fireEvent.keyDown(dialog, { key: 'Escape' });

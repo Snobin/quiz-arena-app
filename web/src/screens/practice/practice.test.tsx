@@ -131,7 +131,7 @@ describe('solo practice', () => {
     const heading = await openPractice();
     expect(heading).toHaveAccessibleName('Question number 1?, Question 1 · Practice');
     await waitFor(() => expect(document.activeElement).toBe(heading));
-    expect(document.title).toBe('Practice · Kerala History · Minnal');
+    await waitFor(() => expect(document.title).toBe('Practice · Kerala History · Minnal'));
     expect(screen.getByTestId('practice-tally')).toHaveTextContent('0 answered · 0 correct');
     expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument();
     expect(calls.find((c) => c.method === 'POST' && c.url === SOLO_SESSIONS_PATH)?.body).toBe(JSON.stringify({ source: { type: 'BANK', topicId: TOPIC } }));

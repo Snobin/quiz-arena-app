@@ -155,7 +155,7 @@ describe('the Rooms tab', () => {
     await boot();
     renderApp('/rooms');
     expect(await screen.findByRole('heading', { level: 1, name: 'Rooms' }, { timeout: 8000 })).toBeInTheDocument();
-    expect(document.title).toBe('Rooms · Minnal');
+    await waitFor(() => expect(document.title).toBe('Rooms · Minnal'));
     expect(screen.getByRole('button', { name: 'Create room' })).not.toHaveAttribute('aria-disabled');
     const field = screen.getByLabelText('Room code');
     expect(field).toHaveAttribute('autocapitalize', 'characters');
@@ -264,7 +264,7 @@ describe('Create room', () => {
     expect(socket().bodiesTo(ROOM_CREATE)).toEqual([{ source: { type: 'BANK', topicId: KH_ID }, questionCount: 12 }]);
     expect(await screen.findByRole('heading', { level: 1, name: 'Battle Room' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/r/K7M-Q2X');
-    expect(document.title).toBe('Battle Room · K7M-Q2X · Minnal');
+    await waitFor(() => expect(document.title).toBe('Battle Room · K7M-Q2X · Minnal'));
     expect(screen.queryByRole('navigation', { name: 'Main' })).toBeNull();
     const saved = loadRecentRooms(USER_ID);
     expect(saved).toHaveLength(1);
@@ -827,7 +827,7 @@ describe('the host lobby with players', () => {
     const user = await hostWithBiju();
     await user.click(screen.getByRole('button', { name: 'Leave' }));
     const dialog = await screen.findByRole('alertdialog', { name: 'Close the room? Everyone will be sent back.' });
-    expect(within(dialog).getByRole('button', { name: 'Stay' })).toHaveFocus();
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Stay' })).toHaveFocus());
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(socket().sentTo(roomLeave(ROOM_ID))).toBe(0);

@@ -162,7 +162,7 @@ describe('Settings', () => {
     await user.click(await screen.findByRole('button', { name: 'Delete account' }));
     const dialog = await screen.findByRole('alertdialog');
     expect(dialog).toHaveTextContent('Your ratings, board positions and history will be removed. This cannot be undone.');
-    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus());
     await user.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect(core.calls).not.toContain(`DELETE ${ME_PATH}`);

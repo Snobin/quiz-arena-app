@@ -206,7 +206,7 @@ describe('subscribe and lead-in', () => {
     expect(heading()).toHaveTextContent('Match');
     expect(screen.getByText("There's no match on this screen.")).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/');
-    expect(document.title).toBe('Match · Minnal');
+    await waitFor(() => expect(document.title).toBe('Match · Minnal'));
   });
 
   it('?matchId= for another match shows "no match"', async () => {
@@ -221,10 +221,10 @@ describe('an open question', () => {
     const m = await inMatch();
     start(m, 3);
     expect(screen.getByTestId('progress')).toHaveTextContent('Q 4/10');
-    expect(heading()).toHaveFocus();
+    await waitFor(() => expect(heading()).toHaveFocus());
     expect(heading()).toHaveAccessibleName('Which is the longest river in Kerala?, Question 4 of 10, 15 seconds');
     expect(heading()).toHaveAttribute('lang', 'en');
-    expect(document.title).toBe('Question 4 / 10 · Minnal');
+    await waitFor(() => expect(document.title).toBe('Question 4 / 10 · Minnal'));
     for (let i = 0; i < 4; i++) {
       expect(option(i)).toHaveTextContent(OPTIONS[i]!);
       expect(option(i).className).toContain('min-h-[56px]');
@@ -244,13 +244,13 @@ describe('an open question', () => {
     await act(() => i18n.changeLanguage('ml'));
     const m = await inMatch();
     start(m, 3);
-    expect(document.title).toBe('ചോദ്യം 4 / 10 · മിന്നൽ');
+    await waitFor(() => expect(document.title).toBe('ചോദ്യം 4 / 10 · മിന്നൽ'));
     expect(heading()).toHaveAttribute('lang', 'ml');
     expect(heading()).toHaveAccessibleName('കേരളത്തിലെ ഏറ്റവും നീളം കൂടിയ നദി ഏത്?, ചോദ്യം 4 / 10, 15 സെക്കൻഡ്');
     reveal(m, 3, {});
     start(m, 4);
-    expect(document.title).toBe('ചോദ്യം 5 / 10 · മിന്നൽ');
-    expect(heading()).toHaveFocus();
+    await waitFor(() => expect(document.title).toBe('ചോദ്യം 5 / 10 · മിന്നൽ'));
+    await waitFor(() => expect(heading()).toHaveFocus());
   });
 
   it('language fallback: UI ml with no textMl shows English, lang="en", and no EN tag', async () => {
@@ -920,7 +920,7 @@ describe('Topic Duel (Story 4.2)', () => {
     expect(label.className).toContain('break-words');
     expect(label.className).not.toContain('truncate');
     expect(screen.getByTestId('en-tag')).toBeInTheDocument();
-    expect(document.title).toBe('Question 4 / 10 · Minnal');
+    await waitFor(() => expect(document.title).toBe('Question 4 / 10 · Minnal'));
   });
 
   it('in Malayalam the label is "ടോപ്പിക് ഡ്യുവൽ · <topic>"', async () => {

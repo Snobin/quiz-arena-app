@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -45,28 +45,28 @@ describe('language change', () => {
     await act(() => i18n.changeLanguage('en'));
     render(<Screen title />);
     expect(document.documentElement.lang).toBe('en');
-    expect(document.title).toBe('Ranks · Minnal');
+    await waitFor(() => expect(document.title).toBe('Ranks · Minnal'));
     expect(screen.getByText('Locked in')).toBeInTheDocument();
 
     await act(() => i18n.changeLanguage('ml'));
     expect(document.documentElement.lang).toBe('ml');
-    expect(document.title).toBe('റാങ്ക് · മിന്നൽ');
+    await waitFor(() => expect(document.title).toBe('റാങ്ക് · മിന്നൽ'));
     expect(screen.getByText('ഉത്തരം ലോക്ക് ചെയ്തു')).toBeInTheDocument();
   });
 
   it('sets the brand alone without a title, in the UI language', async () => {
     render(<Screen />);
-    expect(document.title).toBe('മിന്നൽ');
+    await waitFor(() => expect(document.title).toBe('മിന്നൽ'));
     await act(() => i18n.changeLanguage('en'));
-    expect(document.title).toBe('Minnal');
+    await waitFor(() => expect(document.title).toBe('Minnal'));
   });
 
-  it('restores the previous title on unmount', () => {
+  it('restores the previous title on unmount', async () => {
     document.title = 'before';
     const { unmount } = render(<Screen title />);
-    expect(document.title).toBe('റാങ്ക് · മിന്നൽ');
+    await waitFor(() => expect(document.title).toBe('റാങ്ക് · മിന്നൽ'));
     unmount();
-    expect(document.title).toBe('before');
+    await waitFor(() => expect(document.title).toBe('before'));
   });
 
   it('treats an unsupported language as Malayalam everywhere (strings, <html lang>, <Lang>, wordmark)', async () => {

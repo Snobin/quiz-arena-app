@@ -172,7 +172,7 @@ describe('after signing in', () => {
     expect(screen.queryByTestId('results-sign-in-prompt')).toBeNull();
     expect(screen.queryByTestId('rematch-button')).toBeNull();
     expect(screen.queryAllByText(/rating/i)).toEqual([]);
-    expect(screen.getByRole('heading', { level: 1 })).toHaveFocus();
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1 })).toHaveFocus());
 
     await user.click(screen.getByTestId('play-again-button'));
     expect(window.location.pathname).toBe('/matchmaking');
