@@ -707,7 +707,8 @@ describe('reveal', () => {
 
   it('with no MATCH_ENDED the results open anyway after the hold and the wait, on the minimal view', async () => {
     const m = await inMatch();
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    // Date stays real: the fixtures sit on a fixed server date, and a faked Date drifts from it as the real calendar moves on.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     start(m, 9);
     reveal(m, 9, { totalScore: 7420 });
     await act(() => vi.advanceTimersByTimeAsync(RESULTS_HOLD_MS + 50));

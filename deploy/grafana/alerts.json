@@ -1,0 +1,446 @@
+{
+  "apiVersion": 1,
+  "groups": [
+    {
+      "orgId": 1,
+      "name": "minnal",
+      "folder": "Minnal",
+      "interval": "1m",
+      "rules": [
+        {
+          "uid": "minnal-ack-p95",
+          "title": "Answer confirmation p95 over 200 ms",
+          "condition": "C",
+          "for": "10m",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "annotations": {
+            "summary": "Server answer-confirmation p95 has been over 200 ms for 10 minutes."
+          },
+          "labels": {
+            "app": "minnal"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 900,
+                "to": 0
+              },
+              "datasourceUid": "${PROM_DS_UID}",
+              "model": {
+                "refId": "A",
+                "expr": "histogram_quantile(0.95, sum by (le) (rate(minnal_match_answer_ack_seconds_bucket[10m])))",
+                "instant": true
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0.2
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "minnal-nometrics-core",
+          "title": "core-service reports no metrics",
+          "condition": "C",
+          "for": "0m",
+          "noDataState": "Alerting",
+          "execErrState": "Error",
+          "annotations": {
+            "summary": "core-service has sent no metrics for 10 minutes."
+          },
+          "labels": {
+            "app": "minnal"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 900,
+                "to": 0
+              },
+              "datasourceUid": "${PROM_DS_UID}",
+              "model": {
+                "refId": "A",
+                "expr": "absent_over_time(jvm_memory_used_bytes{service=\"core\"}[10m])",
+                "instant": true
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "minnal-nometrics-game",
+          "title": "game-service reports no metrics",
+          "condition": "C",
+          "for": "0m",
+          "noDataState": "Alerting",
+          "execErrState": "Error",
+          "annotations": {
+            "summary": "game-service has sent no metrics for 10 minutes."
+          },
+          "labels": {
+            "app": "minnal"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 900,
+                "to": 0
+              },
+              "datasourceUid": "${PROM_DS_UID}",
+              "model": {
+                "refId": "A",
+                "expr": "absent_over_time(jvm_memory_used_bytes{service=\"game\"}[10m])",
+                "instant": true
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "minnal-nometrics-ratings",
+          "title": "ratings-service reports no metrics",
+          "condition": "C",
+          "for": "0m",
+          "noDataState": "Alerting",
+          "execErrState": "Error",
+          "annotations": {
+            "summary": "ratings-service has sent no metrics for 10 minutes."
+          },
+          "labels": {
+            "app": "minnal"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 900,
+                "to": 0
+              },
+              "datasourceUid": "${PROM_DS_UID}",
+              "model": {
+                "refId": "A",
+                "expr": "absent_over_time(jvm_memory_used_bytes{service=\"ratings\"}[10m])",
+                "instant": true
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "minnal-5xx",
+          "title": "5xx rate over 2%",
+          "condition": "C",
+          "for": "10m",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "annotations": {
+            "summary": "A service has returned over 2% 5xx for 10 minutes."
+          },
+          "labels": {
+            "app": "minnal"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 900,
+                "to": 0
+              },
+              "datasourceUid": "${PROM_DS_UID}",
+              "model": {
+                "refId": "A",
+                "expr": "max(sum by (service) (rate(http_server_requests_seconds_count{status=~\"5..\"}[10m])) / sum by (service) (rate(http_server_requests_seconds_count[10m])))",
+                "instant": true
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0.02
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "minnal-deadletter",
+          "title": "Dead-lettered entry",
+          "condition": "C",
+          "for": "0m",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "annotations": {
+            "summary": "An entry went to a dead-letter stream."
+          },
+          "labels": {
+            "app": "minnal"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 900,
+                "to": 0
+              },
+              "datasourceUid": "${PROM_DS_UID}",
+              "model": {
+                "refId": "A",
+                "expr": "sum(increase(minnal_deadletter_total[5m])) + sum(increase(minnal_stream_deadletter_total[5m]))",
+                "instant": true
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "uid": "minnal-heap",
+          "title": "JVM heap over 90%",
+          "condition": "C",
+          "for": "10m",
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "annotations": {
+            "summary": "A service's heap has been over 90% of its cap for 10 minutes."
+          },
+          "labels": {
+            "app": "minnal"
+          },
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 900,
+                "to": 0
+              },
+              "datasourceUid": "${PROM_DS_UID}",
+              "model": {
+                "refId": "A",
+                "expr": "max(sum by (service) (jvm_memory_used_bytes{area=\"heap\"}) / sum by (service) (jvm_memory_max_bytes{area=\"heap\"}))",
+                "instant": true
+              }
+            },
+            {
+              "refId": "B",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "B",
+                "type": "reduce",
+                "expression": "A",
+                "reducer": "last"
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "B",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0.9
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "contactPoints": [
+    {
+      "orgId": 1,
+      "name": "minnal-developer-email",
+      "receivers": [
+        {
+          "uid": "minnal-email",
+          "type": "email",
+          "settings": {
+            "addresses": "${ALERT_EMAIL}"
+          }
+        }
+      ]
+    }
+  ],
+  "policies": [
+    {
+      "orgId": 1,
+      "receiver": "minnal-developer-email",
+      "group_by": [
+        "alertname"
+      ],
+      "matchers": [
+        "app = minnal"
+      ]
+    }
+  ]
+}

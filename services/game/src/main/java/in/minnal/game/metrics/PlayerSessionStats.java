@@ -48,6 +48,7 @@ public class PlayerSessionStats {
         this.matchesPerSession = DistributionSummary.builder("minnal.session.matches")
                 .description("Completed matches per player session (30 min idle ends one)")
                 .publishPercentiles(0.5)
+                .publishPercentileHistogram()
                 .register(meters);
     }
 
