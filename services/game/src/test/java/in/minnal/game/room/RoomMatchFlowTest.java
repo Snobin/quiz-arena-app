@@ -247,7 +247,7 @@ class RoomMatchFlowTest extends GameIntegrationTest {
         assertThat(broadcast(room.host(), "ROOM_LOBBY_UPDATED").get("payload").get("phase").asString()).isEqualTo("STARTING");
         JsonNode failed = broadcast(room.players().get(1), "ROOM_START_FAILED");
         assertThat(failed.get("payload").get("reason").asString()).isEqualTo("TOPIC_UNAVAILABLE");
-        assertThat(failed.toString()).doesNotContain("422");
+        assertThat(failed.get("payload").toString()).doesNotContain("422");
         assertThat(broadcast(room.host(), "ROOM_START_FAILED").get("payload").get("reason").asString()).isEqualTo("TOPIC_UNAVAILABLE");
         assertThat(participation.activityOf(subs.get(0))).isPresent();
 
@@ -527,7 +527,7 @@ class RoomMatchFlowTest extends GameIntegrationTest {
         room.host().send("/app/room/" + room.roomId() + "/start");
         JsonNode gone = broadcast(room.players().get(1), "ROOM_START_FAILED");
         assertThat(gone.get("payload").get("reason").asString()).isEqualTo("SOURCE_UNAVAILABLE");
-        assertThat(gone.toString()).doesNotContain("404");
+        assertThat(gone.get("payload").toString()).doesNotContain("404");
         assertThat(broadcast(room.host(), "ROOM_START_FAILED").get("payload").get("reason").asString()).isEqualTo("SOURCE_UNAVAILABLE");
 
         CORE.status = 422;

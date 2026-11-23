@@ -379,14 +379,14 @@ action_items:
     action: "Make the web test fixtures date-relative, or pin the system time, in
       every fake-Date test (LiveMatchScreen.test.tsx and others)"
     owner: "developer"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-11-23.md"
   - id: "epic-7-retro-item-42-stabilise-the-three-flaky-tests-uploadpa"
     epic: 7
     action: "Stabilise the three flaky tests: UploadPage focus, LiveMatchScreen lazy
       results chunk, RoomMatchFlowTest custom-topic case"
     owner: "developer"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-11-23.md"
   - id: "epic-7-retro-item-43-decide-whether-stories-may-spawn-reviewe"
     epic: 7
