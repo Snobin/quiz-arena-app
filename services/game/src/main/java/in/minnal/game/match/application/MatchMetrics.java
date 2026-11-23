@@ -59,6 +59,7 @@ public final class MatchMetrics {
                     .description("Triggering instant to match broadcast send")
                     .tag("kind", type.name())
                     .publishPercentiles(0.5, 0.95, 0.99)
+                    .publishPercentileHistogram()
                     .register(meters));
         }
         for (MatchMode mode : MatchMode.values()) {
