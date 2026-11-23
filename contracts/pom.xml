@@ -16,6 +16,17 @@
     <description>Shared contracts only: event records, /internal DTOs, STOMP envelope and types, Scoring, Ranking. No Spring code.</description>
 
     <dependencies>
+        <!-- Metrics tag allowlist (Story 7.3a): plain Java over Micrometer and Logback, which every service already has. -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-core</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <scope>provided</scope>
+        </dependency>
         <!-- Test only: the golden samples and JSON round-trips use the same Jackson 3 the services run. -->
         <dependency>
             <groupId>tools.jackson.core</groupId>

@@ -60,7 +60,7 @@ class MatchmakingFlowTest extends GameIntegrationTest {
     }
 
     double pairings(String opponent) {
-        var counter = meters.find("minnal.matchmaking.pairings").tag("mode", "QUICK").tag("opponent", opponent).counter();
+        var counter = meters.find("minnal.matchmaking.pairings").tag("mode", "QUICK").tag("kind", opponent).counter();
         return counter == null ? 0 : counter.count();
     }
 

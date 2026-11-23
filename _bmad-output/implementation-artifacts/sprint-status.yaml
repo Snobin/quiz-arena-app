@@ -95,9 +95,9 @@ development_status:
   epic-6-retrospective: done
 
   epic-7: in-progress
-  7-1-result-share-card: review
-  7-2-install-prompt: review
-  7-3-launch-metrics: backlog
+  7-1-result-share-card: done
+  7-2-install-prompt: done
+  7-3-launch-metrics: in-progress
   7-4-launch-readiness: backlog
   epic-7-retrospective: optional
 action_items:

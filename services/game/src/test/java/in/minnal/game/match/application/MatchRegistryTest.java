@@ -113,7 +113,7 @@ class MatchRegistryTest {
                 .toArray(MessageType[]::new));
         assertThat(broadcaster.all).extracting(ServerMessage::seq)
                 .containsExactly(LongStream.rangeClosed(1, 20).boxed().toArray(Long[]::new));
-        assertThat(meters.get(MatchMetrics.BROADCAST_LAG).tag("type", "QUESTION_REVEALED").timer().count()).isEqualTo(10);
+        assertThat(meters.get(MatchMetrics.BROADCAST_LAG).tag("kind", "QUESTION_REVEALED").timer().count()).isEqualTo(10);
     }
 
     /** Whether a late answer from "h0" still finds the ended match's tombstone (ANSWER_REJECTED) rather than NOT_IN_MATCH. */

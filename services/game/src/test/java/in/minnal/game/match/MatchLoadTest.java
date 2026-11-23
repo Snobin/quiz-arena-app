@@ -140,7 +140,7 @@ class MatchLoadTest {
         assertThat(ack.count()).isGreaterThanOrEqualTo(MATCHES * 2 * 10 * 9 / 10);
         assertThat(ackP95).as("answer → ANSWER_ACCEPTED p95").isLessThan(200);
         for (MessageType type : List.of(MessageType.QUESTION_STARTED, MessageType.SCOREBOARD, MessageType.QUESTION_REVEALED)) {
-            Timer lag = meters.get(MatchMetrics.BROADCAST_LAG).tag("type", type.name()).timer();
+            Timer lag = meters.get(MatchMetrics.BROADCAST_LAG).tag("kind", type.name()).timer();
             double p95 = p95Ms(lag);
             log.info("load: {} {} broadcasts, lag p95 {} ms, max {} ms", lag.count(), type, p95, lag.max(TimeUnit.MILLISECONDS));
             assertThat(lag.count()).isPositive();

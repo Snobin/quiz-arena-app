@@ -86,7 +86,7 @@ final class MatchmakingActor implements AutoCloseable {
         return Counter.builder("minnal.matchmaking.pairings")
                 .description("Pairings formed, by opponent (bot-fill rate)")
                 .tag("mode", mode.name())
-                .tag("opponent", opponent)
+                .tag("kind", opponent)
                 .register(meters);
     }
 

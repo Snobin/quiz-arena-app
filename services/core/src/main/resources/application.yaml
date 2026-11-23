@@ -35,6 +35,16 @@ server:
   port: ${SERVER_PORT:8081}
 
 management:
+  metrics:
+    tags:
+      # Every meter carries the service name (the tag allowlist keeps `service`).
+      service: core
+  otlp:
+    metrics:
+      export:
+        # Pushed only under the prod profile (Story 7.3a); local and tests push nothing.
+        enabled: false
+        step: 60s
   endpoints:
     web:
       exposure:

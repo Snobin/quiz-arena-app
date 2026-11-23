@@ -165,7 +165,7 @@ class MatchActorRoomTest {
             assertThat(seqs.get(i)).isEqualTo(i + 1L);
         }
         // No lag over 500 ms for the scoreboards, and the receipts' p95 is far under 200 ms.
-        double maxScoreboardLagMs = meters.get(MatchMetrics.BROADCAST_LAG).tag("type", "SCOREBOARD").timer().max(java.util.concurrent.TimeUnit.MILLISECONDS);
+        double maxScoreboardLagMs = meters.get(MatchMetrics.BROADCAST_LAG).tag("kind", "SCOREBOARD").timer().max(java.util.concurrent.TimeUnit.MILLISECONDS);
         assertThat(maxScoreboardLagMs).isLessThan(500);
         assertThat(meters.get(MatchMetrics.ACK).timer().max(java.util.concurrent.TimeUnit.MILLISECONDS)).isLessThan(200);
     }
