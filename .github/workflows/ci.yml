@@ -104,3 +104,12 @@ jobs:
         run: node --test deploy/*.test.mjs
       - name: Check deploy/compose.yaml
         run: node deploy/check-compose.mjs
+
+  backup-drill:
+    name: backup-drill
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Backup and restore drill against a real Postgres
+        run: deploy/backup-drill-e2e.sh

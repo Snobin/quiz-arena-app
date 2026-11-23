@@ -393,3 +393,7 @@
 - source_spec: none
   summary: Story 7.3b-ii: ratings-service nightly job (03:00 IST) over `match_record` publishing 7-day return gauges (cohort size and share who completed another match on a later IST day within 7 x 24 h).
   evidence: split from Story 7.3b (product metrics) as a separate-service deliverable; independent of the game-service metrics.
+
+- source_spec: none
+  summary: Story 7.4b: `deploy/RUNBOOK-restore.md` (monthly drill and real recovery onto a new VPS, RPO 24 h, RTO 2 h, drill log), the monthly "Monthly restore drill" GitHub Actions issue workflow, and `deploy/LAUNCH-CHECKLIST.md` with every item tagged [OWNER] or [ENG].
+  evidence: split from Story 7.4 (launch readiness); the runbook documents the scripts built in 7.4a and the first drill logged there is run by the owner on the VPS.
