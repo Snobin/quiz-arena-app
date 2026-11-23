@@ -33,7 +33,15 @@ export function checkServiceWorker(input: {
   files: string[];
   webManifest: Record<string, unknown>;
   swJs?: string;
+  runtimeJs?: string;
+  pngSizes?: Record<string, { width: number; height: number } | null>;
 }): string[];
+export function checkInstallability(input: {
+  webManifest: Record<string, unknown>;
+  files?: string[];
+  pngSizes?: Record<string, { width: number; height: number } | null>;
+}): string[];
+export function pngSize(bytes: Buffer): { width: number; height: number } | null;
 export function checkBaseRebase(input: { cssFiles: TextFile[]; indexHtml: string; fontPath: string; base: string }): string[];
 export function checkDist(distDir: string, webRoot?: string): { problems: string[]; initialJsBytes: number };
 export function checkBaseBuild(base?: string, webRoot?: string): string[];

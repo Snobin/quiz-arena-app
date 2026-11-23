@@ -19,6 +19,7 @@ import {
   checkBudget,
   checkFont,
   checkServiceWorker,
+  pngSize,
   extractClasses,
   fixtureLeaks,
   fontUrl,
@@ -36,7 +37,27 @@ const FONT = MALAYALAM_FONT_URL;
 /** The navigation route workbox writes into sw.js (as in the real build). */
 const GOOD_SW =
   `e.precacheAndRoute([{url:"${FONT.slice(1)}",revision:"1"}]),` +
-  'e.registerRoute(new e.NavigationRoute(e.createHandlerBoundToURL("index.html"),{denylist:[/^\\/api\\//,/^\\/ws/]}))';
+  'e.registerRoute(new e.NavigationRoute(e.createHandlerBoundToURL("index.html"),{denylist:[/^\\/api\\//,/^\\/ws/]})),' +
+  'self.addEventListener("fetch",()=>{})';
+
+/** An installable manifest (Story 7.2) and the real PNG sizes behind its icons. */
+const GOOD_MANIFEST = {
+  name: 'Minnal',
+  short_name: 'Minnal',
+  start_url: '/',
+  scope: '/',
+  display: 'standalone',
+  orientation: 'any',
+  theme_color: '#111111',
+  background_color: '#ffffff',
+  icons: [
+    { src: 'pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+    { src: 'pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+    { src: 'pwa-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+  ],
+};
+const ICON_FILES = ['pwa-192.png', 'pwa-512.png', 'pwa-maskable-512.png'];
+const GOOD_SIZES = { 'pwa-192.png': { width: 192, height: 192 }, 'pwa-512.png': { width: 512, height: 512 }, 'pwa-maskable-512.png': { width: 512, height: 512 } };
 
 describe('check-dist: initial JS budget', () => {
   const manifest: Manifest = {
@@ -160,10 +181,9 @@ describe('check-dist: font, service worker and base', () => {
 
   it('requires injected registration and the manifest fields', () => {
     const indexHtml = '<script id="vite-plugin-pwa:register-sw" src="/registerSW.js"></script>';
-    const files = ['index.html', 'registerSW.js', 'sw.js'];
-    const webManifest = { display: 'standalone', orientation: 'any' };
-    expect(checkServiceWorker({ indexHtml, files, webManifest, swJs: GOOD_SW })).toEqual([]);
-    expect(checkServiceWorker({ indexHtml: '', files: ['index.html'], webManifest: { display: 'browser' } })).toEqual([
+    const files = ['index.html', 'registerSW.js', 'sw.js', ...ICON_FILES];
+    expect(checkServiceWorker({ indexHtml, files, webManifest: GOOD_MANIFEST, swJs: GOOD_SW, pngSizes: GOOD_SIZES })).toEqual([]);
+    expect(checkServiceWorker({ indexHtml: '', files: ['index.html'], webManifest: { display: 'browser', icons: GOOD_MANIFEST.icons, name: 'M', short_name: 'M', start_url: '/', scope: '/', theme_color: '#1', background_color: '#2' } })).toEqual([
       'sw: sw.js has no navigation fallback to index.html (createHandlerBoundToURL)',
       'sw: sw.js navigation fallback does not deny /api',
       'sw: sw.js navigation fallback does not deny /ws',
@@ -172,7 +192,34 @@ describe('check-dist: font, service worker and base', () => {
       'sw: sw.js is missing from dist',
       'sw: manifest display is browser, not standalone',
       'sw: manifest orientation is undefined, not any',
+      'install: 192 px PNG icon pwa-192.png is missing from dist',
+      'install: 512 px PNG icon pwa-512.png is missing from dist',
+      'install: 512 px maskable PNG icon pwa-maskable-512.png is missing from dist',
     ]);
+  });
+
+  it('install: fails each missing installability rule, naming it', () => {
+    const files = ['index.html', 'registerSW.js', 'sw.js', ...ICON_FILES];
+    const check = (webManifest: Record<string, unknown>, swJs = GOOD_SW, sizes = GOOD_SIZES) =>
+      checkServiceWorker({ indexHtml: '<script src="/registerSW.js"></script>', files, webManifest, swJs, pngSizes: sizes });
+    expect(check({ ...GOOD_MANIFEST, short_name: undefined })).toEqual(['install: manifest has no short_name']);
+    expect(check({ ...GOOD_MANIFEST, theme_color: '' })).toEqual(['install: manifest has no theme_color']);
+    expect(check({ ...GOOD_MANIFEST, start_url: '/other/', scope: '/app/' })).toEqual(['install: start_url /other/ is outside scope /app/']);
+    expect(check({ ...GOOD_MANIFEST, icons: GOOD_MANIFEST.icons.slice(0, 2) })).toEqual(['install: manifest has no 512 px maskable PNG icon']);
+    expect(check({ ...GOOD_MANIFEST, icons: [GOOD_MANIFEST.icons[0], GOOD_MANIFEST.icons[2]] })).toEqual(['install: manifest has no 512 px PNG icon']);
+    expect(check(GOOD_MANIFEST, GOOD_SW, { ...GOOD_SIZES, 'pwa-512.png': { width: 256, height: 256 } })).toEqual(['install: 512 px PNG icon pwa-512.png is not 512x512']);
+    expect(check(GOOD_MANIFEST, GOOD_SW.replace('addEventListener("fetch"', 'addEventListener("push"'))).toEqual(['sw: sw.js has no fetch handler']);
+    const noFetch = GOOD_SW.replace('addEventListener("fetch"', 'addEventListener("push"');
+    expect(checkServiceWorker({ indexHtml: '<script src="/registerSW.js"></script>', files, webManifest: GOOD_MANIFEST, swJs: noFetch, runtimeJs: 'self.addEventListener("fetch",f)', pngSizes: GOOD_SIZES })).toEqual([]);
+  });
+
+  it('reads a PNG size from its header and rejects other bytes', () => {
+    const png = Buffer.alloc(24);
+    Buffer.from([0x89, 0x50, 0x4e, 0x47]).copy(png);
+    png.writeUInt32BE(192, 16);
+    png.writeUInt32BE(192, 20);
+    expect(pngSize(png)).toEqual({ width: 192, height: 192 });
+    expect(pngSize(Buffer.from('<svg></svg>'))).toBeNull();
   });
 
   it('checks a --base /sub/ build rebased the font URLs', () => {
@@ -247,7 +294,14 @@ describe('check-dist: checkDist over a dist directory', () => {
     writeFileSync(join(dir, 'index.html'), dist.indexHtml);
     writeFileSync(join(dir, 'sw.js'), dist.swJs);
     writeFileSync(join(dir, 'registerSW.js'), '');
-    writeFileSync(join(dir, 'manifest.webmanifest'), JSON.stringify({ display: 'standalone', orientation: 'any' }));
+    writeFileSync(join(dir, 'manifest.webmanifest'), JSON.stringify(GOOD_MANIFEST));
+    for (const [file, { width }] of Object.entries(GOOD_SIZES)) {
+      const png = Buffer.alloc(24);
+      Buffer.from([0x89, 0x50, 0x4e, 0x47]).copy(png);
+      png.writeUInt32BE(width, 16);
+      png.writeUInt32BE(width, 20);
+      writeFileSync(join(dir, file), png);
+    }
     return dir;
   }
 

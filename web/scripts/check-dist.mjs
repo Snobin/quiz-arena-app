@@ -13,7 +13,10 @@
 //   5. font:          the Malayalam woff2 is not precached in sw.js, or its preload is not in index.html.
 //   6. sw:            service-worker registration is not injected, sw.js lost its index.html
 //                     navigation fallback or its /api, /ws denylist, or the manifest lost
-//                     display: standalone / orientation: any.
+//                     display: standalone / orientation: any, or sw.js has no fetch handler.
+//   9. install:       the manifest is not installable (Story 7.2): name, short_name, start_url within
+//                     scope, scope, theme and background colours, and real 192 px and 512 px PNG icons
+//                     including a maskable one.
 //   7. base:          a `--base /sub/` build (made into a temp dir) does not rebase the font URLs.
 //   8. admin:         admin code leaks into the player bundle: a module under src/admin/** is in the entry
 //                     chunk or a chunk it statically imports, the admin chunk marker appears in initial JS, the
@@ -268,7 +271,7 @@ export function checkFont({ swJs, indexHtml, fontPath, base = '/' }) {
   return problems;
 }
 
-export function checkServiceWorker({ indexHtml, files, webManifest, swJs = '' }) {
+export function checkServiceWorker({ indexHtml, files, webManifest, swJs = '', pngSizes, runtimeJs = '' }) {
   const problems = [];
   // Deep links (/rooms, /ranks, /me) open offline only through the navigation fallback.
   if (!/createHandlerBoundToURL\(\s*["']index\.html["']\s*\)/.test(swJs)) {
@@ -288,7 +291,54 @@ export function checkServiceWorker({ indexHtml, files, webManifest, swJs = '' })
   }
   if (webManifest.display !== 'standalone') problems.push(`sw: manifest display is ${webManifest.display}, not standalone`);
   if (webManifest.orientation !== 'any') problems.push(`sw: manifest orientation is ${webManifest.orientation}, not any`);
+  // workbox keeps its fetch listener in the runtime file sw.js imports (workbox-*.js), so look in both.
+  if (swJs && !/addEventListener\(\s*["']fetch["']/.test(swJs + runtimeJs)) problems.push('sw: sw.js has no fetch handler');
+  problems.push(...checkInstallability({ webManifest, files, pngSizes }));
   return problems;
+}
+
+/**
+ * Installability (Story 7.2): the manifest fields Chrome needs, start_url inside scope, and 192 px and 512 px PNG icons
+ * (one maskable) that exist in dist with those real dimensions. `pngSizes` maps a dist-relative path to `{width, height}`;
+ * without it only the declarations are checked.
+ */
+export function checkInstallability({ webManifest, files = [], pngSizes }) {
+  const problems = [];
+  for (const field of ['name', 'short_name', 'start_url', 'scope', 'theme_color', 'background_color']) {
+    if (typeof webManifest[field] !== 'string' || webManifest[field] === '') problems.push(`install: manifest has no ${field}`);
+  }
+  if (typeof webManifest.start_url === 'string' && typeof webManifest.scope === 'string') {
+    const resolve = (value) => new URL(value, 'https://minnal.invalid/').pathname;
+    if (!resolve(webManifest.start_url).startsWith(resolve(webManifest.scope))) {
+      problems.push(`install: start_url ${webManifest.start_url} is outside scope ${webManifest.scope}`);
+    }
+  }
+  const icons = (Array.isArray(webManifest.icons) ? webManifest.icons : []).filter((icon) => icon.type === 'image/png');
+  const declared = (size, maskable) =>
+    icons.find((icon) => icon.sizes === `${size}x${size}` && (icon.purpose ?? 'any').split(/\s+/).includes(maskable ? 'maskable' : 'any'));
+  for (const [size, maskable] of [[192, false], [512, false], [512, true]]) {
+    const icon = declared(size, maskable);
+    const label = `${size} px${maskable ? ' maskable' : ''} PNG icon`;
+    if (!icon) {
+      // A 192 px maskable is not required; only the 512 px one is.
+      problems.push(`install: manifest has no ${label}`);
+      continue;
+    }
+    const path = icon.src.replace(/^\//, '');
+    if (!files.includes(path)) problems.push(`install: ${label} ${path} is missing from dist`);
+    else if (pngSizes) {
+      const actual = pngSizes[path];
+      if (!actual || actual.width !== size || actual.height !== size) problems.push(`install: ${label} ${path} is not ${size}x${size}`);
+    }
+  }
+  return problems;
+}
+
+/** Width and height from a PNG's IHDR chunk, or null when the bytes are not a PNG. */
+export function pngSize(bytes) {
+  const signature = [0x89, 0x50, 0x4e, 0x47];
+  if (bytes.length < 24 || signature.some((b, i) => bytes[i] !== b)) return null;
+  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
 }
 
 /** In a build made with `base`, every font URL in the CSS and the preload carry the base. */
@@ -372,7 +422,16 @@ export function checkDist(distDir, webRoot = WEB_ROOT) {
   const files = readdirSync(distDir);
   const webManifestPath = at('manifest.webmanifest');
   const webManifest = existsSync(webManifestPath) ? JSON.parse(readFileSync(webManifestPath, 'utf8')) : {};
-  problems.push(...checkServiceWorker({ indexHtml, files, webManifest, swJs }));
+  const pngSizes = {};
+  for (const icon of Array.isArray(webManifest.icons) ? webManifest.icons : []) {
+    const path = String(icon.src).replace(/^\//, '');
+    if (path.endsWith('.png') && existsSync(at(path))) pngSizes[path] = pngSize(readFileSync(at(path)));
+  }
+  const runtimeJs = files
+    .filter((f) => /^workbox-.*\.js$/.test(f))
+    .map((f) => readFileSync(at(f), 'utf8'))
+    .join('\n');
+  problems.push(...checkServiceWorker({ indexHtml, files, webManifest, swJs, pngSizes, runtimeJs }));
 
   return { problems, initialJsBytes: budget.total };
 }

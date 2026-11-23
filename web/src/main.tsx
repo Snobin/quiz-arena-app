@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
 import { startSession } from './auth/session.ts';
 import './i18n.ts';
+import './install/installPrompt.ts';
 import './index.css';
 
 const queryClient = new QueryClient();
