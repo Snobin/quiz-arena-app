@@ -61,7 +61,6 @@ export const practiceCatalogue = {
   'practice.error.generic': { ml: 'പരിശീലനം ലോഡ് ചെയ്യാനായില്ല.', en: "Couldn't load practice.", signoff: ['ml', 'en'] },
   'practice.error.answer': { ml: 'ഉത്തരം അയയ്ക്കാനായില്ല.', en: "Couldn't send your answer.", signoff: ['ml', 'en'] },
   // Story 6.4: Solo Practice on a player's own custom topic, and its row in the solo picker.
-  'practice.own': { ml: 'സ്വന്തം', en: 'Own', signoff: ['ml', 'en'] },
   'practice.changed': {
     ml: 'ഈ ടോപ്പിക് പുതുക്കിയിട്ടുണ്ട്. പുതിയ ചോദ്യങ്ങളുമായി വീണ്ടും തുടങ്ങുന്നു.',
     en: 'This topic was updated. Starting again with its new questions.',

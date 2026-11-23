@@ -267,8 +267,7 @@ public class SoloPracticeService {
     private Next customNext(SoloSession session, CustomTopicRepository.Header header, CustomTopicRepository.Stored served, boolean reshuffled) {
         CustomTopicRepository.Row row = served.row();
         OptionOrder order = orderFor(session, served.id(), header.revision());
-        boolean ml = "ml".equals(row.lang());
-        InternalQuestion internal = new InternalQuestion(served.id(), header.revision(), ml ? row.text() : null, ml ? null : row.text(),
+        InternalQuestion internal = new InternalQuestion(served.id(), header.revision(), row.textMl(), row.textEn(),
                 order.apply(row.options()), order.shownIndexOf(row.answerIndex()), row.explanation(), null);
         return new Next(session.answeredCount() + 1, customView(session.source(), header.name()), reshuffled,
                 QuestionBody.of(QuestionView.of(internal)));

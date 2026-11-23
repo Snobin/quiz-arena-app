@@ -107,8 +107,7 @@ public class QuestionSetService {
     private static InternalQuestion toInternal(CustomTopicRepository.Stored stored, int revision) {
         CustomTopicRepository.Row row = stored.row();
         OptionOrder order = OptionOrder.random(java.util.concurrent.ThreadLocalRandom.current());
-        boolean ml = "ml".equals(row.lang());
-        return new InternalQuestion(stored.id(), revision, ml ? row.text() : null, ml ? null : row.text(),
+        return new InternalQuestion(stored.id(), revision, row.textMl(), row.textEn(),
                 order.apply(row.options()), order.shownIndexOf(row.answerIndex()), row.explanation(), null, null);
     }
 

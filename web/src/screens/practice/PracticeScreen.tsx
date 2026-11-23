@@ -11,6 +11,7 @@ import { useOnline } from '../../shell/online.ts';
 import { navigate, setNavigationGuard } from '../../shell/router.ts';
 import { useHideTabBar } from '../../shell/useHideTabBar.ts';
 import { QuestionCard } from '../match/QuestionCard.tsx';
+import { OwnTag } from '../rooms/CustomSource.tsx';
 import { RevealDetails } from '../match/RevealDetails.tsx';
 import { TOPICS_QUERY_KEY } from '../topics/TopicPicker.tsx';
 import {
@@ -356,9 +357,7 @@ export default function PracticeScreen({ target }: { target: PracticeTarget }) {
             {topicName}
           </p>
           {custom ? (
-            <span data-testid="practice-own-tag" lang="ml" className="rounded-sm border border-ink px-2 py-[2px] text-label font-semibold text-ink">
-              {t('practice.own')}
-            </span>
+            <OwnTag />
           ) : null}
           <Button variant="secondary" onClick={() => void stop()}>
             {t('practice.stop')}

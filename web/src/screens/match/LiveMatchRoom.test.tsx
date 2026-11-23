@@ -200,6 +200,17 @@ describe('the Battle Room live screen (Story 5.4)', () => {
     expect(screen.queryByTestId('report-link')).toBeNull();
   });
 
+  it('a custom-topic question written in one language shows in that language with its lang and no EN tag', async () => {
+    await roomMatch(Date.now() - 1_000, 0, true);
+    renderApp('/match');
+    seq += 1;
+    const started = questionStarted(MATCH, { seq, questionIndex: 0, startedAt: Date.now(), textMl: 'എന്റെ ചോദ്യം?', textEn: null });
+    topic({ ...started, payload: { ...started.payload, total: 5 } });
+    const heading = await screen.findByRole('heading', { level: 1, name: /എന്റെ ചോദ്യം\?/ });
+    expect(heading).toHaveAttribute('lang', 'ml');
+    expect(screen.queryByTestId('en-tag')).toBeNull();
+  });
+
   it('a bank room has no custom header', async () => {
     await roomMatch(Date.now() - 1_000);
     renderApp('/match');
