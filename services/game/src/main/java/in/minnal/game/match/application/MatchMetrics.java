@@ -1,7 +1,9 @@
 package in.minnal.game.match.application;
 
 import in.minnal.contracts.realtime.MessageType;
+import in.minnal.contracts.realtime.MatchMode;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
@@ -16,8 +18,10 @@ import java.util.Map;
  *   <li>{@code minnal.match.answer.ack}: an answer's server receive instant → its {@code ANSWER_ACCEPTED} send;
  *   <li>{@code minnal.match.broadcast.lag{kind}}: the triggering instant (the answer's receive
  *       instant, or the timer's due instant) → the broadcast send;
- *   <li>{@code minnal.match.ended}: completed matches (Q1 was revealed; Story 1.9);
- *   <li>{@code minnal.match.aborted}: matches every human left before Q1 was revealed;
+ *   <li>{@code minnal.match.ended{mode}}: completed matches (Q1 was revealed; Story 1.9);
+ *   <li>{@code minnal.match.aborted{mode}}: matches every human left before Q1 was revealed;
+ *   <li>{@code minnal.match.quick.completed{kind}}: completed Quick Matches by opponent, {@code bot} or {@code human} (Story 7.3b);
+ *   <li>{@code minnal.match.answer.rtt}: the client-reported round trip of a player's previous answer, for the dashboard only (never timing or scoring);
  *   <li>{@code minnal.match.failed}: matches ended early by an unexpected error;
  *   <li>{@code minnal.match.publish.failed}: {@code minnal.match.completed} events given up on after
  *       every retry (incremented by the publisher adapter through the same name).
@@ -29,19 +33,26 @@ public final class MatchMetrics {
     public static final String BROADCAST_LAG = "minnal.match.broadcast.lag";
     public static final String ENDED = "minnal.match.ended";
     public static final String ABORTED = "minnal.match.aborted";
+    public static final String QUICK_COMPLETED = "minnal.match.quick.completed";
+    public static final String ANSWER_RTT = "minnal.match.answer.rtt";
+    /** The most a client round trip can count for: larger reports are clamped. */
+    static final int MAX_RTT_MS = 10_000;
     public static final String FAILED = "minnal.match.failed";
     public static final String PUBLISH_FAILED = "minnal.match.publish.failed";
 
     private final Timer ack;
     private final Map<MessageType, Timer> lag = new EnumMap<>(MessageType.class);
-    private final Counter ended;
-    private final Counter aborted;
+    private final Map<MatchMode, Counter> ended = new EnumMap<>(MatchMode.class);
+    private final Map<MatchMode, Counter> aborted = new EnumMap<>(MatchMode.class);
+    private final Map<String, Counter> quick = new java.util.HashMap<>();
+    private final DistributionSummary rtt;
     private final Counter failed;
 
     public MatchMetrics(MeterRegistry meters) {
         ack = Timer.builder(ACK)
                 .description("Answer receipt to ANSWER_ACCEPTED send")
                 .publishPercentiles(0.5, 0.95, 0.99)
+                .publishPercentileHistogram()
                 .register(meters);
         for (MessageType type : List.of(MessageType.QUESTION_STARTED, MessageType.SCOREBOARD, MessageType.QUESTION_REVEALED)) {
             lag.put(type, Timer.builder(BROADCAST_LAG)
@@ -50,8 +61,21 @@ public final class MatchMetrics {
                     .publishPercentiles(0.5, 0.95, 0.99)
                     .register(meters));
         }
-        ended = Counter.builder(ENDED).description("Completed matches (the first question was revealed)").register(meters);
-        aborted = Counter.builder(ABORTED).description("Matches every human left before the first reveal")
+        for (MatchMode mode : MatchMode.values()) {
+            ended.put(mode, Counter.builder(ENDED).description("Completed matches (the first question was revealed)")
+                    .tag("mode", mode.name()).register(meters));
+            aborted.put(mode, Counter.builder(ABORTED).description("Matches every human left before the first reveal")
+                    .tag("mode", mode.name()).register(meters));
+        }
+        for (String kind : List.of("bot", "human")) {
+            quick.put(kind, Counter.builder(QUICK_COMPLETED).description("Completed Quick Matches by opponent kind")
+                    .tag("kind", kind).register(meters));
+        }
+        rtt = DistributionSummary.builder(ANSWER_RTT)
+                .description("Client-measured round trip of the previous answer (milliseconds)")
+                .baseUnit("milliseconds")
+                .publishPercentiles(0.5, 0.95)
+                .publishPercentileHistogram()
                 .register(meters);
         failed = Counter.builder(FAILED).description("Matches ended early by an unexpected error").register(meters);
         publishFailedCounter(meters);
@@ -78,12 +102,24 @@ public final class MatchMetrics {
         }
     }
 
-    void ended() {
-        ended.increment();
+    void ended(MatchMode mode) {
+        ended.get(mode).increment();
     }
 
-    void aborted() {
-        aborted.increment();
+    void aborted(MatchMode mode) {
+        aborted.get(mode).increment();
+    }
+
+    /** A completed Quick Match: whether she played a bot or a human (the bot-ended share). */
+    void quickCompleted(boolean withBot) {
+        quick.get(withBot ? "bot" : "human").increment();
+    }
+
+    /** The client's report of her previous answer's round trip: clamped to 0 to 10,000 ms; absent records nothing. */
+    void clientRtt(Integer ms) {
+        if (ms != null) {
+            rtt.record(Math.max(0, Math.min(MAX_RTT_MS, ms)));
+        }
     }
 
     void failed() {

@@ -75,6 +75,7 @@ final class MatchmakingActor implements AutoCloseable {
                 .description("Time a human waited in the matchmaking queue before pairing")
                 .tag("mode", mode.name())
                 .publishPercentiles(0.5)
+                .publishPercentileHistogram()
                 .register(meters);
         this.humanPairings = pairings(meters, "human");
         this.botPairings = pairings(meters, "bot");

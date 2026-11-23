@@ -394,7 +394,9 @@ class RealtimeSamplesTest {
         AnswerRequest request = ContractJson.MAPPER.readValue(
                 "{\"questionIndex\":3,\"optionIndex\":1,\"clientTime\":\"2026-01-01T00:00:00Z\",\"prevAckRttMs\":80}",
                 AnswerRequest.class);
-        assertThat(request).isEqualTo(new AnswerRequest(3, 1));
+        // prevAckRttMs is read (dashboard only, Story 7.3b); the client timestamp is still ignored.
+        assertThat(request).isEqualTo(new AnswerRequest(3, 1, 80));
+        assertThat(ContractJson.MAPPER.readValue("{\"questionIndex\":3,\"optionIndex\":1}", AnswerRequest.class)).isEqualTo(new AnswerRequest(3, 1));
         assertThat(ContractJson.MAPPER.readValue("{}", AnswerRequest.class)).isEqualTo(new AnswerRequest(null, null));
     }
 
