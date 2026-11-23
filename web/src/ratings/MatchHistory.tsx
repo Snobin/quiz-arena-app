@@ -50,7 +50,8 @@ export function MatchHistory() {
               <span className="flex flex-col">
                 <span className="text-body font-semibold">{t(RESULT_LABEL[match.result])}</span>
                 <span className="text-caption text-muted">
-                  {t(MODE_LABEL[match.mode])} · {formatMatchDate(match.endedAt, uiLanguage(i18n))} · {formatNumber(match.score)}
+                  {t(MODE_LABEL[match.mode])}
+                  {match.mode === 'BATTLE_ROOM' && match.ratingDelta === undefined ? ` · #${match.placement}` : ''} · {formatMatchDate(match.endedAt, uiLanguage(i18n))} · {formatNumber(match.score)}
                 </span>
               </span>
               {match.ratingDelta === undefined ? (

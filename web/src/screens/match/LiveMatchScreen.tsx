@@ -473,7 +473,13 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
               key={`question-${started.questionIndex}:${view.questionId}`}
               view={view}
               headingRef={headingRef}
-              label={live.topic ? `${t('mode.topicDuel.title')} · ${live.topic.name}` : undefined}
+              label={
+                live.topic
+                  ? room && live.questionSource === 'CUSTOM'
+                    ? t('room.live.title', { topic: live.topic.name })
+                    : `${t('mode.topicDuel.title')} · ${live.topic.name}`
+                  : undefined
+              }
               position={t('match.questionPosition', {
                 n: started.questionIndex + 1,
                 total: started.total,
@@ -490,7 +496,7 @@ function LiveMatchView({ live, arrived }: { live: LiveMatch; arrived: boolean })
               onCommit={(optionIndex) => submitAnswer(optionIndex)}
             />
 
-            {reveal ? <RevealDetails explanation={reveal.explanation} attribution={reveal.attribution} /> : null}
+            {reveal ? <RevealDetails explanation={reveal.explanation} attribution={reveal.attribution} hideSource={live.questionSource === 'CUSTOM'} /> : null}
             {reveal ? (
               // Story 3.5: the tap only marks the question; the note is added on the results (no typing in play).
               <ReportQuestion

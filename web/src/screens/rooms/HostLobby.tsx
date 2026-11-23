@@ -19,7 +19,8 @@ import { formatCode, spellCode } from './roomCode.ts';
 import { roomClient, useRoom, type RoomSession } from './roomClient.ts';
 import { expiryLabel } from './roomTime.ts';
 import { selectContents, copyText, shareRoom } from './share.ts';
-import { findTopic, useCatalogue } from './useCatalogue.ts';
+import { findCustomTopic, findTopic, useCatalogue, useCustomTopics } from './useCatalogue.ts';
+import { CustomSourceRow } from './CustomSource.tsx';
 import './roomCatalogue.ts';
 
 const COPIED_MS = 2000;
@@ -112,8 +113,12 @@ function ConfigCard({ session, leaveForPicker }: { session: RoomSession; leaveFo
   const configuring = useRoom((s) => s.configuring);
   const error = useRoom((s) => s.error);
   const isHost = session.role === 'HOST';
+  const custom = session.room.source.type === 'CUSTOM';
   const found = findTopic(catalogue.data, session.room.source.topicId);
-  const limits = countLimits(found?.topic.publishedCount);
+  // Only the host's stepper needs the custom topic's size, so only the host asks for her list; a player never does.
+  const customList = useCustomTopics(custom && isHost);
+  const customFound = findCustomTopic(customList.data?.topics, session.room.source.customTopicId);
+  const limits = countLimits(found?.topic.publishedCount ?? customFound?.questionCount);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(session.room.questionCount);
   const countLabel = 'lobbyCountLabel';
@@ -130,7 +135,9 @@ function ConfigCard({ session, leaveForPicker }: { session: RoomSession; leaveFo
       <div className="flex items-start gap-3">
         <div className="flex min-w-[0] flex-1 flex-col">
           <p className="text-caption text-muted">{t('rooms.source.label')}</p>
-          {found ? (
+          {custom ? (
+            <CustomSourceRow name={customFound?.name ?? session.room.source.topicName ?? t('rooms.source.generic')} />
+          ) : found ? (
             <>
               <p lang={detectLanguage(found.topic.name)} className="text-body font-semibold break-words text-ink">
                 {found.topic.name}
@@ -268,7 +275,10 @@ function StartBar({ session, barRef, leaveForPicker }: { session: RoomSession; b
   const busy = starting || lobbyPhase === 'STARTING';
   let caption: string | null = null;
   if (busy) caption = t('rooms.lobby.starting');
-  else if (startFailure === 'TOPIC_UNAVAILABLE') caption = t('rooms.start.topicUnavailable');
+  else if (startFailure === 'SOURCE_UNAVAILABLE') caption = t('rooms.start.sourceGone');
+  else if (startFailure === 'TOPIC_UNAVAILABLE') {
+    caption = session.room.source.type === 'CUSTOM' ? t('rooms.start.customTooFew', { count: session.room.questionCount }) : t('rooms.start.topicUnavailable');
+  }
   else if (startFailure === 'UNAVAILABLE') caption = t('rooms.start.failed');
   else if (startError) caption = startError.code === 'SERVER_DRAINING' ? t('rooms.start.draining') : t('rooms.start.failed');
   useEffect(() => {
@@ -292,7 +302,7 @@ function StartBar({ session, barRef, leaveForPicker }: { session: RoomSession; b
           </Button>
         )}
         {caption ? <p className="text-caption text-muted">{caption}</p> : null}
-        {!busy && startFailure === 'TOPIC_UNAVAILABLE' ? (
+        {!busy && (startFailure === 'TOPIC_UNAVAILABLE' || startFailure === 'SOURCE_UNAVAILABLE') ? (
           <Link
             to={pickerPath({ roomId: session.roomId, count: session.room.questionCount })}
             onClick={(event) => {

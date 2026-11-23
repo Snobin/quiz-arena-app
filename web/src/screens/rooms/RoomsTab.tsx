@@ -10,13 +10,14 @@ import { announce } from '../../shell/announce.ts';
 import { Link } from '../../shell/Link.tsx';
 import { navigate } from '../../shell/router.ts';
 import { useOnline } from '../../shell/online.ts';
-import { createPath } from './pickerReturn.ts';
-import { loadRecentRooms, type RecentRoom } from './recentRooms.ts';
+import { OwnTag } from './CustomSource.tsx';
+import { createPath, customCreatePath } from './pickerReturn.ts';
+import { loadRecentRooms, sourceId, type RecentRoom } from './recentRooms.ts';
 import { JoinError } from './RoomError.tsx';
 import { formatCode, normalizeCode } from './roomCode.ts';
 import { roomClient, useRoom, type RoomError, type RoomNotice } from './roomClient.ts';
 import { shortDate } from './roomTime.ts';
-import { findTopic, useCatalogue } from './useCatalogue.ts';
+import { findCustomTopic, findTopic, useCatalogue, useCustomTopics } from './useCatalogue.ts';
 import './roomCatalogue.ts';
 
 const NOTICE_KEY = {
@@ -170,10 +171,13 @@ function RecentRow({ entry, name }: { entry: RecentRoom; name: string }) {
   const sub = t('rooms.recent.sub', { questions: t('topics.questions', { count: entry.questionCount }), date: shortDate(entry.hostedAt, uiLanguage()) });
   return (
     <li className="border-b border-hairline last:border-b-0">
-      <Link to={createPath(entry.source.topicId, entry.questionCount)} className="hit-target flex min-h-[56px] w-full min-w-[0] items-center gap-3 rounded-lg px-4 py-2">
+      <Link to={entry.source.type === 'CUSTOM' ? customCreatePath(entry.source.customTopicId, entry.questionCount) : createPath(entry.source.topicId, entry.questionCount)} className="hit-target flex min-h-[56px] w-full min-w-[0] items-center gap-3 rounded-lg px-4 py-2">
         <span className="flex min-w-[0] flex-1 flex-col">
-          <span lang={detectLanguage(name)} className="text-body font-semibold break-words text-ink">
-            {name}
+          <span className="flex flex-wrap items-center gap-2">
+            <span lang={detectLanguage(name)} className="text-body font-semibold break-words text-ink">
+              {name}
+            </span>
+            {entry.source.type === 'CUSTOM' ? <OwnTag /> : null}
           </span>
           <span className="text-caption text-muted">{sub}</span>
         </span>
@@ -194,7 +198,14 @@ export default function RoomsTab() {
   const catalogue = useCatalogue();
   const userId = authSession.userId();
   const recent = userId ? loadRecentRooms(userId) : [];
+  const hasCustom = recent.some((entry) => entry.source.type === 'CUSTOM');
+  const customList = useCustomTopics(hasCustom);
+  // A recent room whose topic is gone, or (custom) no longer in her list or under 5 questions, is hidden.
   const rows = recent.flatMap((entry) => {
+    if (entry.source.type === 'CUSTOM') {
+      const own = findCustomTopic(customList.data?.topics, entry.source.customTopicId);
+      return own ? [{ entry, name: own.name }] : [];
+    }
     const found = findTopic(catalogue.data, entry.source.topicId);
     return found ? [{ entry, name: found.topic.name }] : [];
   });
@@ -220,7 +231,7 @@ export default function RoomsTab() {
             </h2>
             <ul className="rounded-lg border border-hairline bg-card">
               {rows.map(({ entry, name }) => (
-                <RecentRow key={entry.source.topicId} entry={entry} name={name} />
+                <RecentRow key={sourceId(entry.source)} entry={entry} name={name} />
               ))}
             </ul>
           </section>

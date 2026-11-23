@@ -12,7 +12,7 @@ import { useDocumentTitle } from '../../i18n/useDocumentTitle.ts';
 import { useReducedEffects } from '../../motion/reduceEffects.ts';
 import * as lastResult from '../../realtime/lastResult.ts';
 import { cancelRematch, requestRematch, useLiveGame, type LiveMatch } from '../../realtime/liveGameStore.ts';
-import type { MatchEndedPayload, RoomSucceededPayload } from '../../realtime/protocol.ts';
+import type { MatchEndedPayload, RoomSucceededPayload, TopicInfo } from '../../realtime/protocol.ts';
 import { announce } from '../../shell/announce.ts';
 import { Link } from '../../shell/Link.tsx';
 import { navigate } from '../../shell/router.ts';
@@ -166,7 +166,11 @@ function FullResults({ full, view }: { full: FullResult; view: ResultView }) {
   const named = delta.status === 'ready' ? `${baseHeading}, ${t('results.rating.sr', { delta: delta.delta })}` : baseHeading;
   // A Topic Duel names its mode and topic under the result line ("Topic Duel · Kerala History"), and in the heading's name.
   const topic = full.payload.topic;
-  const topicLabel = topic ? `${room ? t('room.result.title') : t('mode.topicDuel.title')} · ${topic.name}` : undefined;
+  // A room on the host's own topic adds "Own · unrated" to that line (Story 6.5b).
+  const customRoom = room && full.payload.questionSource === 'CUSTOM';
+  const topicLabel = topic
+    ? `${room ? t('room.result.title') : t('mode.topicDuel.title')} · ${topic.name}${customRoom ? ` · ${t('room.result.ownUnrated')}` : ''}`
+    : undefined;
   const heading = topicLabel ? `${named}, ${topicLabel}` : named;
   // Questions she marked during the live reveals open expanded with the note ready (Story 3.5).
   const [marks] = useState(() => new Set(lastResult.loadMarks(matchId)));
@@ -287,7 +291,13 @@ function RoomActions({
   );
   if (isHost && payload.room && payload.topic) {
     return (
-      <HostActions roomId={payload.room.roomId} topic={payload.topic} count={payload.questions.length} endedAt={endedAt}>
+      <HostActions
+        roomId={payload.room.roomId}
+        topic={payload.topic}
+        custom={payload.questionSource === 'CUSTOM'}
+        count={payload.questions.length}
+        endedAt={endedAt}
+      >
         {home}
       </HostActions>
     );
@@ -303,12 +313,15 @@ function RoomActions({
 function HostActions({
   roomId,
   topic,
+  custom,
   count,
   endedAt,
   children,
 }: {
   roomId: string;
-  topic: { topicId: string; name: string; subjectName: string };
+  topic: TopicInfo;
+  /** A room on the host's own topic: the server keeps the source, and the payload names no id (Story 6.5b). */
+  custom: boolean;
   count: number;
   endedAt: number | null;
   children: ReactNode;
@@ -337,7 +350,7 @@ function HostActions({
     setSending(true);
     setError(null);
     void roomClient()
-      .playAgain(roomId, { source: { type: 'BANK', topicId: topic.topicId }, questionCount: count })
+      .playAgain(roomId, { source: custom ? { type: 'CUSTOM', topicName: topic.name } : { type: 'BANK', topicId: topic.topicId }, questionCount: count })
       .then((result) => {
         if (!mounted.current) return;
         setSending(false);
@@ -348,11 +361,20 @@ function HostActions({
           return;
         }
         const userId = session.userId();
-        if (userId) {
+        const next = result.session.room.source;
+        if (userId && custom && next.customTopicId) {
+          saveRecentRoom(userId, {
+            source: { type: 'CUSTOM', customTopicId: next.customTopicId },
+            topicName: next.topicName ?? topic.name,
+            subjectName: '',
+            questionCount: count,
+            hostedAt: new Date().toISOString(),
+          });
+        } else if (userId && !custom && topic.topicId) {
           saveRecentRoom(userId, {
             source: { type: 'BANK', topicId: topic.topicId },
             topicName: topic.name,
-            subjectName: topic.subjectName,
+            subjectName: topic.subjectName ?? '',
             questionCount: count,
             hostedAt: new Date().toISOString(),
           });
@@ -368,7 +390,7 @@ function HostActions({
           {t('results.playAgain')}
         </Button>
       ) : (
-        <Button data-testid="room-new-room" onClick={() => navigate(createPath(topic.topicId, count))}>
+        <Button data-testid="room-new-room" onClick={() => navigate(createPath(custom ? undefined : topic.topicId, count))}>
           {t('room.playAgain.newRoom')}
         </Button>
       )}

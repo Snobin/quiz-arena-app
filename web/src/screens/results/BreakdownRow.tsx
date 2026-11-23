@@ -118,7 +118,7 @@ function Details({
           </span>
         </p>
       )}
-      <RevealDetails explanation={question.explanation} attribution={question.attribution} />
+      <RevealDetails explanation={question.explanation} attribution={question.attribution} hideSource={report?.questionSource === 'CUSTOM'} />
       {report ? (
         <ReportQuestion
           questionId={question.questionId}

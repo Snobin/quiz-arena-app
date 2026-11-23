@@ -10,13 +10,14 @@ import { Link } from '../../shell/Link.tsx';
 import { navigate, searchParam } from '../../shell/router.ts';
 import { useOnline } from '../../shell/online.ts';
 import { CountStepper } from './CountStepper.tsx';
+import { CustomSourceRow } from './CustomSource.tsx';
 import { pickerPath } from './pickerReturn.ts';
 import { RoomError } from './RoomError.tsx';
 import { saveRecentRoom } from './recentRooms.ts';
 import { clampCount, countLimits, DEFAULT_QUESTIONS } from './roomConfig.ts';
 import { formatCode } from './roomCode.ts';
 import { roomClient, type RoomError as RoomErrorValue } from './roomClient.ts';
-import { findTopic, useCatalogue } from './useCatalogue.ts';
+import { findCustomTopic, findTopic, useCatalogue, useCustomTopics } from './useCatalogue.ts';
 import './roomCatalogue.ts';
 
 const LINK = 'hit-target inline-flex min-h-target-min items-center text-body font-semibold text-ink underline';
@@ -38,8 +39,13 @@ export default function CreateRoom() {
   const sourceLabel = useId();
   const countLabel = useId();
   const topicId = searchParam('topicId');
+  const customId = searchParam('customTopicId');
   const found = findTopic(catalogue.data, topicId);
-  const limits = countLimits(found?.topic.publishedCount);
+  // A custom source (Story 6.5b) comes from her own list; the bank catalogue is not needed for it.
+  const customList = useCustomTopics(customId !== null && topicId === null);
+  const customFound = topicId === null ? findCustomTopic(customList.data?.topics, customId) : null;
+  const sourceKey = found?.topic.topicId ?? customFound?.customTopicId;
+  const limits = countLimits(found?.topic.publishedCount ?? customFound?.questionCount);
   const [count, setCount] = useState(initialCount);
   const shown = clampCount(count, limits);
   const [sending, setSending] = useState(false);
@@ -55,24 +61,27 @@ export default function CreateRoom() {
   // A topic with fewer questions than the count lowers it, announced politely once.
   const lowered = useRef<string | null>(null);
   useEffect(() => {
-    if (!found || count <= limits.max) return;
+    if (!sourceKey || count <= limits.max) return;
     setCount(limits.max);
-    const key = `${found.topic.topicId}:${limits.max}`;
+    const key = `${sourceKey}:${limits.max}`;
     if (lowered.current === key) return;
     lowered.current = key;
     announce(t('rooms.count.lowered', { count: limits.max }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [found?.topic.topicId, limits.max, count]);
+  }, [sourceKey, limits.max, count]);
 
-  const catalogueFailed = !catalogue.data && catalogue.isError;
-  const reason = !online ? t('rooms.offline') : !found ? t('rooms.source.chooseFirst') : null;
+  const catalogueFailed = customId !== null && topicId === null ? !customList.data && customList.isError : !catalogue.data && catalogue.isError;
+  const reason = !online ? t('rooms.offline') : !found && !customFound ? t('rooms.source.chooseFirst') : null;
 
   const create = () => {
-    if (!found || !online || sending) return;
+    if ((!found && !customFound) || !online || sending) return;
     setSending(true);
     setError(null);
+    const source = customFound
+      ? ({ type: 'CUSTOM', customTopicId: customFound.customTopicId, topicName: customFound.name } as const)
+      : ({ type: 'BANK', topicId: found!.topic.topicId } as const);
     void roomClient()
-      .create({ source: { type: 'BANK', topicId: found.topic.topicId }, questionCount: shown })
+      .create({ source, questionCount: shown })
       .then((result) => {
         if (!mounted.current) return;
         setSending(false);
@@ -83,9 +92,11 @@ export default function CreateRoom() {
         const userId = authSession.userId();
         if (userId) {
           saveRecentRoom(userId, {
-            source: { type: 'BANK', topicId: found.topic.topicId },
-            topicName: found.topic.name,
-            subjectName: found.subject.name,
+            source: customFound
+              ? { type: 'CUSTOM', customTopicId: customFound.customTopicId }
+              : { type: 'BANK', topicId: found!.topic.topicId },
+            topicName: customFound ? customFound.name : found!.topic.name,
+            subjectName: customFound ? '' : found!.subject.name,
             questionCount: shown,
             hostedAt: new Date().toISOString(),
           });
@@ -109,7 +120,14 @@ export default function CreateRoom() {
             <h2 id={sourceLabel} className="text-caption text-muted">
               {t('rooms.source.label')}
             </h2>
-            {found ? (
+            {customFound ? (
+              <>
+                <CustomSourceRow name={customFound.name} />
+                <Link to={pickerPath({ count: shown })} className={LINK}>
+                  {t('rooms.source.change')}
+                </Link>
+              </>
+            ) : found ? (
               <>
                 <p lang={detectLanguage(found.topic.name)} className="text-body font-semibold break-words text-ink">
                   {found.topic.name}
@@ -121,12 +139,12 @@ export default function CreateRoom() {
                   {t('rooms.source.change')}
                 </Link>
               </>
-            ) : topicId && !catalogue.data && !catalogueFailed ? (
+            ) : (topicId && !catalogue.data && !catalogueFailed) || (customId && !customList.data && !catalogueFailed) ? (
               <p className="text-body text-muted">{t('rooms.source.loading')}</p>
             ) : catalogueFailed ? (
               <div className="flex flex-col items-start gap-2">
                 <p className="text-body text-ink">{t('rooms.source.loadFailed')}</p>
-                <Button variant="secondary" onClick={() => void catalogue.refetch()}>
+                <Button variant="secondary" onClick={() => void (customId !== null && topicId === null ? customList.refetch() : catalogue.refetch())}>
                   {t('common.retry')}
                 </Button>
               </div>

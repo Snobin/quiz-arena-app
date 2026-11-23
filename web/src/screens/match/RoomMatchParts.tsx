@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatNumber } from '../../i18n/format.ts';
-import { Lang } from '../../i18n/Lang.tsx';
+import { detectLanguage, Lang } from '../../i18n/Lang.tsx';
 import type { LiveMatch } from '../../realtime/liveGameStore.ts';
 import '../rooms/roomCatalogue.ts';
+import { OwnTag } from '../rooms/CustomSource.tsx';
 
 /**
  * The Battle Room's parts of the live screen (Story 5.4): the start countdown, a compact header, the plain standings. They sit in the match chunk with the screen; the room strings they use come from the rooms
@@ -88,6 +89,14 @@ export function RoomHeader({ live, trailing }: { live: LiveMatch; trailing?: Rea
       data-testid="room-header"
       className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-hairline bg-card px-3 py-3"
     >
+      {live.questionSource === 'CUSTOM' && live.topic ? (
+        <div data-testid="room-custom-header" className="flex w-full flex-wrap items-center gap-2">
+          <span lang={detectLanguage(live.topic.name)} className="min-w-[0] break-words text-label font-bold text-ink">
+            {t('room.live.title', { topic: live.topic.name })}
+          </span>
+          <OwnTag />
+        </div>
+      ) : null}
       <div className="flex flex-col">
         <span className="text-label font-bold text-ink">{t('match.you')}</span>
         <span data-testid="self-total" className="font-score text-score tabular-nums text-ink">

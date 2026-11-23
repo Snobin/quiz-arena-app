@@ -279,7 +279,7 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
           mode: payload.mode,
           participants: payload.participants,
           questionCount: payload.questionCount,
-          questionSource: 'BANK',
+          questionSource: payload.questionSource ?? 'BANK',
           selfParticipantId: session.selfParticipantId,
           ...(payload.topic && { topic: payload.topic }),
         },
@@ -292,7 +292,10 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
     }
     const { room, joined, left, phase } = incoming.payload;
     const before = session.room;
-    const configChanged = before.questionCount !== room.questionCount || before.source.topicId !== room.source.topicId;
+    const configChanged =
+      before.questionCount !== room.questionCount ||
+      before.source.topicId !== room.source.topicId ||
+      before.source.customTopicId !== room.source.customTopicId;
     const patch: Partial<RoomState> = {
       session: { ...session, room, lastSeq: seq },
       lobbyEvent: { seq, joined, left },
@@ -472,7 +475,12 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
   }
 
   function sameConfig(request: Required<RoomConfigRequest>, room: RoomView): boolean {
-    return room.source.topicId === request.source.topicId && room.questionCount === request.questionCount;
+    if (room.questionCount !== request.questionCount) return false;
+    if (request.source.type === 'CUSTOM') {
+      // A play again names no id (the server keeps the old source): any custom room with that count is the successor.
+      return room.source.type === 'CUSTOM' && (request.source.customTopicId === undefined || room.source.customTopicId === request.source.customTopicId);
+    }
+    return room.source.type !== 'CUSTOM' && room.source.topicId === request.source.topicId;
   }
 
   function open(retryOnAuth: boolean): void {

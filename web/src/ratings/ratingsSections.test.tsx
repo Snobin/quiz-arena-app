@@ -107,6 +107,21 @@ describe('Me: rating trio and match history', () => {
     expect(within(rows[2]!).queryByTestId('history-delta')).toBeNull();
   });
 
+  it('lists an unrated Battle Room match (a custom topic) as "Battle Room · #3" with the muted unrated tag and no delta (Story 6.5b)', async () => {
+    core({
+      matches: () =>
+        jsonResponse({
+          matches: [{ matchId: 'c', mode: 'BATTLE_ROOM', result: 'LOSS', score: 3960, placement: 3, rated: false, endedAt: '2026-11-20T10:00:00Z' }],
+        }),
+    });
+    await boot();
+    renderApp('/me');
+    const rows = await screen.findAllByTestId('history-row');
+    expect(rows[0]).toHaveTextContent('Battle Room · #3');
+    expect(within(rows[0]!).getByTestId('history-unrated')).toHaveTextContent('unrated');
+    expect(within(rows[0]!).queryByTestId('history-delta')).toBeNull();
+  });
+
   it('lists a Battle Room match with its mode and rating delta (placement "#N" in the row is deferred from Story 5.5)', async () => {
     core({
       matches: () =>
