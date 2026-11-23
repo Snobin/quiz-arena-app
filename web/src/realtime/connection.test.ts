@@ -336,6 +336,27 @@ describe('the live match', () => {
     expect(state().phase).toBe('found');
   });
 
+  it('the next answer reports the previous answer\'s round trip as prevAckRttMs (dashboard only), clamped', async () => {
+    const { matchId } = await found();
+    let now = Date.parse(SERVER_TIME) - 1500;
+    env.now = () => now;
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 3, startedAt: T0 }));
+    expect(realtime.submitAnswer(2)).toBe(true);
+    now += 120;
+    last().deliver(answerAccepted(matchId, 3));
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 2, questionIndex: 4, startedAt: T0 }));
+    expect(realtime.submitAnswer(1)).toBe(true);
+    expect(last().bodiesTo(matchAnswer(matchId))).toEqual([
+      { questionIndex: 3, optionIndex: 2 },
+      { questionIndex: 4, optionIndex: 1, prevAckRttMs: 120 },
+    ]);
+    now += 60_000;
+    last().deliver(answerAccepted(matchId, 4));
+    last().deliverTopic(matchId, questionStarted(matchId, { seq: 3, questionIndex: 5, startedAt: T0 }));
+    expect(realtime.submitAnswer(0)).toBe(true);
+    expect(last().bodiesTo(matchAnswer(matchId))[2]).toEqual({ questionIndex: 5, optionIndex: 0, prevAckRttMs: 10_000 });
+  });
+
   it('a 1v1 ANSWER_ACCEPTED keeps her own result on the locked answer; the reveal leaves it', async () => {
     const { matchId, opponent } = await found();
     last().deliverTopic(matchId, questionStarted(matchId, { seq: 1, questionIndex: 0, startedAt: T0 }));

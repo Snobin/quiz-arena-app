@@ -146,6 +146,6 @@ class MatchLoadTest {
             assertThat(lag.count()).isPositive();
             assertThat(p95).as("%s broadcast lag p95", type).isLessThan(500);
         }
-        assertThat(meters.get(MatchMetrics.ENDED).counter().count()).isEqualTo(MATCHES);
+        assertThat(meters.get(MatchMetrics.ENDED).tag("mode", "QUICK").counter().count()).isEqualTo(MATCHES);
     }
 }

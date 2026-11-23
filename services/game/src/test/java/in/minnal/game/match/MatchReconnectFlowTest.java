@@ -102,7 +102,7 @@ class MatchReconnectFlowTest extends GameIntegrationTest {
     }
 
     double counter(String name) {
-        return meters.get(name).counter().count();
+        return meters.get(name).tag("mode", "QUICK").counter().count();
     }
 
     @Test

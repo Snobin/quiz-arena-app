@@ -3,6 +3,7 @@ package in.minnal.game.match.application;
 import in.minnal.contracts.realtime.AnswerRequest;
 import in.minnal.contracts.realtime.ErrorCode;
 import in.minnal.contracts.realtime.MatchMode;
+import in.minnal.contracts.realtime.ParticipantKind;
 import in.minnal.contracts.realtime.ServerMessage;
 import in.minnal.game.match.domain.MatchParticipant;
 import in.minnal.game.match.domain.MatchSetup;
@@ -187,7 +188,8 @@ public class MatchRegistry implements MatchAccess, DisposableBean {
             channel.toSession(sub, sessionId, ServerMessage.error(ErrorCode.NOT_IN_MATCH, matchId, clock.instant()));
             return;
         }
-        AnswerRequest body = request == null ? new AnswerRequest(null, null) : request;
+        AnswerRequest body = request == null ? new AnswerRequest(null, null, null) : request;
+        metrics.clientRtt(body.prevAckRttMs()); // the dashboard only: never used for timing or scoring (AD-6)
         match.tell(new MatchEvent.Answer(participantId.get(), body.questionIndex(), body.optionIndex(), receivedAt,
                 new MatchEvent.ReplyTo(sub, sessionId)));
     }
@@ -249,9 +251,10 @@ public class MatchRegistry implements MatchAccess, DisposableBean {
         if (match.isFailed()) {
             metrics.failed();
         } else if (match.isAborted()) {
-            metrics.aborted();
+            metrics.aborted(match.setup().mode());
         } else if (match.isCompleted()) {
-            metrics.ended();
+            metrics.ended(match.setup().mode());
+            recordCompleted(match);
         } else {
             metrics.failed();
         }
@@ -267,6 +270,19 @@ public class MatchRegistry implements MatchAccess, DisposableBean {
         if (!match.isFailed() && !match.isAborted() && match.isCompleted()
                 && (match.setup().mode() == MatchMode.QUICK || match.setup().mode() == MatchMode.TOPIC_DUEL)) {
             openRematchWindow(match);
+        }
+    }
+
+    /** Product metrics for a completed match (Story 7.3b); never blocks the end. */
+    private void recordCompleted(MatchActor match) {
+        try {
+            MatchSetup setup = match.setup();
+            if (setup.mode() == MatchMode.QUICK) {
+                metrics.quickCompleted(setup.participants().stream().anyMatch(p -> p.kind() == ParticipantKind.BOT));
+            }
+            events.publishEvent(new MatchCompleted(setup));
+        } catch (RuntimeException e) {
+            log.atWarn().addKeyValue("matchId", match.matchId()).setCause(e).log("could not record the match's metrics");
         }
     }
 

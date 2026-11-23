@@ -389,3 +389,7 @@
 - source_spec: none
   summary: Story 7.3c: the "Launch" and "Health" Grafana dashboards, the five alert rules in `deploy/grafana/`, a forced-failure test of each alert, and the coaching-centre "proxy" note.
   evidence: split from Story 7.3 as an independently shippable deliverable; depends on the meter names from 7.3b.
+
+- source_spec: none
+  summary: Story 7.3b-ii: ratings-service nightly job (03:00 IST) over `match_record` publishing 7-day return gauges (cohort size and share who completed another match on a later IST day within 7 x 24 h).
+  evidence: split from Story 7.3b (product metrics) as a separate-service deliverable; independent of the game-service metrics.

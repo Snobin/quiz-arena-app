@@ -77,6 +77,19 @@ class MatchRegistryTest {
     }
 
     @Test
+    void anAnswersClientRoundTripGoesToTheHistogramClampedAndNeverIntoTheMatch() {
+        registry = registry(Duration.ofMillis(40));
+        MatchSetup setup = claimed(MatchTestKit.setup(2, 0, 10));
+        registry.start(setup).orElseThrow();
+        registry.answer("h0", "s-h0", setup.matchId().toString(), new AnswerRequest(9, 0, 99_999), Instant.now());
+        registry.answer("h1", "s-h1", setup.matchId().toString(), new AnswerRequest(9, 0), Instant.now());
+        var rtt = meters.get(MatchMetrics.ANSWER_RTT).summary();
+        assertThat(rtt.count()).isEqualTo(1);
+        assertThat(rtt.max()).isEqualTo(10_000);
+        await().atMost(Duration.ofSeconds(10)).until(() -> registry.liveCount() == 0);
+    }
+
+    @Test
     void aMatchRunsItsTenQuestionsThenEndsAndReleasesItsHumans() {
         registry = registry(Duration.ofMillis(40));
         MatchSetup setup = claimed(MatchTestKit.setup(2, 0, 10));
@@ -94,7 +107,7 @@ class MatchRegistryTest {
         assertThat(participation.activityOf("h1")).isEmpty();
         assertThat(registry.find(setup.matchId())).isEmpty();
         assertThat(registry.isParticipant(setup.matchId(), "h0")).as("an ended match has no participants").isFalse();
-        assertThat(meters.get(MatchMetrics.ENDED).counter().count()).isEqualTo(1);
+        assertThat(meters.get(MatchMetrics.ENDED).tag("mode", "QUICK").counter().count()).isEqualTo(1);
         assertThat(meters.get(MatchMetrics.FAILED).counter().count()).isZero();
 
         // A late answer from one of its players: ANSWER_REJECTED with the last seq (the match is gone).
@@ -252,7 +265,7 @@ class MatchRegistryTest {
         assertThat(participation.activityOf("h0")).isEmpty();
         assertThat(participation.activityOf("h1")).isEmpty();
         assertThat(meters.get(MatchMetrics.FAILED).counter().count()).isEqualTo(1);
-        assertThat(meters.get(MatchMetrics.ENDED).counter().count()).isZero();
+        assertThat(meters.get(MatchMetrics.ENDED).tag("mode", "QUICK").counter().count()).isZero();
         // Story 1.9: the failure is broadcast as MATCH_ABORTED{ERROR} before the end.
         assertThat(broadcaster.all).extracting(ServerMessage::type).containsExactly(MessageType.QUESTION_STARTED,
                 MessageType.QUESTION_REVEALED, MessageType.MATCH_ABORTED);
@@ -313,8 +326,8 @@ class MatchRegistryTest {
         assertThat(broadcaster.all).extracting(ServerMessage::type)
                 .endsWith(MessageType.PARTICIPANT_FORFEITED, MessageType.MATCH_ABORTED);
         assertThat(((MatchAbortedPayload) broadcaster.all.getLast().payload()).reason()).isEqualTo(AbortReason.ALL_LEFT);
-        assertThat(meters.get(MatchMetrics.ABORTED).counter().count()).isEqualTo(1);
-        assertThat(meters.get(MatchMetrics.ENDED).counter().count()).isZero();
+        assertThat(meters.get(MatchMetrics.ABORTED).tag("mode", "QUICK").counter().count()).isEqualTo(1);
+        assertThat(meters.get(MatchMetrics.ENDED).tag("mode", "QUICK").counter().count()).isZero();
         assertThat(meters.get(MatchMetrics.FAILED).counter().count()).isZero();
         assertThat(participation.activityOf("h0")).isEmpty();
     }
@@ -322,11 +335,16 @@ class MatchRegistryTest {
     // -----------------------------------------------------------------------------------------
     // Story 1.10 (part 2): the rematch window opens for a completed QUICK match only
 
-    final List<Object> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+    final List<Object> allEvents = new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** The rematch events only: the registry also publishes {@link MatchCompleted} for the product metrics (Story 7.3b). */
+    final List<Object> events = new java.util.AbstractList<>() {
+        @Override public Object get(int i) { return allEvents.stream().filter(e -> !(e instanceof MatchCompleted)).toList().get(i); }
+        @Override public int size() { return (int) allEvents.stream().filter(e -> !(e instanceof MatchCompleted)).count(); }
+    };
 
     MatchRegistry publishing(MatchSettings settings) {
         return new MatchRegistry(participation, sessions, channel, broadcaster, Clock.systemUTC(), timers, settings, bots,
-                drain, meters, event -> { }, events::add);
+                drain, meters, event -> { }, allEvents::add);
     }
 
     @Test

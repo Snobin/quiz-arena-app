@@ -189,6 +189,9 @@ export function createRealtime(env: RealtimeEnv): Realtime {
   /** Send `leave` on the next CONNECT instead of `resync` (gave up locally, or left while offline). */
   let pendingLeave = false;
   /** `leave` sent; waiting for her own PARTICIPANT_FORFEITED. */
+  // The round trip of her previous answer (send to ANSWER_ACCEPTED), reported on the next one for the launch dashboard only (Story 7.3b).
+  let answerSentAt: number | null = null;
+  let prevAckRttMs: number | null = null;
   let leaving = false;
   let retries = 0;
   let droppedAt = 0;
@@ -640,6 +643,10 @@ export function createRealtime(env: RealtimeEnv): Realtime {
         const current = live();
         const mine = current?.myAnswer;
         if (current && incoming.message.matchId === current.matchId && mine?.status === 'pending' && mine.questionIndex === incoming.payload.questionIndex) {
+          if (answerSentAt !== null) {
+            prevAckRttMs = Math.max(0, Math.min(10_000, Math.round(env.now() - answerSentAt)));
+            answerSentAt = null;
+          }
           set({
             clockOffsetMs,
             live: { ...current, myAnswer: { ...mine, status: 'locked', result: incoming.payload.result } },
@@ -1014,7 +1021,11 @@ export function createRealtime(env: RealtimeEnv): Realtime {
       const { questionIndex } = current.question;
       setLive({ myAnswer: { questionIndex, optionIndex, status: 'pending', result: null } });
       try {
-        client.publish({ destination: matchAnswer(current.matchId), body: JSON.stringify({ questionIndex, optionIndex }) });
+        client.publish({
+          destination: matchAnswer(current.matchId),
+          body: JSON.stringify(prevAckRttMs === null ? { questionIndex, optionIndex } : { questionIndex, optionIndex, prevAckRttMs }),
+        });
+        answerSentAt = env.now();
       } catch {
         setLive({ myAnswer: null });
         return false;

@@ -2,6 +2,8 @@ package in.minnal.game.platform.infrastructure.ws;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import in.minnal.contracts.realtime.Destinations;
+import in.minnal.game.metrics.PlayerSessionStats;
+import in.minnal.game.metrics.SessionActivityInterceptor;
 import in.minnal.game.platform.infrastructure.security.StompConnectAuthInterceptor;
 import in.minnal.game.platform.session.DeletedUsers;
 import in.minnal.game.platform.session.MatchAccess;
@@ -55,6 +57,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private InboundRateLimiter rateLimiter;
     private Clock clock;
     private DeletedUsers deletedUsers;
+    private PlayerSessionStats sessionStats;
 
     public WebSocketConfig(@Value("${minnal.cors.allowed-origins:}") List<String> allowedOrigins, Environment environment) {
         this.allowedOrigins = allowedOrigins.stream().map(String::strip).filter(origin -> !origin.isEmpty()).toList();
@@ -104,6 +107,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     }
 
     @Autowired
+    void setSessionStats(PlayerSessionStats sessionStats) {
+        this.sessionStats = sessionStats;
+    }
+
+    @Autowired
     void setClock(Clock clock) {
         this.clock = clock;
     }
@@ -138,7 +146,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         // a session's frames are handled in order (SUBSCRIBE before the join that follows it), and
         // handlers only hand events to actors, so they never block the socket for long.
         registration.executor(new SyncTaskExecutor());
-        registration.interceptors(new StompConnectAuthInterceptor(jwtDecoder, matchAccess, roomAccess, rateLimiter, playerChannel, clock, deletedUsers));
+        registration.interceptors(new StompConnectAuthInterceptor(jwtDecoder, matchAccess, roomAccess, rateLimiter, playerChannel, clock, deletedUsers),
+                new SessionActivityInterceptor(sessionStats));
     }
 
     @Override
