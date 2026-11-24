@@ -34,12 +34,17 @@ services:
     restart: unless-stopped
     logging: *logging
     mem_limit: 128m
+    # Local: 8080 plain HTTP, TLS port bound to loopback and unused. Prod (.env): CADDY_HTTP_PORT=80,
+    # CADDY_HTTP_TARGET=80, CADDY_HTTPS_BIND=0.0.0.0:443 and a real hostname in CADDY_SITE_ADDRESS.
     ports:
-      - "${CADDY_HTTP_PORT:-8080}:8080"
+      - "${CADDY_HTTP_PORT:-8080}:${CADDY_HTTP_TARGET:-8080}"
+      - "${CADDY_HTTPS_BIND:-127.0.0.1:8443}:443"
     environment:
       CADDY_SITE_ADDRESS: ${CADDY_SITE_ADDRESS:-:8080}
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Issued certificates survive a container recreate (avoids Let's Encrypt rate limits).
+      - caddydata:/data
     # service_started, not service_healthy: one unhealthy service must not take the whole site down.
     depends_on:
       core-service:
@@ -56,6 +61,8 @@ services:
 
   core-service:
     <<: *service-defaults
+    # image: pulled in prod (IMAGE_TAG = commit SHA); `up --build` builds and tags it locally.
+    image: ${IMAGE_REGISTRY:-ghcr.io/snobin}/minnal-core:${IMAGE_TAG:-local}
     build:
       context: ..
       dockerfile: services/core/Dockerfile
@@ -100,6 +107,8 @@ services:
 
   game-service:
     <<: *service-defaults
+    # image: pulled in prod (IMAGE_TAG = commit SHA); `up --build` builds and tags it locally.
+    image: ${IMAGE_REGISTRY:-ghcr.io/snobin}/minnal-game:${IMAGE_TAG:-local}
     build:
       context: ..
       dockerfile: services/game/Dockerfile
@@ -129,6 +138,8 @@ services:
 
   ratings-service:
     <<: *service-defaults
+    # image: pulled in prod (IMAGE_TAG = commit SHA); `up --build` builds and tags it locally.
+    image: ${IMAGE_REGISTRY:-ghcr.io/snobin}/minnal-ratings:${IMAGE_TAG:-local}
     build:
       context: ..
       dockerfile: services/ratings/Dockerfile
@@ -200,5 +211,6 @@ services:
       retries: 10
 
 volumes:
+  caddydata:
   pgdata:
   valkeydata:

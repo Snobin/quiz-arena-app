@@ -1,3 +1,4 @@
+import { apiUrl } from '../config/apiBase.ts';
 import { session, type Session } from './session.ts';
 
 /**
@@ -6,11 +7,17 @@ import { session, type Session } from './session.ts';
  * every token); a second 401 is returned to the caller. Rejects with a GuestSessionError when no
  * token can be obtained.
  */
-export function createApiFetch(session: Pick<Session, 'getAccessToken' | 'invalidate'>, fetchImpl: () => typeof fetch = () => fetch) {
+export function createApiFetch(
+  session: Pick<Session, 'getAccessToken' | 'invalidate'>,
+  fetchImpl: () => typeof fetch = () => fetch,
+  apiBase?: string,
+) {
   const send = (input: RequestInfo | URL, init: RequestInit | undefined, token: string) => {
     const headers = new Headers(init?.headers);
     headers.set('Authorization', `Bearer ${token}`);
-    return fetchImpl()(input, { ...init, headers });
+    // A root-relative path ("/api/...") goes to the configured API origin.
+    const target = typeof input === 'string' && input.startsWith('/') ? apiUrl(input, apiBase) : input;
+    return fetchImpl()(target, { ...init, headers });
   };
 
   return async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {

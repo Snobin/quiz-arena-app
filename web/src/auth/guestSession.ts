@@ -1,4 +1,5 @@
 import { create, type StoreApi, type UseBoundStore } from 'zustand';
+import { apiUrl } from '../config/apiBase.ts';
 import { deviceLanguage, preferredLanguage, type Language } from '../i18n/language.ts';
 
 /**
@@ -40,6 +41,8 @@ type Timer = ReturnType<typeof setTimeout>;
 export type GuestSessionEnv = {
   storage?: () => StorageLike | undefined;
   fetch?: () => typeof fetch;
+  /** API origin; defaults to VITE_API_BASE_URL (empty = same-origin). */
+  apiBase?: string;
   now?: () => number;
   language?: () => Language;
   online?: () => boolean;
@@ -198,7 +201,7 @@ export function createGuestSession(env: GuestSessionEnv = browserEnv()): GuestSe
     const fetchImpl = env.fetch?.() ?? fetch;
     let response: Response;
     try {
-      response = await fetchImpl(GUEST_TOKEN_PATH, {
+      response = await fetchImpl(apiUrl(GUEST_TOKEN_PATH, env.apiBase), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({ lang: language() }),

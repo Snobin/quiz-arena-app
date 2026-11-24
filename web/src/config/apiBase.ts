@@ -1,12 +1,25 @@
 /**
- * The origin of core-service's public API. Empty (the default) means same origin: the Vite proxy in
- * development, Caddy in the Compose stack. Set `VITE_API_BASE_URL` (e.g. https://api.minnal.in) when
- * the PWA is hosted on a different origin, which needs a shared registrable domain for the refresh
- * cookie to be first-party.
+ * The API origin. `VITE_API_BASE_URL` (build time, e.g. https://api.example.com) points a Pages-hosted
+ * build at the VPS; unset or blank keeps every call same-origin (local dev through Vite's proxy, tests).
  */
-const configured: string = (import.meta.env as Record<string, string | undefined>).VITE_API_BASE_URL ?? '';
+export function normalizeBase(raw: string | undefined): string {
+  return (raw ?? '').trim().replace(/\/+$/, '');
+}
 
-/** An absolute-or-relative URL for an API path such as '/api/core/v1/auth/refresh'. */
-export function apiUrl(path: string, base: string = configured): string {
-  return `${base.replace(/\/+$/, '')}${path}`;
+export const API_BASE_URL = normalizeBase(import.meta.env.VITE_API_BASE_URL);
+
+/** `path` (starting with "/") on the API origin; the bare path when same-origin. */
+export function apiUrl(path: string, base: string = API_BASE_URL): string {
+  return `${normalizeBase(base)}${path}`;
+}
+
+/** `ws(s)://<host>/ws` for the API origin, or for `location` when no base is set. */
+export function wsUrl(
+  path: string,
+  base: string = API_BASE_URL,
+  location: Pick<Location, 'protocol' | 'host'> = window.location,
+): string {
+  const b = normalizeBase(base);
+  if (b) return `${b.replace(/^http/i, 'ws')}${path}`;
+  return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${path}`;
 }
