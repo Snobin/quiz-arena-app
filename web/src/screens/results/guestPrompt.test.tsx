@@ -128,6 +128,27 @@ describe('guest results prompt', () => {
     expect((await screen.findByTestId('results-sign-in-prompt')).textContent).toBe(first);
   });
 
+  it.each([
+    ['cancelled', 'Sign-in cancelled', 'status'],
+    ['failed', "Sign-in didn't work. Please try again.", 'alert'],
+  ])('shows the "%s" sign-in note inside the card, once, and takes ?signin= out of the address', async (outcome, text, role) => {
+    stubFetch();
+    restartGuestSession();
+    storeResult({ you: 7840, rival: { name: 'Rahul', kind: 'GUEST', score: 3000 }, guest: true });
+    renderApp(`/results?signin=${outcome}`);
+    const card = await screen.findByTestId('results-sign-in-prompt');
+    const note = within(card).getByTestId('signin-outcome');
+    expect(note).toHaveTextContent(text);
+    expect(note).toHaveAttribute('role', role);
+    await waitFor(() => expect(window.location.search).toBe(''));
+    expect(within(prompt()).getByRole('button', { name: 'Continue with Google' })).toBeInTheDocument();
+  });
+
+  it('shows no sign-in note when she did not come back from a sign-in', async () => {
+    await guestResults({ you: 7840, rival: { name: 'Rahul', kind: 'GUEST', score: 3000 } });
+    expect(screen.queryByTestId('signin-outcome')).toBeNull();
+  });
+
   it('starts the Google sign-in for the whole page with returnTo=/results and nothing about the match', async () => {
     const user = userEvent.setup();
     await guestResults({ you: 7840, rival: { name: 'Rahul', kind: 'GUEST', score: 3000 } });

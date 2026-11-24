@@ -84,12 +84,33 @@ public final class RoomConfigRules {
 
     private static final int MAX_NAME = 80;
 
-    private static String cleanName(String name) {
+    /**
+     * The host's client-sent topic name, made safe to show to other players: control characters, line and paragraph
+     * separators and invisible format characters (bidi overrides, isolates and marks, BOM, soft hyphen) are dropped, so a
+     * name cannot flip the text direction of what is drawn around it or smuggle in line breaks. The zero-width joiner and
+     * non-joiner stay: Malayalam conjuncts and emoji sequences need them. Then trimmed and capped at 80 characters, never
+     * splitting a surrogate pair.
+     */
+    static String cleanName(String name) {
         if (name == null) {
             return "";
         }
-        String trimmed = name.strip();
-        return trimmed.length() > MAX_NAME ? trimmed.substring(0, MAX_NAME) : trimmed;
+        StringBuilder kept = new StringBuilder(name.length());
+        name.codePoints().filter(RoomConfigRules::isShowable).forEach(kept::appendCodePoint);
+        String trimmed = kept.toString().strip();
+        return trimmed.codePointCount(0, trimmed.length()) > MAX_NAME
+                ? trimmed.substring(0, trimmed.offsetByCodePoints(0, MAX_NAME)).strip() : trimmed;
+    }
+
+    private static boolean isShowable(int cp) {
+        if (cp == 0x200C || cp == 0x200D) {
+            return true;
+        }
+        return switch (Character.getType(cp)) {
+            case Character.CONTROL, Character.FORMAT, Character.LINE_SEPARATOR, Character.PARAGRAPH_SEPARATOR,
+                    Character.UNASSIGNED, Character.PRIVATE_USE, Character.SURROGATE -> false;
+            default -> true;
+        };
     }
 
     private static UUID parseUuid(String text) {
