@@ -6,7 +6,7 @@ Last reviewed: 2026-11-23. Nothing here is launch-ready until every box is check
 
 ## 1. Domain, hosting and origins
 
-- [ ] **[OWNER]** Choose and buy the domain. Answer: _open · blocks launch_
+- [ ] **[OWNER]** Choose and buy the domain. Answer: `minnal.in` chosen on 2026-11-24 (app on `minnal.in`, API on `api.minnal.in`); _not bought yet · blocks launch until it is registered_. Buy where the second-year renewal is lowest, not the first-year promo; turn on auto-renew and WHOIS privacy; point its nameservers at Cloudflare DNS.
 - [ ] **[ENG]** Serve the PWA from Cloudflare Pages on the app host and the API from the VPS on an `api.` subdomain of the same registrable domain, so the refresh cookie from Story 2.1 is first-party. Set `VITE_PUBLIC_APP_ORIGIN`, the prod `CORS_ALLOWED_ORIGINS` and the Google OAuth redirect URIs to the real origins. Verify sign-in, a `/r/<code>` link and a `/q` link on a real Android phone. Evidence: _open_ (needs Story 1.2 part 2, the production deploy, which is still `in-progress`)
 - [ ] **[ENG]** Production deploy to the OVH Mumbai VPS and Cloudflare Pages (Story 1.2 part 2: CI deploy, secrets, TLS, resource envelope). Evidence: _open_
 
