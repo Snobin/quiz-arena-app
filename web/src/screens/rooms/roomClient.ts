@@ -1,21 +1,12 @@
-import type { IFrame } from '@stomp/stompjs';
 import {
-  HEARTBEAT_MS,
   onRealtimeClose,
   realtimeEnv,
   RETRY_DELAYS_MS,
   RETRY_WINDOW_MS,
-  UNAUTHENTICATED,
-  type RealtimeClient,
   type RealtimeEnv,
 } from '../../realtime/connection.ts';
 import { startRoomMatch } from '../../realtime/liveGameStore.ts';
-import {
-  USER_PRIVATE_QUEUE,
-  type RoomClosedReason,
-  type RoomConfigRequest,
-  type RoomView,
-} from '../../realtime/protocol.ts';
+import type { RoomConfigRequest } from '../../realtime/protocol.ts';
 import { navigate } from '../../shell/router.ts';
 import {
   configBody,
@@ -26,11 +17,13 @@ import {
   roomPlayAgain,
   roomResync,
   roomStart,
-  roomTopic,
   ROOM_CREATE,
   ROOM_JOIN,
   type RoomIncoming,
 } from './roomProtocol.ts';
+import { hostName, lobbyUpdate, NOTICES, sameConfig, type Ordered } from './roomLobby.ts';
+import { createSeqGate } from './roomSeqGate.ts';
+import { createRoomTransport } from './roomTransport.ts';
 
 /**
  * The Battle Room client (Stories 5.2 and 5.3): the player's own STOMP connection to game-service, opened by the rooms
@@ -72,28 +65,7 @@ import {
   type RoomState,
 } from './roomStore.ts';
 
-type Status = 'closed' | 'connecting' | 'open';
-
-const NOTICES: Record<RoomClosedReason, RoomNotice> = {
-  EXPIRED: 'EXPIRED',
-  HOST_LEFT: 'CLOSED',
-  HOST_DISCONNECTED: 'DISCONNECTED',
-  SERVER_DRAINING: 'DRAINING',
-  // Never sent to a player (she is in the match by then); read as a plain close should one arrive.
-  MATCH_ENDED: 'CLOSED',
-};
-
-/** The broadcasts on the room topic: numbered by one `seq`, applied in order. */
-type Ordered = Extract<RoomIncoming, { type: 'ROOM_LOBBY_UPDATED' | 'ROOM_START_FAILED' | 'ROOM_MATCH_STARTED' }>;
-
 export function createRoomClient(env: RealtimeEnv): RoomClient {
-  let client: RealtimeClient | null = null;
-  let status: Status = 'closed';
-  /** Sends waiting for the socket to open. */
-  let pending: Array<(c: RealtimeClient) => void> = [];
-  /** Bumped whenever an attempt is abandoned, so its late callbacks are ignored. */
-  let generation = 0;
-  let topic: { roomId: string; unsubscribe: () => void } | null = null;
   let retries = 0;
   let droppedAt = 0;
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -102,12 +74,8 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
   let resumeTimer: ReturnType<typeof setTimeout> | undefined;
   let joinTimer: ReturnType<typeof setTimeout> | undefined;
   let startTimer: ReturnType<typeof setTimeout> | undefined;
-  let resyncTimer: ReturnType<typeof setTimeout> | undefined;
   let creating: { request: Required<RoomConfigRequest>; resolve: (result: CreateResult) => void } | null = null;
   let joining: { code: string; promise: Promise<JoinResult>; resolve: (result: JoinResult) => void } | null = null;
-  /** Room broadcast frames held while a resync is out (a seq gap). */
-  let held: Ordered[] = [];
-  let awaitingResync = false;
   let resuming: ((found: boolean) => void) | null = null;
   let resumePromise: Promise<boolean> | null = null;
 
@@ -119,28 +87,43 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
     return undefined;
   };
 
-  function dropTopic(): void {
-    const previous = topic;
-    topic = null;
-    try {
-      previous?.unsubscribe();
-    } catch {
-      // The socket is already gone.
-    }
-  }
+  const onBody = (body: string) => {
+    const incoming = parseRoomIncoming(body);
+    if (incoming) onIncoming(incoming);
+  };
+
+  /** The socket (`roomTransport.ts`): what to do when it opens or is lost is decided here. */
+  const transport = createRoomTransport(env, {
+    onPrivate: onBody,
+    onTopic: onBody,
+    onOpen() {
+      const { session } = get();
+      if (!session) return;
+      transport.subscribeTopic(session.roomId);
+      if (get().reconnecting) {
+        // The server answers the private subscription with ROOM_JOINED if the room is still hers.
+        resumeTimer = clearTimer(resumeTimer);
+        resumeTimer = setTimeout(() => end('CLOSED'), RESUME_TIMEOUT_MS);
+      }
+    },
+    onLost: (wasOpen) => connectionLost(wasOpen),
+  });
+
+  /** The room's numbered broadcasts, applied in order (`roomSeqGate.ts`). */
+  const gate = createSeqGate<Ordered>({
+    retryMs: RESYNC_RETRY_MS,
+    lastSeq: () => get().session?.lastSeq ?? 0,
+    apply: applyLobby,
+    requestResync() {
+      const { session } = get();
+      return session ? transport.publishIfOpen(roomResync(session.roomId), '{}') : false;
+    },
+  });
 
   function closeSocket(): void {
-    generation++;
-    dropTopic();
     retryTimer = clearTimer(retryTimer);
-    resyncTimer = clearTimer(resyncTimer);
-    held = [];
-    awaitingResync = false;
-    const closing = client;
-    client = null;
-    status = 'closed';
-    pending = [];
-    void closing?.deactivate();
+    gate.reset();
+    transport.close();
   }
 
   /** The room is over for her: no session, no socket, and the notice (when there is one) for the Rooms tab. */
@@ -154,10 +137,6 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
     // A player (not the host) whose own connection never came back: her room may well go on without her.
     const lost = notice === 'DISCONNECTED' && get().session !== null && get().session?.role !== 'HOST';
     set({ ...INITIAL_ROOM_STATE, joinFailure: get().joinFailure, notice: lost ? 'LOST' : notice, noticeHost });
-  }
-
-  function hostName(session: RoomSession | null): string | null {
-    return session?.room.participants.find((p) => p.participantId === session.room.hostParticipantId)?.displayName ?? null;
   }
 
   function settleJoin(result: JoinResult): void {
@@ -202,67 +181,10 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
       end(null);
       return;
     }
-    const { room, joined, left, phase } = incoming.payload;
-    const before = session.room;
-    const configChanged =
-      before.questionCount !== room.questionCount ||
-      before.source.topicId !== room.source.topicId ||
-      before.source.customTopicId !== room.source.customTopicId;
-    const patch: Partial<RoomState> = {
-      session: { ...session, room, lastSeq: seq },
-      lobbyEvent: { seq, joined, left },
-      lobbyPhase: phase,
-    };
-    if (phase === 'STARTING') {
-      // Her own start (or the host's, for a player) is under way: nothing is waiting on an answer any more.
-      startTimer = clearTimer(startTimer);
-      Object.assign(patch, { starting: false, startError: null, startFailure: null });
-    }
-    // A membership-only frame neither closes an open configure nor clears its inline error.
-    if (configChanged || (joined.length === 0 && left.length === 0)) {
-      if (configuring) configureTimer = clearTimer(configureTimer);
-      Object.assign(patch, { configuring: false, error: null });
-    }
-    // A new topic or count answers the "too few questions" line.
-    if (configChanged) Object.assign(patch, { startFailure: null });
-    set(patch);
-  }
-
-  /** Asks for a fresh `ROOM_JOINED` (a seq gap), again while unanswered. */
-  function requestResync(): void {
-    resyncTimer = clearTimer(resyncTimer);
-    awaitingResync = true;
-    const { session } = get();
-    if (!session || status !== 'open' || !client) return;
-    try {
-      client.publish({ destination: roomResync(session.roomId), body: '{}' });
-    } catch {
-      // The socket is going; the reconnect brings ROOM_JOINED.
-    }
-    resyncTimer = setTimeout(() => {
-      resyncTimer = undefined;
-      if (awaitingResync) requestResync();
-    }, RESYNC_RETRY_MS);
-  }
-
-  /** After a fresh `ROOM_JOINED`: the held frames above it, in order, until the next gap. */
-  function drainHeld(): void {
-    awaitingResync = false;
-    resyncTimer = clearTimer(resyncTimer);
-    const frames = held.sort((a, b) => (a.message.seq ?? 0) - (b.message.seq ?? 0));
-    held = [];
-    for (let i = 0; i < frames.length; i++) {
-      const frame = frames[i]!;
-      const last = get().session?.lastSeq ?? 0;
-      const seq = frame.message.seq ?? last + 1;
-      if (seq <= last) continue;
-      if (seq > last + 1) {
-        held = frames.slice(i);
-        requestResync();
-        return;
-      }
-      applyLobby(frame);
-    }
+    const update = lobbyUpdate(session, configuring, incoming);
+    if (update.clearStartTimer) startTimer = clearTimer(startTimer);
+    if (update.clearConfigureTimer) configureTimer = clearTimer(configureTimer);
+    set(update.patch);
   }
 
   function settleCreate(result: CreateResult): void {
@@ -289,18 +211,11 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
     current(found);
   }
 
-  function subscribeTopic(roomId: string): void {
-    if (topic?.roomId === roomId) return;
-    dropTopic();
-    if (status !== 'open' || !client) return;
-    const attempt = generation;
-    const subscription = client.subscribe(roomTopic(roomId), (message) => {
-      if (attempt !== generation || topic !== handle) return;
-      const incoming = parseRoomIncoming(message.body);
-      if (incoming) onIncoming(incoming);
-    });
-    const handle = { roomId, unsubscribe: () => subscription.unsubscribe() };
-    topic = handle;
+  /** A close that arrives while a create is open: the create is over without a lobby. */
+  function settleCreateAfterEnd(): void {
+    const current = creating;
+    creating = null;
+    current?.resolve({ ok: false, error: { code: 'CONNECTION' } });
   }
 
   function onIncoming(incoming: RoomIncoming): void {
@@ -313,10 +228,10 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
         resumeTimer = clearTimer(resumeTimer);
         // Whichever room game-service says she is in: its state replaces what she had.
         const previous = get().session;
-        if (previous && previous.roomId !== payload.roomId) held = [];
+        if (previous && previous.roomId !== payload.roomId) gate.dropHeld();
         set({ session, reconnecting: false, phase: get().phase === 'idle' ? 'lobby' : get().phase });
-        subscribeTopic(payload.roomId);
-        drainHeld();
+        transport.subscribeTopic(payload.roomId);
+        gate.drain();
         if (creating && sameConfig(creating.request, payload.room)) settleCreate({ ok: true, session });
         if (joining && joining.code === payload.code) settleJoin({ ok: true, session });
         if (resuming) {
@@ -333,17 +248,7 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
       case 'ROOM_MATCH_STARTED': {
         const { session } = get();
         if (!session || message.roomId !== session.roomId) return;
-        if (message.seq === undefined) {
-          applyLobby(incoming);
-          return;
-        }
-        if (message.seq <= session.lastSeq) return;
-        if (awaitingResync || message.seq > session.lastSeq + 1) {
-          held.push(incoming);
-          if (!awaitingResync) requestResync();
-          return;
-        }
-        applyLobby(incoming);
+        gate.receive(incoming, session.lastSeq);
         return;
       }
       case 'ROOM_CLOSED': {
@@ -379,89 +284,10 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
     }
   }
 
-  /** A close that arrives while a create is open: the create is over without a lobby. */
-  function settleCreateAfterEnd(): void {
-    const current = creating;
-    creating = null;
-    current?.resolve({ ok: false, error: { code: 'CONNECTION' } });
-  }
-
-  function sameConfig(request: Required<RoomConfigRequest>, room: RoomView): boolean {
-    if (room.questionCount !== request.questionCount) return false;
-    if (request.source.type === 'CUSTOM') {
-      // A play again names no id (the server keeps the old source): any custom room with that count is the successor.
-      return room.source.type === 'CUSTOM' && (request.source.customTopicId === undefined || room.source.customTopicId === request.source.customTopicId);
-    }
-    return room.source.type !== 'CUSTOM' && room.source.topicId === request.source.topicId;
-  }
-
-  function open(retryOnAuth: boolean): void {
-    status = 'connecting';
-    const attempt = ++generation;
-    env.getAccessToken().then(
-      (token) => {
-        if (attempt !== generation) return;
-        let refused = false;
-        const created = env.factory({
-          brokerURL: env.url(),
-          connectHeaders: { Authorization: `Bearer ${token}` },
-          reconnectDelay: 0,
-          heartbeatIncoming: HEARTBEAT_MS,
-          heartbeatOutgoing: HEARTBEAT_MS,
-          onConnect: () => {
-            if (attempt !== generation) return;
-            status = 'open';
-            created.subscribe(USER_PRIVATE_QUEUE, (message) => {
-              if (attempt !== generation) return;
-              const incoming = parseRoomIncoming(message.body);
-              if (incoming) onIncoming(incoming);
-            });
-            const sends = pending;
-            pending = [];
-            for (const send of sends) send(created);
-            const { session } = get();
-            if (session) {
-              subscribeTopic(session.roomId);
-              if (get().reconnecting) {
-                // The server answers the private subscription with ROOM_JOINED if the room is still hers.
-                resumeTimer = clearTimer(resumeTimer);
-                resumeTimer = setTimeout(() => end('CLOSED'), RESUME_TIMEOUT_MS);
-              }
-            }
-          },
-          onStompError: (frame: IFrame) => {
-            if (attempt !== generation) return;
-            if (status === 'connecting' && frame.headers.message === UNAUTHENTICATED) refused = true;
-          },
-          onWebSocketClose: () => {
-            if (attempt !== generation) return;
-            const wasOpen = status === 'open';
-            client = null;
-            topic = null;
-            status = 'closed';
-            if (!wasOpen && refused && retryOnAuth) {
-              env.invalidate(token);
-              open(false);
-              return;
-            }
-            connectionLost(wasOpen);
-          },
-        });
-        client = created;
-        created.activate();
-      },
-      () => {
-        if (attempt !== generation) return;
-        status = 'closed';
-        connectionLost(false);
-      },
-    );
-  }
-
   /** The socket closed or never opened. In a lobby it is reopened; anything waiting on it fails. */
   function connectionLost(wasOpen: boolean): void {
-    pending = [];
-    resyncTimer = clearTimer(resyncTimer);
+    transport.clearPending();
+    gate.stopRetrying();
     if (joining) settleJoin({ ok: false, error: { code: 'CONNECTION' } });
     if (creating) {
       settleCreate({ ok: false, error: { code: 'CONNECTION' } });
@@ -495,17 +321,8 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
     retries++;
     retryTimer = setTimeout(() => {
       retryTimer = undefined;
-      if (status === 'closed' && get().session) open(true);
+      if (transport.status() === 'closed' && get().session) transport.open(true);
     }, delay);
-  }
-
-  function send(action: (c: RealtimeClient) => void): void {
-    if (status === 'open' && client) {
-      action(client);
-      return;
-    }
-    pending.push(action);
-    if (status === 'closed') open(true);
   }
 
   function reset(): void {
@@ -533,7 +350,7 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
       creating = { request: config, resolve };
       set({ phase: 'creating', error: null, notice: null });
       createTimer = setTimeout(() => settleCreate({ ok: false, error: { code: 'TIMEOUT' } }), CREATE_TIMEOUT_MS);
-      send((c) => c.publish({ destination, body }));
+      transport.send((c) => c.publish({ destination, body }));
     });
   }
 
@@ -558,7 +375,7 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
       set({ phase: get().session ? get().phase : 'joining', notice: null });
       joinTimer = clearTimer(joinTimer);
       joinTimer = setTimeout(() => settleJoin({ ok: false, error: { code: 'TIMEOUT' } }), JOIN_TIMEOUT_MS);
-      send((c) => c.publish({ destination: ROOM_JOIN, body: joinBody(code) }));
+      transport.send((c) => c.publish({ destination: ROOM_JOIN, body: joinBody(code) }));
       return promise;
     },
     start() {
@@ -570,7 +387,7 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
         startTimer = undefined;
         set({ starting: false, startError: { code: 'TIMEOUT' } });
       }, CONFIGURE_TIMEOUT_MS);
-      send((c) => c.publish({ destination: roomStart(session.roomId), body: '{}' }));
+      transport.send((c) => c.publish({ destination: roomStart(session.roomId), body: '{}' }));
     },
     setJoinFailure(failure) {
       set({ joinFailure: failure });
@@ -586,7 +403,7 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
         set({ phase: 'resuming', error: null });
         resumeTimer = setTimeout(() => settleResume(false), RESUME_TIMEOUT_MS);
         // Nothing is published: the private subscription itself brings ROOM_JOINED when she is in a room.
-        send(() => undefined);
+        transport.send(() => undefined);
       });
       return resumePromise;
     },
@@ -599,17 +416,12 @@ export function createRoomClient(env: RealtimeEnv): RoomClient {
         configureTimer = undefined;
         set({ configuring: false, error: { code: 'TIMEOUT' } });
       }, CONFIGURE_TIMEOUT_MS);
-      send((c) => c.publish({ destination: roomConfigure(session.roomId), body: configBody(config) }));
+      transport.send((c) => c.publish({ destination: roomConfigure(session.roomId), body: configBody(config) }));
     },
     leave() {
       const { session } = get();
-      if (session && status === 'open' && client) {
-        try {
-          client.publish({ destination: roomLeave(session.roomId), body: '{}' });
-        } catch {
-          // The socket is going; game-service closes the room after its grace.
-        }
-      }
+      // Not open: nothing to tell game-service, which closes the room after its grace.
+      if (session) transport.publishIfOpen(roomLeave(session.roomId), '{}');
       end(null);
     },
     clearError() {
