@@ -1,5 +1,6 @@
 package in.minnal.game.platform.infrastructure.valkey;
 
+import in.minnal.contracts.events.RatingUpdatedStream;
 import in.minnal.game.matchmaking.application.RatingCache;
 import java.time.Instant;
 import org.slf4j.Logger;
@@ -18,7 +19,7 @@ import tools.jackson.databind.json.JsonMapper;
  */
 public class RatingFeeder implements StreamFeeder {
 
-    public static final String STREAM = "minnal.rating.updated";
+    public static final String STREAM = RatingUpdatedStream.STREAM;
     static final String START = "0-0";
     private static final Logger log = LoggerFactory.getLogger(RatingFeeder.class);
 

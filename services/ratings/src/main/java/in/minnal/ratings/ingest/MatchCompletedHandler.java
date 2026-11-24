@@ -2,6 +2,7 @@ package in.minnal.ratings.ingest;
 
 import in.minnal.contracts.events.CompletedParticipant;
 import in.minnal.contracts.events.MatchCompletedEvent;
+import in.minnal.contracts.events.RatingUpdatedStream;
 import in.minnal.contracts.realtime.ParticipantKind;
 import in.minnal.ratings.outbox.OutboxRepository;
 import in.minnal.ratings.rating.Elo;
@@ -29,7 +30,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Service
 public class MatchCompletedHandler {
 
-    public static final String RATING_UPDATED = "minnal.rating.updated";
+    public static final String RATING_UPDATED = RatingUpdatedStream.STREAM;
     private static final Logger log = LoggerFactory.getLogger(MatchCompletedHandler.class);
 
     /** What handling did, for logs and tests. */

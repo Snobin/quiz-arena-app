@@ -134,13 +134,13 @@ action_items:
     action: "A5 Story-template check: new streams, feeders and runners need a test
       through the real stream name"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-19.md"
   - id: "epic-2-retro-item-6-a6-add-a-real-two-context-test-for-the-s"
     epic: 2
     action: "A6 Add a real two-context test for the Story 2.2 reuse-detection criterion"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-19.md"
   - id: "epic-2-retro-item-7-a7-show-the-sign-in-cancelled-note-on-ev"
     epic: 2
@@ -167,7 +167,7 @@ action_items:
     action: "Add a Topic Duel forfeit and disconnect test and a ResultQuestion.topicId
       equals MATCH_ENDED topic assertion"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-11-21.md"
   - id: "epic-4-retro-item-11-decide-whether-the-duel-draw-shares-topi"
     epic: 4
@@ -208,7 +208,7 @@ action_items:
     epic: 4
     action: "Add an ml and en parity test for the practise lazy catalogue"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-4-retro-2026-11-21.md"
   - id: "epic-4-retro-item-17-confirm-a-review-triage-log-is-present-i"
     epic: 4
@@ -254,7 +254,7 @@ action_items:
     epic: 5
     action: "Manual-clock variant for MatchActorRoomTest"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-21.md"
   - id: "epic-5-retro-item-24-settle-deferred-unverified-would-be-medi"
     epic: 5
