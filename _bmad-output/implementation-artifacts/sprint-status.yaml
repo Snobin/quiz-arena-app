@@ -147,7 +147,7 @@ action_items:
     action: "A7 Show the sign-in cancelled note on every originating surface (Story
       2.1)"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-19.md"
   - id: "epic-2-retro-item-8-a8-choose-one-error-and-status-code-conv"
     epic: 2
@@ -229,7 +229,7 @@ action_items:
     action: "Verify playAgain sends under the RoomRegistry lock cannot block; move
       outside the lock if they can"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-5-retro-2026-11-21.md"
   - id: "epic-5-retro-item-20-decide-and-schedule-the-battle-room-poli"
     epic: 5
@@ -365,7 +365,7 @@ action_items:
     action: "Strip control and bidirectional characters from the room client-sent
       topic name"
     owner: "dev"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-6-retro-2026-11-23.md"
   - id: "epic-6-retro-item-40-decide-once-whether-stories-may-spawn-re"
     epic: 6
@@ -400,7 +400,7 @@ action_items:
     action: "Make deploy/backup.sh and restore-drill.sh parse .env safely instead
       of sourcing it, and test a value with spaces"
     owner: "developer"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-7-retro-2026-11-23.md"
   - id: "epic-7-retro-item-45-reconcile-epics-md-stories-7-1-to-7-4-wi"
     epic: 7

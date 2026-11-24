@@ -135,3 +135,55 @@ describe('backup.sh', () => {
     assert.match(out, /R2_BUCKET/);
   });
 });
+
+describe('deploy/.env loading (safe, never evaluated)', () => {
+  const copyScripts = (envText) => {
+    const work = join(dir, 'deploy');
+    mkdirSync(work);
+    for (const f of ['backup.sh', 'load-env.sh']) writeFileSync(join(work, f), readFileSync(fileURLToPath(new URL(`./${f}`, import.meta.url))));
+    mkdirSync(join(work, 'postgres'));
+    writeFileSync(join(work, 'postgres', 'snapshot-dump.sh'), '');
+    writeFileSync(join(work, '.env'), envText);
+    return work;
+  };
+  const runWithEnv = (envText) => {
+    const work = copyScripts(envText);
+    const pg = script('pg.sh', `case "$1" in bash) cat > /dev/null; printf 'D' > "$4"; printf 'core.t\\t1\\n' ;; cat) cat "$2" ;; rm) rm -f "$3" ;; esac`);
+    const aws = script('aws.sh', `echo "$@" >> "${dir}/aws.log"; cp "$5" "${dir}/uploaded/$(basename "$5")"`);
+    const curl = script('curl.sh', `printf '%s\\n' "$*" >> "${dir}/curl.log"`);
+    const res = spawnSync('bash', [join(work, 'backup.sh')], {
+      env: { PATH: process.env.PATH, PG_EXEC: pg, AWS_CMD: aws, CURL_CMD: curl, BACKUP_DIR: join(dir, 'local') },
+      encoding: 'utf8',
+    });
+    return { code: res.status, out: res.stdout + res.stderr };
+  };
+
+  it('takes values with spaces, $, backticks, semicolons and & literally and runs nothing from them', () => {
+    const canary = join(dir, 'PWNED');
+    const { code, out } = runWithEnv(
+      [
+        '# a comment',
+        '',
+        'R2_ENDPOINT=https://r2.example',
+        'R2_BUCKET=minnal-backups',
+        'R2_ACCESS_KEY_ID=id',
+        `R2_SECRET_ACCESS_KEY=pa ss;$(touch ${canary}) \`touch ${canary}\` $HOME`,
+        `export BACKUP_HEARTBEAT_URL="https://beat.example/abc?x=1&y=2"`,
+        `UNRELATED=$(touch ${canary})`,
+        'not a valid line',
+        '',
+      ].join('\n'),
+    );
+    assert.equal(code, 0, out);
+    assert.equal(existsSync(canary), false, 'nothing in .env was executed');
+    assert.deepEqual(logLines('curl.log'), ['-fsS -m 20 --retry 3 -o /dev/null https://beat.example/abc?x=1&y=2']);
+  });
+
+  it('handles single quotes, CRLF line endings and a value that contains =', () => {
+    const { code, out } = runWithEnv(
+      "R2_ENDPOINT=https://r2.example\r\nR2_BUCKET='minnal-backups'\r\nR2_ACCESS_KEY_ID=id\r\nR2_SECRET_ACCESS_KEY=a=b=c\r\nBACKUP_HEARTBEAT_URL=https://beat.example/z\r\n",
+    );
+    assert.equal(code, 0, out);
+    assert.match(logLines('aws.log')[0], /s3:\/\/minnal-backups\/postgres\//);
+  });
+});

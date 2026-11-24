@@ -11,10 +11,9 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 if [ -f .env ] && [ -z "${BACKUP_SKIP_ENV:-}" ]; then
-  set -a
   # shellcheck disable=SC1091
-  . ./.env
-  set +a
+  . ./load-env.sh
+  load_env_file ./.env
 fi
 
 PG_EXEC=${PG_EXEC:-docker compose -f compose.yaml --env-file .env exec -T postgres}

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { startGoogleSignIn } from '../../auth/googleSignIn.ts';
 import { Button } from '../../design/Button.tsx';
 import type { MessageKey } from '../../i18n/index.ts';
+import { SignInOutcomeNote } from '../home/SignInOutcomeNote.tsx';
 import type { ResultView } from './outcome.ts';
 
 /** The results route a guest comes back to after signing in. Nothing about the match goes with it. */
@@ -24,7 +25,8 @@ const KEYS: Record<ReturnType<typeof promptVariant>, MessageKey> = {
  * The guest's registration prompt (UX-DR47, Story 2.4): an inline card in the Sign-in nudge style, built
  * from the match she just played. It is the only nudge on the results, never a modal, and it never
  * promises this match will be saved, rated or added to history. The button starts the Google sign-in with
- * `returnTo=/results`; no match id, score or guest id leaves the page.
+ * `returnTo=/results`; no match id, score or guest id leaves the page. A sign-in she cancelled or that failed
+ * shows its one-line note here, on the surface she started it from (Epic 2 action A7).
  */
 export function GuestResultsPrompt({ view }: { view: ResultView }) {
   const { t } = useTranslation();
@@ -43,6 +45,7 @@ export function GuestResultsPrompt({ view }: { view: ResultView }) {
         {t('results.prompt.title')}
       </h2>
       <p className="text-caption text-muted">{text}</p>
+      <SignInOutcomeNote />
       <Button className="mt-2 w-full" onClick={() => startGoogleSignIn(RESULTS_RETURN)}>
         {t('signIn.google')}
       </Button>

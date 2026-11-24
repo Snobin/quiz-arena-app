@@ -255,9 +255,20 @@ public class RoomRegistry implements RoomAccess, DisposableBean {
     /**
      * Play again (Story 5.6): {@code player} asks for the successor of the finished room {@code oldRoomId}. Within
      * {@link #PLAY_AGAIN_TTL} of the match's end the host gets a new lobby through {@link #open} (same source and count)
-     * and every participant is told; a repeat finds the same lobby again and creates nothing.
+     * and every participant is told; a repeat finds the same lobby again and creates nothing. The decision is taken under
+     * the registry lock; the sends to the participants happen after it is released, so a slow send can never hold up
+     * every other create, join and lookup.
      */
-    synchronized Succeeding playAgain(MinnalPrincipal player, String sessionId, UUID oldRoomId) {
+    Succeeding playAgain(MinnalPrincipal player, String sessionId, UUID oldRoomId) {
+        Runnable[] announce = new Runnable[1];
+        Succeeding result = decidePlayAgain(player, sessionId, oldRoomId, announce);
+        if (announce[0] != null) {
+            announce[0].run();
+        }
+        return result;
+    }
+
+    private synchronized Succeeding decidePlayAgain(MinnalPrincipal player, String sessionId, UUID oldRoomId, Runnable[] announce) {
         Instant now = clock.instant();
         successions.values().removeIf(l -> !now.isBefore(l.until()));
         Link link = successions.get(oldRoomId);
@@ -288,7 +299,7 @@ public class RoomRegistry implements RoomAccess, DisposableBean {
             case Opening.Opened opened -> {
                 String code = rooms.get(opened.roomId()).code();
                 successions.put(oldRoomId, link.withSuccessor(opened.roomId()));
-                announceSuccessor(oldRoomId, link, code, now);
+                announce[0] = () -> announceSuccessor(oldRoomId, link, code, now);
                 return new Succeeding.Opened(code);
             }
         }

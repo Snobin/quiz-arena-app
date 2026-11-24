@@ -82,6 +82,23 @@ class RoomConfigRulesTest {
     }
 
     @Test
+    void aCustomTopicNameLosesControlAndBidirectionalCharactersButKeepsMalayalamAndEmoji() {
+        String id = java.util.UUID.randomUUID().toString();
+        java.util.function.Function<String, String> shown = name -> RoomConfigRules
+                .forCreate(new RoomConfigInput(true, "CUSTOM", null, id, name, true, 10)).config().source().topicName();
+        // Right-to-left override and isolates, line breaks, NUL, BOM, bidi marks, soft hyphen: all dropped.
+        assertThat(shown.apply("\u202Eevil\u202C \u2066x\u2069\nline\u0000\uFEFF\u200E\u200F\u00AD two")).isEqualTo("evil xline two");
+        assertThat(shown.apply("a\u2028b\u2029c\td")).isEqualTo("abcd");
+        // Malayalam with ZWNJ/ZWJ (chakkilakkam, conjuncts) and an emoji sequence are unchanged.
+        String malayalam = "\u0D15\u0D47\u0D30\u0D33 \u0D28\u0D4D\u200D \u0D15\u0D4D\u200C\u0D37";
+        assertThat(shown.apply(malayalam)).isEqualTo(malayalam);
+        assertThat(shown.apply("\uD83D\uDC68\u200D\uD83D\uDCBB code")).isEqualTo("\uD83D\uDC68\u200D\uD83D\uDCBB code");
+        // The cap counts characters and never cuts an emoji in half; a name of only invisible characters becomes empty.
+        assertThat(shown.apply("\uD83D\uDE00".repeat(100)).codePointCount(0, shown.apply("\uD83D\uDE00".repeat(100)).length())).isEqualTo(80);
+        assertThat(shown.apply("\u202E\u200E\u2066")).isEmpty();
+    }
+
+    @Test
     void aMissingSourceIsInvalidRoomConfig() {
         assertThat(RoomConfigRules.forCreate(new RoomConfigInput(false, null, null, true, 10)).error())
                 .isEqualTo(ErrorCode.INVALID_ROOM_CONFIG);
