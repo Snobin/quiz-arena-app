@@ -5,6 +5,9 @@ name: CI
 on:
   push:
     branches: ['**'] # branches only, not tags
+  # Also on pull requests: the PR page shows the checks, and a PR still gets CI when GitHub does not deliver the push event.
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
