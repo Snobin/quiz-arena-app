@@ -17,7 +17,7 @@ Last reviewed: 2026-11-23. Nothing here is launch-ready until every box is check
 
 ## 3. Privacy and sign-in
 
-- [ ] **[OWNER]** Answer the India DPDP Act question from Story 2.8: what must be erased or kept on account deletion, including backups and `match_record`. Answer: _open · blocks launch_ (launch is blocked while this item is open)
+- [ ] **[OWNER]** Answer the India DPDP Act question from Story 2.8: what must be erased or kept on account deletion, including backups and `match_record`. Backups: the off-site dumps (emails, ratings) rely on R2 server-side encryption and the bucket's access keys; they are not encrypted client-side (owner decision, 2026-11-24 code review). Answer: _open · blocks launch_ (launch is blocked while this item is open)
 - [ ] **[ENG]** Implement whatever the DPDP answer requires before launch, or record that nothing changes. Evidence: _open, waits on the answer above_
 - [ ] **[OWNER]** Publish the Google OAuth consent screen out of testing mode. Answer: _open · blocks launch_
 - [ ] **[ENG]** Set `ADMIN_EMAILS` in the prod `.env`; check that the admin can open `/admin` and a non-admin cannot. Evidence: _open_ (the admin console and its role check exist from Epic 3; the prod value and the two-account check are still to do)

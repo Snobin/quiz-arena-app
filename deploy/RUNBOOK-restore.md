@@ -10,6 +10,7 @@ Docker with the Compose plugin, the AWS CLI (`aws`, used against the R2 endpoint
 
 ```
 crontab -e
+PATH=/usr/local/bin:/usr/bin:/bin
 15 2 * * *  /opt/minnal/deploy/backup.sh >> /var/log/minnal-backup.log 2>&1
 ```
 

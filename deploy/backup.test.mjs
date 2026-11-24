@@ -2,7 +2,7 @@
 // The real dump and restore are exercised against a live Postgres by deploy/backup-drill-e2e.sh in CI.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -185,5 +185,37 @@ describe('deploy/.env loading (safe, never evaluated)', () => {
     );
     assert.equal(code, 0, out);
     assert.match(logLines('aws.log')[0], /s3:\/\/minnal-backups\/postgres\//);
+  });
+});
+
+describe('backup.sh hardening (code review of Epics 6 and 7)', () => {
+  it('warns, still succeeds and sends no heartbeat when BACKUP_HEARTBEAT_URL is empty', () => {
+    const { code, out } = run({ BACKUP_HEARTBEAT_URL: '' });
+    assert.equal(code, 0, out);
+    assert.match(out, /WARNING: BACKUP_HEARTBEAT_URL is empty/);
+    assert.deepEqual(logLines('curl.log'), []);
+  });
+
+  it('does not warn when a heartbeat URL is set', () => {
+    const { code, out } = run();
+    assert.equal(code, 0, out);
+    assert.doesNotMatch(out, /WARNING/);
+  });
+
+  it('creates the backup directory and every file in it owner-only (the dump holds personal data)', () => {
+    const { code, out } = run({ BACKUP_UPLOAD: 'off' });
+    assert.equal(code, 0, out);
+    const local = join(dir, 'local');
+    assert.equal(statSync(local).mode & 0o777, 0o700);
+    const files = readdirSync(local);
+    assert.ok(files.some((f) => f.endsWith('.dump')) && files.some((f) => f.endsWith('.manifest.json')));
+    for (const file of files) assert.equal(statSync(join(local, file)).mode & 0o077, 0, `${file} is readable by others`);
+  });
+
+  it('finds the AWS CLI under cron: both scripts and the runbook crontab extend PATH with /usr/local/bin', () => {
+    const text = (name) => readFileSync(fileURLToPath(new URL(name, import.meta.url)), 'utf8');
+    assert.match(text('./backup.sh'), /^export PATH="\$PATH:\/usr\/local\/bin/m);
+    assert.match(text('./restore-drill.sh'), /^export PATH="\$PATH:\/usr\/local\/bin/m);
+    assert.match(text('./RUNBOOK-restore.md'), /^PATH=\/usr\/local\/bin:/m);
   });
 });
