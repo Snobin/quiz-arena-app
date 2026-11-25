@@ -185,3 +185,28 @@ describe('deploy shape of the real compose file (no docker needed)', () => {
     }
   });
 });
+
+describe('metrics push settings reach every JVM service (code review of Epics 6 and 7)', () => {
+  const compose = readFileSync(fileURLToPath(new URL('./compose.yaml', import.meta.url)), 'utf8');
+  const example = readFileSync(fileURLToPath(new URL('./.env.example', import.meta.url)), 'utf8');
+  const names = ['GRAFANA_OTLP_URL', 'GRAFANA_OTLP_AUTHORIZATION'];
+
+  it('defines both variables once, in the environment block the services share, with no default value', () => {
+    // Raw text, not `docker compose config`, so this runs without Docker.
+    const shared = compose.slice(compose.indexOf('x-service-env: &service-env'), compose.indexOf('\nservices:'));
+    for (const name of names) assert.match(shared, new RegExp(`^\\s+${name}: \\$\\{${name}:-\\}$`, 'm'), `${name} is missing from the shared service environment`);
+  });
+
+  it('merges that shared block into core, game and ratings', () => {
+    for (const [service, next] of [['core-service', 'game-service'], ['game-service', 'ratings-service'], ['ratings-service', null]]) {
+      const start = compose.indexOf(`\n  ${service}:`);
+      assert.ok(start >= 0, `${service} not found`);
+      const end = next ? compose.indexOf(`\n  ${next}:`) : compose.length;
+      assert.match(compose.slice(start, end), /<<: \*service-env/, `${service} does not use the shared environment`);
+    }
+  });
+
+  it('documents both variables in .env.example', () => {
+    for (const name of names) assert.match(example, new RegExp(`^${name}=`, 'm'), name);
+  });
+});

@@ -70,7 +70,7 @@
           "title": "core-service reports no metrics",
           "condition": "C",
           "for": "0m",
-          "noDataState": "Alerting",
+          "noDataState": "OK",
           "execErrState": "Error",
           "annotations": {
             "summary": "core-service has sent no metrics for 10 minutes."
@@ -128,7 +128,7 @@
           "title": "game-service reports no metrics",
           "condition": "C",
           "for": "0m",
-          "noDataState": "Alerting",
+          "noDataState": "OK",
           "execErrState": "Error",
           "annotations": {
             "summary": "game-service has sent no metrics for 10 minutes."
@@ -186,7 +186,7 @@
           "title": "ratings-service reports no metrics",
           "condition": "C",
           "for": "0m",
-          "noDataState": "Alerting",
+          "noDataState": "OK",
           "execErrState": "Error",
           "annotations": {
             "summary": "ratings-service has sent no metrics for 10 minutes."
@@ -320,7 +320,7 @@
               "datasourceUid": "${PROM_DS_UID}",
               "model": {
                 "refId": "A",
-                "expr": "sum(increase(minnal_deadletter_total[5m])) + sum(increase(minnal_stream_deadletter_total[5m]))",
+                "expr": "sum(increase(minnal_stream_deadletter_total[5m]))",
                 "instant": true
               }
             },

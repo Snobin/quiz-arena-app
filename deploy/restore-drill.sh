@@ -9,6 +9,8 @@
 # DRILL_SOURCE_DIR (read the dump from a folder instead of R2), AWS_CMD, DOCKER_CMD.
 set -euo pipefail
 cd "$(dirname "$0")"
+# Cron starts with PATH=/usr/bin:/bin, where the AWS CLI (usually /usr/local/bin or /snap/bin) is not found.
+export PATH="$PATH:/usr/local/bin:/snap/bin"
 
 if [ -f .env ] && [ -z "${BACKUP_SKIP_ENV:-}" ]; then
   # shellcheck disable=SC1091
@@ -86,7 +88,7 @@ echo "restore-drill: restored"
 # 5. Every table's row count against the manifest.
 query="SELECT table_schema || '.' || table_name || E'\t' || (xpath('/row/c/text()', query_to_xml(format('SELECT count(*) AS c FROM %I.%I', table_schema, table_name), false, true, '')))[1]::text FROM information_schema.tables WHERE table_schema IN ('core', 'ratings') AND table_type = 'BASE TABLE' ORDER BY 1"
 $DOCKER exec "$CONTAINER" psql -X -A -t -U postgres -d minnal -c "$query" | sort > "$work/restored.counts" || fail "could not count the restored rows"
-sed -n 's/^ *"\([a-z_]*\.[a-z_]*\)": \([0-9]*\),\{0,1\}$/\1\t\2/p' "$work/$base.manifest.json" | sort > "$work/manifest.counts"
+sed -n 's/^ *"\([a-z0-9_]*\.[a-z0-9_]*\)": \([0-9]*\),\{0,1\}$/\1\t\2/p' "$work/$base.manifest.json" | sort > "$work/manifest.counts"
 [ -s "$work/manifest.counts" ] || fail "the manifest lists no row counts"
 if ! diff -u "$work/manifest.counts" "$work/restored.counts" > "$work/counts.diff"; then
   cat "$work/counts.diff" >&2
