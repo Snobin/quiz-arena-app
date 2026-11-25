@@ -2,10 +2,13 @@ package in.minnal.ratings.platform.infrastructure.security;
 
 import in.minnal.contracts.identity.MinnalClaims;
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.ObjectPostProcessor;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -19,6 +22,9 @@ import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -49,10 +55,30 @@ public class SecurityConfig {
         return decoder;
     }
 
+    /**
+     * The PWA is a different origin from the API in production, so the browser's leaderboard and match calls need
+     * CORS. Allowed origins come from {@code minnal.cors.allowed-origins} (env {@code CORS_ALLOWED_ORIGINS});
+     * none configured means no browser origin is allowed. The Security CORS filter answers preflights before
+     * authentication, which a preflight cannot carry.
+     */
+    @Bean
+    CorsConfigurationSource corsConfigurationSource(@Value("${minnal.cors.allowed-origins:}") String origins) {
+        List<String> allowed = Arrays.stream(origins.split(",")).map(String::trim).filter(o -> !o.isEmpty()).toList();
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(allowed);
+        config.setAllowedMethods(List.of("GET"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        config.setMaxAge(600L);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/api/**", config);
+        return source;
+    }
+
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtDecoder jwtDecoder, JsonMapper jsonMapper) throws Exception {
         ProblemDetailSecurityHandler problems = new ProblemDetailSecurityHandler(jsonMapper);
         http
+                .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)

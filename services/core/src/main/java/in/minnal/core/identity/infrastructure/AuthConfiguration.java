@@ -15,8 +15,8 @@ import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * Sign-in wiring (AD-9). Everything secret or deployment-specific comes from the environment; the
- * refresh endpoint is the only one that allows credentialed cross-origin calls, and only from the PWA.
+ * Sign-in wiring (AD-9). Everything secret or deployment-specific comes from the environment; browser calls
+ * are allowed only from the configured PWA origins (see {@link ApiCors}).
  */
 @Configuration(proxyBeanMethods = false)
 public class AuthConfiguration {
@@ -54,21 +54,13 @@ public class AuthConfiguration {
     }
 
     @Bean
-    WebMvcConfigurer refreshCors(AuthSettings settings) {
+    WebMvcConfigurer apiCors(AuthSettings settings) {
         return new WebMvcConfigurer() {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
-                registry.addMapping("/api/core/v1/me/**")
-                        .allowedOrigins(settings.corsOrigins().toArray(String[]::new))
-                        .allowedMethods("GET", "PUT")
-                        .allowedHeaders("Authorization", "Content-Type")
-                        .maxAge(600);
-                registry.addMapping("/api/core/v1/auth/refresh")
-                        .allowedOrigins(settings.corsOrigins().toArray(String[]::new))
-                        .allowedMethods("POST")
-                        .allowedHeaders("Content-Type", "X-Minnal-Auth")
-                        .allowCredentials(true)
-                        .maxAge(600);
+                ApiCors.CREDENTIALED_PATHS.forEach(path ->
+                        registry.addMapping(path).combine(ApiCors.credentialed(settings.corsOrigins())));
+                registry.addMapping(ApiCors.GENERAL_PATTERN).combine(ApiCors.general(settings.corsOrigins()));
             }
         };
     }
