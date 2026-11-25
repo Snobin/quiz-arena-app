@@ -28,6 +28,26 @@ function setup(apiStatuses: number[]) {
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
+describe('apiFetch with an API base', () => {
+  it('sends the guest-token call and API calls to the base origin', async () => {
+    const base = 'https://api.example.com';
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) =>
+      String(input).endsWith(GUEST_TOKEN_PATH) ? jsonResponse(guestTokenBody('ml')) : jsonResponse({}),
+    );
+    const session = createGuestSession({
+      storage: () => undefined,
+      fetch: () => fetchMock as unknown as typeof fetch,
+      language: () => 'ml',
+      online: () => true,
+      apiBase: base,
+    });
+    const apiFetch = createApiFetch(session, () => fetchMock as unknown as typeof fetch, base);
+    await apiFetch('/api/ratings/v1/x');
+    const urls = fetchMock.mock.calls.map(([input]) => String(input));
+    expect(urls).toEqual([`${base}${GUEST_TOKEN_PATH}`, `${base}/api/ratings/v1/x`]);
+  });
+});
+
 describe('apiFetch', () => {
   it('sends the guest token as a Bearer token and keeps the caller headers', async () => {
     const { apiFetch, issued, fetchMock } = setup([200]);

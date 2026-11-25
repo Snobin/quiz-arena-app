@@ -397,6 +397,19 @@
 - source_spec: none
   summary: Story 7.4b: `deploy/RUNBOOK-restore.md` (monthly drill and real recovery onto a new VPS, RPO 24 h, RTO 2 h, drill log), the monthly "Monthly restore drill" GitHub Actions issue workflow, and `deploy/LAUNCH-CHECKLIST.md` with every item tagged [OWNER] or [ENG].
   evidence: split from Story 7.4 (launch readiness); the runbook documents the scripts built in 7.4a and the first drill logged there is run by the owner on the VPS.
+- source_spec: none
+  summary: Story 1.2 follow-up: nightly pg_dump backup to Cloudflare R2 with dated names, retention, backup and restore scripts in deploy/, and one proven restore into a scratch database.
+  evidence: Split from Story 1.2 part 2 at the build scope check (2026-11-19); backups are an independent deliverable (NFR9).
+- source_spec: none
+  summary: Story 1.2 follow-up: external free-tier uptime monitor pinging /health at least every 5 minutes that alerts the developer on failure.
+  evidence: Split from Story 1.2 part 2 at the build scope check (2026-11-19); it needs a live production URL first.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-2-deploy-pipeline.md`
+  summary: Run `docker compose config` and `check-compose.mjs` with prod env values and `actionlint` in CI.
+  evidence: The compose tests added in 1.2 read the YAML text; the resolved prod shape and the deploy workflow are unchecked until a first real deploy.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-2-deploy-pipeline.md`
+  summary: Verify cross-origin operation from Cloudflare Pages to the API: CORS preflight with Authorization, the WebSocket handshake origin, and a post-deploy /health smoke check.
+  evidence: The PWA and API are different origins in prod; nothing in the diff exercises this, and the Caddyfile and service CORS rules are unchanged.
 
 ## Deferred from: code review of Epics 6 and 7, chunk 1 (ops and security) (2026-11-24)
 

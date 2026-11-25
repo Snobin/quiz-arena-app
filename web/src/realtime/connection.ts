@@ -1,3 +1,4 @@
+import { API_BASE_URL, wsUrl } from '../config/apiBase.ts';
 import { Client, type IFrame, type IMessage, type StompConfig, type StompSubscription } from '@stomp/stompjs';
 import { session } from '../auth/session.ts';
 import {
@@ -113,9 +114,12 @@ export const REJOIN_TIMEOUT_MS = 10_000;
 export const UNAUTHENTICATED = 'UNAUTHENTICATED';
 export const HEARTBEAT_MS = 10_000;
 
-/** `ws(s)://<host>/ws` for the current page. */
-export function sameOriginUrl(location: Pick<Location, 'protocol' | 'host'> = window.location): string {
-  return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${ENDPOINT_PATH}`;
+/** `ws(s)://<host>/ws`: the API origin when VITE_API_BASE_URL is set, else the current page. */
+export function sameOriginUrl(
+  location: Pick<Location, 'protocol' | 'host'> = window.location,
+  base: string = API_BASE_URL,
+): string {
+  return wsUrl(ENDPOINT_PATH, base, location);
 }
 
 export const defaultFactory: ClientFactory = (config) => new Client(config);

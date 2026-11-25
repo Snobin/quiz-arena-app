@@ -68,6 +68,21 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe('guest session with an API base', () => {
+  it('posts the guest-token request to the base origin', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => jsonResponse(guestTokenBody('ml')));
+    const session = createGuestSession({
+      storage: () => undefined,
+      fetch: () => fetchMock as unknown as typeof fetch,
+      language: () => 'ml',
+      online: () => true,
+      apiBase: 'https://api.example.com',
+    });
+    await session.getAccessToken();
+    expect(String(fetchMock.mock.calls[0]![0])).toBe('https://api.example.com/api/core/v1/auth/guest');
+  });
+});
+
 describe('guest session', () => {
   it('first boot on a Malayalam phone: one POST with lang ml, token stored, ready', async () => {
     const { session, fetchMock, storage } = setup({ language: deviceLanguage(['ml-IN']) });

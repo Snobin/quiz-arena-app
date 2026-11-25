@@ -4,13 +4,12 @@
 
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 
-import { readFileSync } from 'node:fs';
 import { checkConfig, heapCap, parseBytes, requiredVariables } from './check-compose.mjs';
 
 const script = fileURLToPath(new URL('./check-compose.mjs', import.meta.url));
@@ -160,6 +159,30 @@ describe('core-service sign-in settings (Story 2.1)', () => {
     for (const name of names) assert.match(example, new RegExp(`^${name}=`, 'm'));
     assert.match(example, /^GOOGLE_CLIENT_ID=$/m);
     assert.match(example, /^GOOGLE_CLIENT_SECRET=$/m);
+  });
+});
+
+describe('deploy shape of the real compose file (no docker needed)', () => {
+  const composeText = readFileSync(fileURLToPath(new URL('./compose.yaml', import.meta.url)), 'utf8');
+  const envExample = readFileSync(fileURLToPath(new URL('./.env.example', import.meta.url)), 'utf8');
+
+  it('tags the three service images with ${IMAGE_TAG}', () => {
+    for (const svc of ['core', 'game', 'ratings']) {
+      assert.match(composeText, new RegExp(`image: \\$\\{IMAGE_REGISTRY:-ghcr\\.io/snobin\\}/minnal-${svc}:\\$\\{IMAGE_TAG:-local\\}`));
+    }
+  });
+
+  it('publishes ports only on caddy and never scales game-service', () => {
+    assert.equal((composeText.match(/^\s+ports:/gm) ?? []).length, 1);
+    assert.doesNotMatch(composeText, /replicas:/);
+  });
+
+  it('lists every required variable in .env.example', () => {
+    const keys = new Set([...envExample.matchAll(/^([A-Z][A-Z0-9_]*)=/gm)].map((m) => m[1]));
+    for (const name of requiredVariables(composeText)) assert.ok(keys.has(name), `${name} missing from .env.example`);
+    for (const name of ['IMAGE_TAG', 'CADDY_SITE_ADDRESS', 'CORS_ALLOWED_ORIGINS', 'MINNAL_INTERNAL_TOKEN']) {
+      assert.ok(keys.has(name), `${name} missing from .env.example`);
+    }
   });
 });
 

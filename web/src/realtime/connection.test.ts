@@ -1531,3 +1531,9 @@ describe('Topic Duel (Story 4.2)', () => {
     expect(state().live!.topic).toEqual(TOPIC);
   });
 });
+
+describe('sameOriginUrl with an API base', () => {
+  it('uses the base instead of the page origin', () => {
+    expect(sameOriginUrl({ protocol: 'https:', host: 'minnal.pages.dev' }, 'https://api.example.com')).toBe('wss://api.example.com/ws');
+  });
+});

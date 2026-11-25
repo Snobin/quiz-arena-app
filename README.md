@@ -261,3 +261,32 @@ for Testcontainers, and the Compose check calls `docker compose`.
 node --test deploy/*.test.mjs
 node deploy/check-compose.mjs
 ```
+
+## Deploy
+
+`.github/workflows/deploy.yml` runs only after the **CI** workflow succeeds for a push to `main` (PRs and
+other branches never deploy). It builds the core, game and ratings images tagged with the commit SHA, pushes
+them to `ghcr.io/snobin/minnal-<service>`, copies `deploy/` to `~/minnal/deploy` on the VPS over SSH, writes
+`IMAGE_TAG` into the server's `deploy/.env`, runs `docker compose pull` and `up -d --wait`, and publishes
+`web/dist` to Cloudflare Pages with `wrangler pages deploy`. Backups and the uptime monitor are not part of it yet.
+
+### One-time owner setup
+
+1. **VPS (OVH):** install Docker Engine with the Compose plugin; create a deploy user in the `docker` group;
+   open ports 22, 80 and 443 only. Add the deploy public key to that user's `~/.ssh/authorized_keys`.
+2. **DNS:** an A record for the API hostname (for example `api.example.com`) pointing at the VPS.
+3. **Server `.env`:** `mkdir -p ~/minnal/deploy`, then create `~/minnal/deploy/.env` from `deploy/.env.example`
+   with real values: `SPRING_PROFILES_ACTIVE=prod`, strong passwords, `MINNAL_INTERNAL_TOKEN`,
+   `MINNAL_JWT_SIGNING_KEY`, `CADDY_SITE_ADDRESS=<api hostname>`, `CADDY_HTTP_PORT=80`, `CADDY_HTTP_TARGET=80`,
+   `CADDY_HTTPS_BIND=0.0.0.0:443`, and `CORS_ALLOWED_ORIGINS=https://<project>.pages.dev` (the Pages origin
+   only). Rotating `MINNAL_INTERNAL_TOKEN` is a `.env` edit plus `docker compose up -d` (or a redeploy).
+4. **Cloudflare Pages:** create a Pages project (direct upload, no Git connection) and an API token with
+   "Cloudflare Pages: Edit".
+5. **GitHub:** in repository Settings, create an environment `production`, then add these secrets:
+   `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY` (private key), `VPS_KNOWN_HOSTS` (output of `ssh-keyscan <host>`),
+   `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`; and the variables `CLOUDFLARE_PAGES_PROJECT` and `VITE_API_BASE_URL` (the API origin, e.g.
+   `https://api.example.com`; the web build uses it for HTTP calls and the WebSocket).
+6. **Switch it on:** deploys stay off until you add the repository variable `DEPLOY_ENABLED=true`. Set it last,
+   after the secrets and the server's `deploy/.env` exist; the next merge to `main` then deploys.
+7. After the first deploy, keep the GHCR packages private or public as you prefer; the workflow logs the
+   server in to GHCR with the job's token for each pull.
