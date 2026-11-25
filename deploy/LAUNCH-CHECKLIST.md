@@ -8,11 +8,11 @@ Last reviewed: 2026-11-23. Nothing here is launch-ready until every box is check
 
 - [ ] **[OWNER]** Choose and buy the domain. Answer: answered, `snobin.in`, bought at GoDaddy (2026-11-24), as a general domain so it can host other projects. Minnal runs on subdomains: the app at `minnal.snobin.in` and the API at `api.minnal.snobin.in` (same registrable domain, so the refresh cookie stays first-party). Still to do at the registrar: auto-renew on, two-factor sign-in on, registrar lock on, and nameservers pointed at Cloudflare DNS.
 - [ ] **[ENG]** Serve the PWA from Cloudflare Pages on the app host and the API from the VPS on an `api.` subdomain of the same registrable domain, so the refresh cookie from Story 2.1 is first-party. Set `VITE_PUBLIC_APP_ORIGIN`, the prod `CORS_ALLOWED_ORIGINS` and the Google OAuth redirect URIs to the real origins. Verify sign-in, a `/r/<code>` link and a `/q` link on a real Android phone. Evidence: _open_ (needs Story 1.2 part 2, the production deploy, which is still `in-progress`)
-- [ ] **[ENG]** Production deploy to the OVH Mumbai VPS and Cloudflare Pages (Story 1.2 part 2: CI deploy, secrets, TLS, resource envelope). Evidence: _open_
+- [ ] **[ENG]** Production deploy to the Hostinger Mumbai VPS and Cloudflare Pages (Story 1.2 part 2: CI deploy, secrets, TLS, resource envelope). Evidence: _open_
 
 ## 2. VPS plan and bandwidth
 
-- [ ] **[OWNER]** Confirm the OVHcloud Mumbai plan's availability and its bandwidth cap (10 Mbps after the monthly quota) on the order page, and accept or change the plan. Answer: _open · blocks launch_
+- [ ] **[OWNER]** Confirm the VPS plan and its bandwidth terms, and accept or change the plan. Answer: answered, Hostinger KVM 2 (2 vCPU, 8 GB, 100 GB NVMe, 8 TB bandwidth) in the India (Mumbai) data centre, bought 2026-11-25 with the 30-day money-back window. OVHcloud Mumbai was out of stock, and Singapore and Europe plans fail the 200 ms answer-confirm target. Still to do inside the 30-day window: run the load test, a 50-player room and `docker stats`, and record the result below (refund if it fails). Renewal price is higher than the first term, so decide again before it renews.
 - [ ] **[ENG]** Record the measured bandwidth of one 50-player room so the cap can be judged. Evidence: _open_ (measure on the VPS during a staged room)
 
 ## 3. Privacy and sign-in
