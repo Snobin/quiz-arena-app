@@ -157,6 +157,8 @@ jobs:
         working-directory: web
     steps:
       - name: Require the web build settings
+        # Runs before checkout, so web/ does not exist yet: use the workspace root, not the job default.
+        working-directory: .
         env:
           VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
           CLOUDFLARE_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
