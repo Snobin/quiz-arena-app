@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Nightly Postgres backup (Story 7.4a, NFR9). Run from cron on the VPS, for example:
+# Nightly Postgres backup (Story 7.4a, NFR9). Run from cron on the VPS, for example (cron's own PATH is only /usr/bin:/bin):
+#   PATH=/usr/local/bin:/usr/bin:/bin
 #   15 2 * * *  /opt/minnal/deploy/backup.sh >> /var/log/minnal-backup.log 2>&1
 # It dumps the whole database at one snapshot, writes a manifest beside the dump (UTC time, size, SHA-256, row counts of every
 # table in the `core` and `ratings` schemas), uploads both to Cloudflare R2 and, only on success, calls the uptime monitor's
@@ -9,6 +10,10 @@
 # BACKUP_UPLOAD=off, AWS_CMD, CURL_CMD.
 set -euo pipefail
 cd "$(dirname "$0")"
+# Cron starts with PATH=/usr/bin:/bin, where the AWS CLI (usually /usr/local/bin or /snap/bin) is not found.
+export PATH="$PATH:/usr/local/bin:/snap/bin"
+# The dump holds personal data (emails, ratings): everything this script creates is owner-only.
+umask 077
 
 if [ -f .env ] && [ -z "${BACKUP_SKIP_ENV:-}" ]; then
   # shellcheck disable=SC1091
@@ -27,7 +32,7 @@ name=minnal-$stamp
 dump=$BACKUP_DIR/$name.dump
 manifest=$BACKUP_DIR/$name.manifest.json
 counts=$BACKUP_DIR/$name.counts.tmp
-mkdir -p "$BACKUP_DIR"
+mkdir -p -m 700 "$BACKUP_DIR"
 
 fail() { echo "backup: $*" >&2; rm -f "$counts"; exit 1; }
 trap 'rm -f "$counts"' EXIT
@@ -63,6 +68,9 @@ if [ "$UPLOAD" = "on" ]; then
   rm -f "$dump" "$manifest"
   if [ -n "${BACKUP_HEARTBEAT_URL:-}" ]; then
     $CURL_CMD -fsS -m 20 --retry 3 -o /dev/null "$BACKUP_HEARTBEAT_URL" || fail "the heartbeat call failed"
+  else
+    # The heartbeat is the only dead-man's switch: without it a failed night raises no alert at all.
+    echo "backup: WARNING: BACKUP_HEARTBEAT_URL is empty, so a night without a backup will not alert anyone" >&2
   fi
 fi
 echo "backup: $name ok ($size bytes, sha256 $sha)"

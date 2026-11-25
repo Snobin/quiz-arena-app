@@ -165,17 +165,8 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(increase(minnal_deadletter_total[1h]))",
-          "legendFormat": "minnal.deadletter",
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${ds}"
-          }
-        },
-        {
-          "refId": "B",
           "expr": "sum(increase(minnal_stream_deadletter_total[1h]))",
-          "legendFormat": "minnal.stream.deadletter",
+          "legendFormat": "dead-lettered stream entries",
           "datasource": {
             "type": "prometheus",
             "uid": "${ds}"

@@ -397,3 +397,9 @@
 - source_spec: none
   summary: Story 7.4b: `deploy/RUNBOOK-restore.md` (monthly drill and real recovery onto a new VPS, RPO 24 h, RTO 2 h, drill log), the monthly "Monthly restore drill" GitHub Actions issue workflow, and `deploy/LAUNCH-CHECKLIST.md` with every item tagged [OWNER] or [ENG].
   evidence: split from Story 7.4 (launch readiness); the runbook documents the scripts built in 7.4a and the first drill logged there is run by the owner on the VPS.
+
+## Deferred from: code review of Epics 6 and 7, chunk 1 (ops and security) (2026-11-24)
+
+- source_spec: spec-7-4b-runbook-and-checklist.md
+  summary: The monthly restore-drill reminder workflow stops after 60 days without repo activity (GitHub disables scheduled workflows) and an ignored open issue suppresses all later reminders, with no label, comment or escalation.
+  evidence: `.github/workflows/monthly-restore-drill.yml` opens an issue only when none is open; nothing re-notifies. Matters once the owner runs the monthly drill unattended; add a label and a comment on the open issue then.

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
 const read = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
@@ -58,4 +59,64 @@ test('the five alert rules exist, send by email, and keep no real address or tok
   assert.equal(forOf('minnal-5xx'), '10m');
   assert.equal(forOf('minnal-heap'), '10m');
   assert.equal(forOf('minnal-nometrics-ratings'), '0m'); // absent_over_time already spans 10 minutes
+});
+
+test('the no-metrics alerts fire on absence, never on presence', () => {
+  // `absent_over_time` returns nothing while the service reports (Grafana calls that NoData) and 1 once it stops. NoData
+  // must therefore be OK: with "Alerting" the rule fires all the time, healthy or not.
+  const rules = alerts.groups[0].rules.filter((r) => r.uid.startsWith('minnal-nometrics-'));
+  assert.equal(rules.length, 3);
+  for (const rule of rules) {
+    assert.match(rule.data[0].model.expr, /^absent_over_time\(/, rule.uid);
+    assert.equal(rule.noDataState, 'OK', rule.uid);
+  }
+});
+
+// Every `minnal_*` metric a dashboard or alert queries must be a meter some service really registers. Without this a typo, or
+// a Valkey stream name mistaken for a meter, leaves a panel empty and an alert that can never fire.
+const root = fileURLToPath(new URL('..', import.meta.url));
+const javaFiles = (dir) =>
+  readdirSync(dir).flatMap((name) => {
+    const path = `${dir}/${name}`;
+    return statSync(path).isDirectory() ? javaFiles(path) : path.endsWith('.java') ? [path] : [];
+  });
+
+function registeredMeters() {
+  const sources = [`${root}/contracts/src/main/java`, ...readdirSync(`${root}/services`).map((s) => `${root}/services/${s}/src/main/java`)].flatMap((d) => {
+    try {
+      return javaFiles(d).map((f) => readFileSync(f, 'utf8'));
+    } catch {
+      return [];
+    }
+  });
+  const constants = new Map(); // NAME -> literals
+  for (const src of sources) {
+    for (const [, name, literal] of src.matchAll(/\b([A-Z][A-Z0-9_]*)\s*=\s*"(minnal\.[a-z0-9_.]+)"/g)) {
+      constants.set(name, [...(constants.get(name) ?? []), literal]);
+    }
+  }
+  const meters = new Set();
+  const arg = /(?:Counter|Timer|Gauge|DistributionSummary|LongTaskTimer|MultiGauge)\.builder\(\s*([^,)\n]+)|\.(?:counter|timer|gauge|summary)\(\s*([^,)\n]+)/g;
+  for (const src of sources) {
+    for (const match of src.matchAll(arg)) {
+      const token = (match[1] ?? match[2]).trim();
+      const literal = token.match(/^"(minnal\.[a-z0-9_.]+)"$/);
+      const names = literal ? [literal[1]] : (constants.get(token.split('.').pop()) ?? []);
+      for (const name of names) meters.add(name.replaceAll('.', '_'));
+    }
+  }
+  return meters;
+}
+
+test('every minnal_* metric on a dashboard or alert is registered by a service', () => {
+  const meters = registeredMeters();
+  assert.ok(meters.size > 10, `found only ${meters.size} registered meters: the scan is broken`);
+  const queries = [...exprs(launch), ...exprs(health), ...alerts.groups.flatMap((g) => g.rules.flatMap((r) => r.data.map((d) => d.model?.expr ?? '')))];
+  const used = new Set(queries.flatMap((q) => q.match(/\bminnal_[a-z0-9_]+/g) ?? []));
+  assert.ok(used.size > 10, 'found no dashboard metrics: the scan is broken');
+  for (const metric of used) {
+    const stem = metric.replace(/_(bucket|count|sum|max)$/, '');
+    const candidates = [stem, stem.replace(/_total$/, ''), stem.replace(/_(seconds|milliseconds|bytes|ratio)$/, ''), stem.replace(/_total$/, '').replace(/_(seconds|milliseconds|bytes|ratio)$/, '')];
+    assert.ok(candidates.some((c) => meters.has(c)), `${metric} is on a dashboard or alert but no service registers a meter named like it`);
+  }
 });
