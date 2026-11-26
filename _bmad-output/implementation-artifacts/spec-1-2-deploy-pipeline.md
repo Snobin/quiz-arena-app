@@ -75,3 +75,24 @@ context:
 
 **Manual checks (if no CLI):**
 - The workflow file parses (`actionlint` if available); the real deploy is run by the owner after setup.
+
+## First production deploy (2026-11-25) and closure
+
+Story 1.2 was closed by the owner on 2026-11-26 after the first real deploy. The host is a **Hostinger KVM 2 in Mumbai** (2 vCPU, 8 GB, 100 GB NVMe); OVHcloud Mumbai was out of stock and Singapore and Europe plans missed the 200 ms target. Domain `snobin.in` on Cloudflare DNS: app `minnal.snobin.in` (Cloudflare Pages), API `api.minnal.snobin.in` (Caddy, DNS only).
+
+**Verified on production**
+- CI on `main` (push) then Deploy (`workflow_run`, gated by `DEPLOY_ENABLED`, `production` environment with required reviewer): gate, three images, server rollout and web publish all green (runs 45670133377 and 45676293411).
+- `https://api.minnal.snobin.in/health` returns `{"status":"UP"}` over a valid TLS certificate; all six containers healthy; `ufw` allows only 22, 80 and 443; Postgres and Valkey are bound to `127.0.0.1` only (a server-side `compose.override.yaml`, not in the repo, for SSH-tunnel database access).
+- Sign in with Google works; the WebSocket handshake works from the app origin and is refused from another origin.
+- Question bank seeded: 387 published questions (30 starter, 357 from batches 2 to 4, the batch rows marked `reviewedBy = unreviewed-batch`).
+
+**Found only by the real deploy (fixed)**
+- PR #4: the web job's first step ran in `web/` before checkout, so it failed before it could check its settings.
+- PR #5: the browser's first call (`POST /auth/guest`) failed its CORS preflight. Core only had CORS rules for `/me/**` and `/auth/refresh`, and ratings read no CORS setting. Now one rule for `/api/**` (no credentials) plus credentialed rules for refresh and logout; ratings wires its allow-list into the security chain.
+
+**Acceptance criteria not proven on production at closure (tracked in `deploy/LAUNCH-CHECKLIST.md`, none is a code gap)**
+- External uptime monitor pinging `/health` (split off to `deferred-work.md`).
+- Nightly backup cron with R2 keys, and the first restore drill (scripts are merged and CI-proven in the `backup-drill` job; the VPS setup is in `deploy/RUNBOOK-restore.md`).
+- Killing a container and watching Docker restart it (`restart: unless-stopped` is in the compose file and checked by `check-compose.mjs`; not exercised live).
+- A completed match played end to end on production by two people, and the mobile checks (`/r/<code>`, `/q`, install prompt) on a real Android phone.
+
