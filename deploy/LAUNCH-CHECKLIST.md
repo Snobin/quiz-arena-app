@@ -8,7 +8,7 @@ Last reviewed: 2026-11-23. Nothing here is launch-ready until every box is check
 
 - [ ] **[OWNER]** Choose and buy the domain. Answer: answered, `snobin.in`, bought at GoDaddy (2026-11-24), as a general domain so it can host other projects. Minnal runs on subdomains: the app at `minnal.snobin.in` and the API at `api.minnal.snobin.in` (same registrable domain, so the refresh cookie stays first-party). Still to do at the registrar: auto-renew on, two-factor sign-in on, registrar lock on, and nameservers pointed at Cloudflare DNS.
 - [ ] **[ENG]** Serve the PWA from Cloudflare Pages on the app host and the API from the VPS on an `api.` subdomain of the same registrable domain, so the refresh cookie from Story 2.1 is first-party. Set `VITE_PUBLIC_APP_ORIGIN`, the prod `CORS_ALLOWED_ORIGINS` and the Google OAuth redirect URIs to the real origins. Verify sign-in, a `/r/<code>` link and a `/q` link on a real Android phone. Evidence: _open_ (needs Story 1.2 part 2, the production deploy, which is still `in-progress`)
-- [ ] **[ENG]** Production deploy to the Hostinger Mumbai VPS and Cloudflare Pages (Story 1.2 part 2: CI deploy, secrets, TLS, resource envelope). Evidence: _open_
+- [x] **[ENG]** Production deploy to the Hostinger Mumbai VPS and Cloudflare Pages (Story 1.2 part 2: CI deploy, secrets, TLS, resource envelope). Evidence: first real deploy 2026-11-25, Deploy runs 45670133377 and 45676293411 green, `/health` UP over TLS on `api.minnal.snobin.in`, six healthy containers, 387 questions seeded; see the closure section of `spec-1-2-deploy-pipeline.md`
 
 ## 2. VPS plan and bandwidth
 
