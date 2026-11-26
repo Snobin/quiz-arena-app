@@ -31,6 +31,8 @@ management:
         # Pushed only under the prod profile (Story 7.3a); local and tests push nothing.
         enabled: false
         step: 60s
+        # Timers are exported in seconds so the Grafana names end in _seconds (the default is milliseconds).
+        base-time-unit: seconds
   endpoints:
     web:
       exposure:
