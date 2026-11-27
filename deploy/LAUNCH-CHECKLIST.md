@@ -13,6 +13,19 @@ Last reviewed: 2026-11-23. Nothing here is launch-ready until every box is check
 ## 2. VPS plan and bandwidth
 
 - [ ] **[OWNER]** Confirm the VPS plan and its bandwidth terms, and accept or change the plan. Answer: answered, Hostinger KVM 2 (2 vCPU, 8 GB, 100 GB NVMe, 8 TB bandwidth) in the India (Mumbai) data centre, bought 2026-11-25 with the 30-day money-back window. OVHcloud Mumbai was out of stock, and Singapore and Europe plans fail the 200 ms answer-confirm target. Still to do inside the 30-day window: run the load test, a 50-player room and `docker stats`, and record the result below (refund if it fails). Renewal price is higher than the first term, so decide again before it renews.
+  - Load test 2026-11-26, 500 live WebSocket players (figures from the comments in `compose.yaml`; the full output is not recorded here): Caddy used 76% of 128 MiB and the game container reached about 600 MiB of 640 MiB. The limits were raised to 192 MiB and 768 MiB (PR #8). Not yet re-tested under load with the new limits.
+  - `docker stats --no-stream` on the VPS, 2026-11-27, after PR #8 was deployed (one snapshot, every container under 2% CPU, so not a load measurement):
+
+    | Container | CPU | Memory / limit |
+    |---|---|---|
+    | caddy | 1.73% | 10.88 MiB / 192 MiB |
+    | game-service | 1.47% | 228.5 MiB / 768 MiB |
+    | ratings-service | 0.74% | 230.2 MiB / 640 MiB |
+    | core-service | 0.38% | 232.2 MiB / 640 MiB |
+    | valkey | 0.25% | 6.801 MiB / 256 MiB |
+    | postgres | 0.07% | 66.72 MiB / 512 MiB |
+
+  - Still open: the 50-player room.
 - [ ] **[ENG]** Record the measured bandwidth of one 50-player room so the cap can be judged. Evidence: _open_ (measure on the VPS during a staged room)
 
 ## 3. Privacy and sign-in
